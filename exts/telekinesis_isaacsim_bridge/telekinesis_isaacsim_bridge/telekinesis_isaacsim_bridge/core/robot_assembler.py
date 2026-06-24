@@ -33,6 +33,31 @@ def find_prim_by_name(stage, root_path, name):
     raise RuntimeError(f"prim named {name!r} not found under {root_path!r}")
 
 
+def get_articulation_base_link_name(articulation):
+    """Root/base link name of an already-initialized ``SingleArticulation``.
+
+    Used to auto-discover the gripper's mount link for ``attach_tool``: the gripper
+    must be joined at its *base* link (the root of its kinematic tree), not an
+    internal frame. Isaac orders an articulation's links root-first, so the base
+    link is ``body_names[0]``. The name is read off the physics view (the wrapper
+    does not expose it), the same path we use for joint limits.
+
+    Why the physics view and not the robot schema: ``body_names`` comes straight
+    from PhysX (``link_names``), so it is authoritative for the actual simulated
+    articulation root and works even when an asset has not authored the robot
+    schema. An explicit override may still be passed (a Robot Link or a Site).
+
+    References:
+    - isaacsim.core.prims Articulation.body_names (root-first link ordering;
+      backed by PhysX ``link_names``).
+    - Robot schema "Attach Point" (a Link or Site) and ``isaac:physics:robotLinks``
+      ("ordered list of links ... starting with the base link"):
+      https://docs.isaacsim.omniverse.nvidia.com/latest/robot_setup/assemble_robots.html
+      https://docs.isaacsim.omniverse.nvidia.com/latest/omniverse_usd/robot_schema.html
+    """
+    return articulation._articulation_view.body_names[0]
+
+
 def apply_attach_offset(prim_path, translation_m, rotation_deg):
     """Nudge the attach prim by a custom offset in its own (mount-local) frame.
 

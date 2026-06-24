@@ -11,15 +11,17 @@ Flow (all over HTTP):
   1. PUT /articulations {arm,  device_type:"robot",   urdf_path} -> arm articulation
   2. PUT /articulations {grip, device_type:"gripper", urdf_path?} -> gripper articulation
   3. POST /articulations/{arm_id}/robot/attach_tool {gripper_articulation_id,
-         arm_mount_link, gripper_mount_link, offset?} -> merged articulation
+         arm_mount_link, gripper_mount_link?, offset?} -> merged articulation
   4. POST /articulations/{arm_id}/robot/move_j {q}      (radians) -> blocks until done
   5. POST /articulations/{grip_id}/gripper/close / open -> blocks until done
 
-The mount links must be RigidBodyAPI links (e.g. UR ``wrist_3_link`` and the
-gripper's base link), NOT empty frames like ``tool0`` / ``flange``.
+``arm_mount_link`` is the arm's flange (a RigidBodyAPI link or a Site, e.g. UR
+``wrist_3_link``), NOT an empty frame like ``tool0`` / ``flange``. Omit
+``gripper_mount_link`` (the default here) to let the bridge auto-discover the
+gripper's base link -- attaching to the wrong body silently breaks the merge.
 
 Run:  python attach_tool.py
-      python attach_tool.py --arm-mount-link wrist_3_link --gripper-mount-link robotiq_85_base_link
+      python attach_tool.py --arm-mount-link wrist_3_link --gripper-mount-link base_link
 
 Requires the ``requests`` package (``pip install requests``).
 """
@@ -43,9 +45,11 @@ PORT = 8765
 ARM_PRIM_PATH = "/World/ur10e"
 GRIPPER_PRIM_PATH = "/World/Robotiq_2F_85_edit"
 
-# Rigid-body links to join the two robots at (must be RigidBodyAPI links).
+# Links to join the two robots at. The arm mount is its flange (a Link or Site).
+# The gripper mount is left None so the bridge auto-discovers the gripper's base
+# link (its articulation root) -- pass --gripper-mount-link to override.
 ARM_MOUNT_LINK = "wrist_3_link"
-GRIPPER_MOUNT_LINK = "base_link"
+GRIPPER_MOUNT_LINK = None
 
 # Optional mount offset baked into the fixed joint (meters / XYZ Euler degrees).
 # None => flush attach (no transform).
@@ -108,6 +112,7 @@ def run(base, arm_prim, arm_urdf, gripper_prim, gripper_urdf, arm_mount_link, gr
         },
     )
     print(f"attached: shared articulation {merged['articulation']} num_dof={merged['num_dof']}")
+    print(f"  mounts: arm={merged['arm_mount_link']} gripper={merged['gripper_mount_link']} (resolved)")
     print(f"  arm drives {merged['robot']['num_dof']} dof: {merged['robot']['dof_names']}")
 
     # 4) Move the arm with the same 6-value payload as a standalone arm.
@@ -134,8 +139,12 @@ def main():
     parser.add_argument("--gripper-prim", default=GRIPPER_PRIM_PATH, help="prim path of the gripper in the stage")
     parser.add_argument("--arm-urdf", default=ARM_URDF_PATH, help="path to the arm URDF to import")
     parser.add_argument("--gripper-urdf", default=None, help="optional URDF to import the gripper from")
-    parser.add_argument("--arm-mount-link", default=ARM_MOUNT_LINK, help="rigid-body flange link on the arm")
-    parser.add_argument("--gripper-mount-link", default=GRIPPER_MOUNT_LINK, help="rigid-body base link on the gripper")
+    parser.add_argument("--arm-mount-link", default=ARM_MOUNT_LINK, help="flange link (or Site) on the arm")
+    parser.add_argument(
+        "--gripper-mount-link",
+        default=GRIPPER_MOUNT_LINK,
+        help="gripper base link to mount at (omit to auto-discover the gripper's root link)",
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

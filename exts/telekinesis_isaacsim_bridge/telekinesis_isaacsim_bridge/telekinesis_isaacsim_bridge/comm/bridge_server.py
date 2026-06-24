@@ -55,7 +55,7 @@ from fastapi import FastAPI, HTTPException
 
 from ..core.gripper_articulation import GripperArticulation
 from ..core.robot_articulation import RobotArticulation
-from ..core.robot_assembler import assemble_tool, bind_shared_articulation
+from ..core.robot_assembler import get_articulation_base_link_name, assemble_tool, bind_shared_articulation
 from ..core.urdf_loader import import_urdf_at
 from .routers import ALL_ROUTERS
 
@@ -164,6 +164,11 @@ class BridgeServer:
         with ``RobotAssembler``, bind the single merged articulation, and hand that
         same handle to both devices -- each re-resolving its own joints by name.
         After this, the unchanged ``move_j`` / gripper routes drive the shared rig.
+
+        ``gripper_mount_link`` may be None: the gripper must be joined at its *base*
+        link (the articulation's root), so we auto-discover it via
+        ``get_articulation_base_link_name`` rather than trusting a guessed name -- a
+        non-root mount silently corrupts the merge (gripper joints never fold in).
         """
         arm = self.get_device(arm_id)
         gripper = self.get_device(gripper_id)
@@ -174,6 +179,8 @@ class BridgeServer:
 
         arm_names = list(arm.dof_names)
         driver_name = gripper.dof_names[gripper._driven_index]
+        if gripper_mount_link is None:
+            gripper_mount_link = get_articulation_base_link_name(gripper._articulation)
 
         stage = omni.usd.get_context().get_stage()
         if stage is None:
@@ -199,6 +206,8 @@ class BridgeServer:
             "articulation": arm.prim_path,
             "num_dof": shared.num_dof,
             "dof_names": list(shared.dof_names),
+            "arm_mount_link": arm_mount_link,
+            "gripper_mount_link": gripper_mount_link,  # resolved (auto-discovered if omitted)
             "robot": {"articulation_id": arm_id, **arm.info()},
             "gripper": {"articulation_id": gripper_id, **gripper.info()},
         }

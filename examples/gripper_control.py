@@ -26,9 +26,33 @@ import argparse
 
 import requests
 
+try:
+    import telekinesis_urdfs
+except ImportError as e:
+    raise ImportError(
+        "telekinesis-urdfs is not installed. "
+        "Install it from: https://github.com/telekinesis-ai/telekinesis-urdfs"
+    ) from e
+
+# Path to the grippers's URDF to import. Left blank on purpose -- set it to the URDF
+# you want to load (an absolute path or a path the bridge process can read).
+try:
+    robot_description = telekinesis_urdfs.load("OnRobotRG6")
+    if not robot_description.urdf_path.is_file():
+        raise ValueError(f"No urdf found, i.e. {robot_description.urdf_path} is not a file")
+
+except Exception as e:
+    raise RuntimeError(
+        f"Failed to load robot description for '{__class__.__name__}'. "
+        "Ensure telekinesis-urdfs is installed: "
+        "https://github.com/telekinesis-ai/telekinesis-urdfs"
+    ) from e
+
+URDF_PATH = str(robot_description.urdf_path )
+
 HOST = "127.0.0.1"
 PORT = 8765
-GRIPPER_PRIM_PATH = "/World/Robotiq_2F_85_edit"
+GRIPPER_PRIM_PATH = "/World/rg6"
 
 # A move blocks server-side until it finishes, so allow well over the bridge's
 # own motion cap (~30 s) before the HTTP client gives up.
@@ -64,7 +88,7 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--prim", default=GRIPPER_PRIM_PATH, help="prim path of the gripper in the stage")
-    parser.add_argument("--urdf", default=None, help="optional URDF to import if the prim isn't in the stage")
+    parser.add_argument("--urdf", default=URDF_PATH, help="optional URDF to import if the prim isn't in the stage")
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

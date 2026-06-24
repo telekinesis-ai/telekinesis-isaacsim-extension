@@ -46,16 +46,19 @@ class AttachToolRequest(BaseModel):
     """Body of POST /articulations/{articulation_id}/robot/attach_tool.
 
     The path ``articulation_id`` is the arm. This names the *gripper* articulation
-    to attach and the rigid-body links to join them at (e.g. UR ``wrist_3_link`` and the
-    gripper's base link -- must be RigidBodyAPI links, not empty frames like
-    ``tool0``). After attaching, arm and gripper share one articulation; each
-    device keeps driving only its own joints. ``offset`` is an optional mount
-    transform baked into the fixed joint (null/omitted => flush attach).
+    to attach and the links to join them at. ``arm_mount_link`` is the arm's flange
+    (e.g. UR ``wrist_3_link``) -- a RigidBodyAPI link or a Site, not an empty frame
+    like ``tool0``. ``gripper_mount_link`` is the gripper's base link; leave it
+    null/omitted to auto-discover the gripper articulation's root link (its base),
+    which is what the fixed joint must attach to. After attaching, arm and gripper
+    share one articulation; each device keeps driving only its own joints.
+    ``offset`` is an optional mount transform baked into the fixed joint
+    (null/omitted => flush attach).
     """
 
     gripper_articulation_id: str
     arm_mount_link: str
-    gripper_mount_link: str
+    gripper_mount_link: str | None = None
     offset: Transformation | None = None
 
 
