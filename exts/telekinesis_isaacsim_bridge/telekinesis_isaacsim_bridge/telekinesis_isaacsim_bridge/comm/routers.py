@@ -1,12 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """HTTP routers for the bridge, grouped by domain.
 
+Refereces:
+Prim and articulation:
+- https://isaac-sim.github.io/IsaacLab/main/source/api/lab/isaaclab.assets.html#isaaclab.assets.Articulation
+- https://isaac-sim.github.io/IsaacLab/main/source/api/lab/isaaclab.sim.utils.html#module-isaaclab.sim.utils.prims
 
-
-Three ``APIRouter``s -- devices (connect/disconnect/info/list), robot, and
+Three ``APIRouter``s -- articulations (create/get/delete/list), robot, and
 gripper -- so each device kind owns a parallel namespace under
-``/devices/{device_id}/<kind>/...``. They are intentionally thin: every handler
-just resolves the shared :class:`DeviceRegistry` and forwards to it.
+``/articulations/{articulation_id}/<kind>/...``. They are intentionally thin:
+every handler just resolves the shared registry and forwards to it.
 
 The registry is the ``BridgeServer`` instance itself, stashed on ``app.state`` by
 ``BridgeServer._build_app`` and pulled back here via the ``get_registry``
@@ -18,6 +21,10 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, sta
 
 from .models import (
     ApplyRelativePoseRequest,
+    AttachToolRequest,
+    CreateArticulationRequest,
+    GripperMoveRequest,
+    MoveJRequest,
     OpenSceneRequest,
     SetJointStateRequest,
     SetPrimMetadataRequest,
@@ -41,6 +48,84 @@ def not_implemented():
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="Not implemented",
     )
+
+
+# -- articulations (device-kind agnostic) -----------------------------------
+
+articulations = APIRouter(tags=["articulations"])
+
+
+@articulations.put("/articulations", summary="Create Articulation")
+async def create_articulation(req: CreateArticulationRequest, reg=Depends(get_registry)):
+    # Register (and bind) one articulation; returns its id, prim, dof and state.
+    return await reg.create_articulation(req.prim_path, req.device_type, req.urdf_path)
+
+
+@articulations.get("/articulations", summary="List Articulations")
+async def list_articulations(reg=Depends(get_registry)):
+    return reg.list_articulations()
+
+
+@articulations.get("/articulations/{articulation_id}", summary="Get Articulation")
+async def get_articulation(articulation_id: str, reg=Depends(get_registry)):
+    # Id + static description (prim, dof, names, current state). 404 if unknown.
+    return reg.get_articulation_info(articulation_id)
+
+
+@articulations.delete("/articulations/{articulation_id}", summary="Delete Articulation")
+async def delete_articulation(articulation_id: str, reg=Depends(get_registry)):
+    # Unregister the articulation (the USD prim is left in the stage).
+    return reg.delete_articulation(articulation_id)
+
+
+# -- robot ------------------------------------------------------------------
+
+robot = APIRouter(prefix="/articulations/{articulation_id}/robot", tags=["robot"])
+
+
+@robot.post("/move_j")
+async def move_j(articulation_id: str, req: MoveJRequest, reg=Depends(get_registry)):
+    # Blocks until the move completes, then returns the final motion status.
+    return await reg.get_device(articulation_id).move_j(req.q)
+
+
+@robot.get("/state")
+async def get_state(articulation_id: str, reg=Depends(get_registry)):
+    return reg.get_device(articulation_id).get_state()
+
+
+@robot.post("/attach_tool", summary="Attach Tool")
+async def attach_tool(articulation_id: str, req: AttachToolRequest, reg=Depends(get_registry)):
+    # Assemble a gripper onto this arm; both devices then share one articulation.
+    return await reg.attach_tool(
+        articulation_id, req.gripper_articulation_id, req.arm_mount_link, req.gripper_mount_link, req.offset
+    )
+
+
+# -- gripper ----------------------------------------------------------------
+
+gripper = APIRouter(prefix="/articulations/{articulation_id}/gripper", tags=["gripper"])
+
+
+@gripper.post("/move")
+async def gripper_move(articulation_id: str, req: GripperMoveRequest, reg=Depends(get_registry)):
+    # Blocks until the finger reaches the target or stalls; returns final state.
+    return await reg.get_device(articulation_id).gripper_move(req.fraction)
+
+
+@gripper.post("/open")
+async def gripper_open(articulation_id: str, reg=Depends(get_registry)):
+    return await reg.get_device(articulation_id).gripper_open()
+
+
+@gripper.post("/close")
+async def gripper_close(articulation_id: str, reg=Depends(get_registry)):
+    return await reg.get_device(articulation_id).gripper_close()
+
+
+@gripper.get("/state")
+async def gripper_state(articulation_id: str, reg=Depends(get_registry)):
+    return reg.get_device(articulation_id).gripper_state()
 
 
 # ---------------------------------------------------------------------------
@@ -677,7 +762,7 @@ async def sweep_collisions():
 
 
 ALL_ROUTERS = (
-    devices, robot, gripper,
+    articulations, robot, gripper,
     general, stage, prims,
     nucleus, manipulators, periphery,
     trajectories, teaching, trajectory_planner,

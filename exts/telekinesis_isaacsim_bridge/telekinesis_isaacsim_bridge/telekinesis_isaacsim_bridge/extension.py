@@ -31,9 +31,9 @@ from .comm.bridge_server import BridgeServer
 from .global_variables import EXTENSION_DESCRIPTION, EXTENSION_TITLE
 from .ui.ui_builder import UIBuilder
 
-# Well-known entry point. Clients POST /connect here, name a prim (+ optional
-# URDF), and get back an opaque device_id. Multi-robot scales by adding more
-# connect calls -- the bridge server tracks one device per prim, all on one port.
+# Well-known entry point. Clients PUT /articulations here, name a prim (+ optional
+# URDF), and get back an articulation_id. Multi-robot scales by adding more
+# create calls -- the bridge server tracks one articulation per prim, all on one port.
 CONNECTION_PORT = 8765
 
 """
@@ -91,9 +91,9 @@ class Extension(omni.ext.IExt):
         self._stage_event_sub = None
         self._timeline = omni.timeline.get_timeline_interface()
 
-        # Host the single bridge server. Clients connect here and address devices
-        # by the device_id it returns (see BridgeServer). A bind failure (e.g.
-        # port already in use) must never break startup.
+        # Host the single bridge server. Clients create articulations here and
+        # address them by the articulation_id it returns (see BridgeServer). A bind
+        # failure (e.g. port already in use) must never break startup.
         self._connection_server = BridgeServer(port=CONNECTION_PORT)
         try:
             self._connection_server.start()

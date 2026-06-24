@@ -5,12 +5,59 @@ Reference:
 -https://github.com/fastapi/full-stack-fastapi-template/blob/master/backend/app/models.py
 
 Kept separate from the routers so the wire schema is one obvious place to look
-as the API grows. 
+as the API grows. Wire units are native Isaac: radians for joints, the gripper
+``fraction`` is closed-ness (0.0 open .. 1.0 closed).
 """
 
 from enum import Enum
 
 from pydantic import BaseModel
+
+
+class CreateArticulationRequest(BaseModel):
+    """Body of PUT /articulations -- register (and bind) one articulation."""
+
+    prim_path: str
+    device_type: str  # "robot" | "gripper"
+    urdf_path: str | None = None
+
+
+class MoveJRequest(BaseModel):
+    q: list[float]
+
+
+class GripperMoveRequest(BaseModel):
+    fraction: float
+
+
+class Transformation(BaseModel):
+    """A rigid transform: translation (meters) + rotation (XYZ Euler degrees).
+
+    Generic on purpose -- used here as the gripper mount offset for attach_tool,
+    but reusable wherever a request needs a pose delta. An all-zero transform (the
+    default) is the identity.
+    """
+
+    translation: list[float] = [0.0, 0.0, 0.0]  # meters (x, y, z)
+    rotation: list[float] = [0.0, 0.0, 0.0]      # XYZ Euler degrees
+
+
+class AttachToolRequest(BaseModel):
+    """Body of POST /articulations/{articulation_id}/robot/attach_tool.
+
+    The path ``articulation_id`` is the arm. This names the *gripper* articulation
+    to attach and the rigid-body links to join them at (e.g. UR ``wrist_3_link`` and the
+    gripper's base link -- must be RigidBodyAPI links, not empty frames like
+    ``tool0``). After attaching, arm and gripper share one articulation; each
+    device keeps driving only its own joints. ``offset`` is an optional mount
+    transform baked into the fixed joint (null/omitted => flush attach).
+    """
+
+    gripper_articulation_id: str
+    arm_mount_link: str
+    gripper_mount_link: str
+    offset: Transformation | None = None
+
 
 # -- Stage (mirrors the extension's Omniservice schemas) --------------------
 
