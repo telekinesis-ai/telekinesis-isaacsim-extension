@@ -20,7 +20,7 @@ Requires the ``requests`` package (``pip install requests``).
 """
 
 import argparse
-import math
+import numpy as np
 
 import requests
 
@@ -46,7 +46,7 @@ def _request(base, method, path, body=None):
 def robot_joints_deg(base, articulation_id):
     """Current joint positions in degrees (wire is radians)."""
     q = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["q"]
-    return [round(math.degrees(v), 3) for v in q]
+    return np.rad2deg(q).round(3).tolist()
 
 
 def run_robot(base, prim_path):
@@ -60,7 +60,7 @@ def run_robot(base, prim_path):
         base,
         "POST",
         f"/articulations/{articulation_id}/joint_positions",
-        {"positions": [math.radians(d) for d in TARGET_DEG]},
+        {"positions": np.deg2rad(TARGET_DEG).tolist()},
     )
     print(f"joints after  (deg): {robot_joints_deg(base, articulation_id)}")
 

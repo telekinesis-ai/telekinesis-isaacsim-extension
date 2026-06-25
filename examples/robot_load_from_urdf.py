@@ -19,7 +19,7 @@ Requires the ``requests`` package (``pip install requests``).
 """
 
 import argparse
-import math
+import numpy as np
 
 import requests
 
@@ -78,7 +78,7 @@ def run_robot(base, prim_path, urdf_path):
         base,
         "POST",
         f"/articulations/{articulation_id}/joint_positions",
-        {"positions": [math.radians(d) for d in TARGET_DEG]},
+        {"positions": np.deg2rad(TARGET_DEG).tolist()},
     )
     print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
 

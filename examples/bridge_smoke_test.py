@@ -29,7 +29,7 @@ Run from any Python:  python bridge_smoke_test.py --prim /World/ur10e2
 
 import argparse
 import json
-import math
+import numpy as np
 import urllib.request
 
 HOST = "127.0.0.1"
@@ -67,7 +67,7 @@ def run_robot(base, prim_path, urdf_path):
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
 
     for target_deg in ROBOT_TARGETS_DEG:
-        target_rad = [math.radians(d) for d in target_deg]
+        target_rad = np.deg2rad(target_deg).tolist()
         print(f"move_j target (deg): {target_deg}")
         status = _request(
             base, "POST", f"/articulations/{articulation_id}/joint_positions", {"positions": target_rad}

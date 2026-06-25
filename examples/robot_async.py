@@ -26,7 +26,7 @@ Requires the ``requests`` package (``pip install requests``).
 """
 
 import argparse
-import math
+import numpy as np
 import time
 
 import requests
@@ -93,7 +93,7 @@ def run(base, prim_path):
 
     # 1) asynchronous, fire-and-forget -------------------------------------------
     print(f"\n[1] async fire-and-forget -> {TARGET_A_DEG}")
-    target_a = [math.radians(d) for d in TARGET_A_DEG]
+    target_a = np.deg2rad(TARGET_A_DEG).tolist()
     result = set_joint_positions(base, articulation_id, target_a, asynchronous=True)
     print(f"  returned immediately: {result}")
     time.sleep(2)
@@ -102,14 +102,14 @@ def run(base, prim_path):
 
     # 2) asynchronous, then wait client-side for a tolerance ---------------------
     print(f"\n[2] async + client-side wait -> {TARGET_B_DEG}")
-    target_b = [math.radians(d) for d in TARGET_B_DEG]
+    target_b = np.deg2rad(TARGET_B_DEG).tolist()
     set_joint_positions(base, articulation_id, target_b, asynchronous=True)
     status = wait_until_reached(base, articulation_id, target_b, tolerance_rad=5e-3)
     print(f"  client saw reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
 
     # 3) blocking ----------------------------------------------------------------
     print(f"\n[3] blocking -> {TARGET_C_DEG}")
-    target_c = [math.radians(d) for d in TARGET_C_DEG]
+    target_c = np.deg2rad(TARGET_C_DEG).tolist()
     status = set_joint_positions(base, articulation_id, target_c, asynchronous=False)
     print(f"  server returned done={status['done']} reached={status['reached']} "
           f"(max_error={status['max_error']:.2e} rad)")

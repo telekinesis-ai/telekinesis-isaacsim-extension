@@ -31,7 +31,7 @@ Requires the ``requests`` package (``pip install requests``).
 """
 
 import argparse
-import math
+import numpy as np
 import time
 
 import requests
@@ -252,14 +252,13 @@ def run(base, arm_prim, gripper_prim, arm_mount_link):
     # 3) Move the arm (all joints) on the shared rig. move_j blocks server-side;
     #    move_j_and_wait fires async and runs the same reached-or-stalled wait here.
     print(f"\nmove arm target (deg): {TARGET_DEG}  (server-blocking move_j)")
-    status = arm.move_j([math.radians(d) for d in TARGET_DEG])
+    status = arm.move_j(np.deg2rad(TARGET_DEG).tolist())
     print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
-
-    print(f"move arm back to zero  (client-side move_j_and_wait)")
-    status = arm.move_j_and_wait(TARGET_DEG2)
+    
+    print(f"move arm to {TARGET_DEG2} (client-side move_j_and_wait) ")
+    status = arm.move_j_and_wait(np.deg2rad(TARGET_DEG2).tolist())
     print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
-    print(f"  arm joints now (deg): {[round(math.degrees(v), 2) for v in arm.get_state()['q']]}")
-
+    print(f"  arm joints now (deg): {np.rad2deg(arm.get_state()['q']).round(2).tolist()}")
     # 4) Move the gripper (fraction -> one joint) on the shared rig. close_and_wait
     #    returns reached=False if the finger stalls on an object (a successful grasp).
     print(f"\ngripper fraction (start): {gripper.fraction():.3f}")
