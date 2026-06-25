@@ -84,6 +84,19 @@ class BridgeServer:
         self._serve_task = asyncio.ensure_future(self._server.serve())
         logger.info(f"[bridge] server listening on {self._host}:{self._port}")
 
+    def reset_devices(self):
+        """Drop every bound device while leaving the server running.
+
+        Called when a new stage is opened: the device table holds
+        SingleArticulation handles into the previous stage, which are stale the
+        moment that stage is replaced. Clearing the registry (rather than
+        restarting uvicorn) keeps the port bound and the app alive -- clients
+        just re-PUT their articulations against the new stage.
+        """
+        if self._articulation_service is not None:
+            self._articulation_service.clear()
+            logger.info("[bridge] cleared device registry (stage changed).")
+
     def stop(self):
         """Ask uvicorn to exit and drop every bound device."""
         if self._articulation_service is not None:

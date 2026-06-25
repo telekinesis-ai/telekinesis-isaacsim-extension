@@ -61,8 +61,11 @@ class Extension(omni.ext.IExt):
 
         # Build Window
         self._window = ScrollingWindow(
-            title=EXTENSION_TITLE, width=600, height=500, visible=False, dockPreference=ui.DockPreference.LEFT_BOTTOM
-        )
+            title=EXTENSION_TITLE,
+            width=600,
+            height=500,
+            visible=False,
+            dockPreference=ui.DockPreference.LEFT_BOTTOM)
         self._window.set_visibility_changed_fn(self._on_window)
 
         action_registry = omni.kit.actions.core.get_action_registry()
@@ -73,8 +76,11 @@ class Extension(omni.ext.IExt):
             description=f"Add {EXTENSION_TITLE} Extension to UI toolbar",
         )
         self._menu_items = [
-            MenuItemDescription(name=EXTENSION_TITLE, onclick_action=(ext_id, f"CreateUIExtension:{EXTENSION_TITLE}"))
-        ]
+            MenuItemDescription(
+                name=EXTENSION_TITLE,
+                onclick_action=(
+                    ext_id,
+                    f"CreateUIExtension:{EXTENSION_TITLE}"))]
 
         add_menu_items(self._menu_items, EXTENSION_TITLE)
 
@@ -97,9 +103,17 @@ class Extension(omni.ext.IExt):
         except Exception as exc:
             logger.error(f"[bridge] bridge server on port {BRIDGE_PORT} failed to start: {exc}")
 
+        # Clear the bridge's device registry whenever the stage is replaced. This
+        # subscription is tied to the server (always active while the extension is
+        # loaded), not to the UI panel -- the _on_window stage subscription only
+        # exists while the window is visible, but the bridge runs regardless.
+        self._bridge_stage_event_sub = self._usd_context.get_stage_event_stream().create_subscription_to_pop(
+            self._on_bridge_stage_event, name="telekinesis bridge device-registry reset")
+
     def on_shutdown(self):
         """Stop the bridge server and release all subscriptions, menu items, and UI resources."""
         self._models = {}
+        self._bridge_stage_event_sub = None
         if getattr(self, "_bridge_server", None) is not None:
             self._bridge_server.stop()
             self._bridge_server = None
@@ -164,7 +178,8 @@ class Extension(omni.ext.IExt):
         """Subscribe physics steps on play; unsubscribe on stop; forward to UIBuilder."""
         if event.type == int(omni.timeline.TimelineEventType.PLAY):
             if not self._physx_subscription:
-                self._physx_subscription = self._physxIFace.subscribe_physics_step_events(self._on_physics_step)
+                self._physx_subscription = self._physxIFace.subscribe_physics_step_events(
+                    self._on_physics_step)
         elif event.type == int(omni.timeline.TimelineEventType.STOP):
             self._physx_subscription = None
 
@@ -173,6 +188,18 @@ class Extension(omni.ext.IExt):
     def _on_physics_step(self, step):
         """Forward each physics step to UIBuilder (only fires while the timeline is playing)."""
         self.ui_builder.on_physics_step(step)
+
+    def _on_bridge_stage_event(self, event):
+        """Clear the bridge's device registry when the stage is opened or closed.
+
+        The articulation handles held by the bridge belong to the stage that was
+        active when they were created; replacing the stage strands them. We clear
+        rather than restart the server so the port stays bound and clients can
+        simply re-PUT their articulations against the new stage.
+        """
+        if event.type == int(StageEventType.OPENED) or event.type == int(StageEventType.CLOSED):
+            if getattr(self, "_bridge_server", None) is not None:
+                self._bridge_server.reset_devices()
 
     def _on_stage_event(self, event):
         """Clean up physics subscription on stage open/close; forward event to UIBuilder."""
