@@ -20,6 +20,7 @@ import omni.kit.commands
 import omni.timeline
 import omni.usd
 from isaacsim.core.prims import SingleArticulation
+from loguru import logger
 from pxr import Gf, Usd
 
 _BIND_RETRIES = 60
@@ -161,7 +162,7 @@ async def bind_shared_articulation(prim_path, name):
             articulation = SingleArticulation(prim_path=prim_path, name=name)
             articulation.initialize()
             if articulation.num_dof and articulation.get_joint_positions() is not None:
-                print(f"[bridge] bound shared articulation {prim_path}: {articulation.num_dof} dof {list(articulation.dof_names)}")
+                logger.info(f"[bridge] bound shared articulation {prim_path}: {articulation.num_dof} dof {list(articulation.dof_names)}")
                 return articulation
         except Exception:
             pass

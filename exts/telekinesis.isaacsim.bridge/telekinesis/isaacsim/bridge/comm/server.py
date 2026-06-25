@@ -52,6 +52,7 @@ import asyncio
 import omni.usd
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from loguru import logger
 
 from ..core.gripper_articulation import GripperArticulation
 from ..core.robot_articulation import RobotArticulation
@@ -71,7 +72,8 @@ class BridgeServer:
     / ``get_device`` / ``list_articulations``).
     """
 
-    def __init__(self, host="127.0.0.1", port=8765):
+    def __init__(self, host="127.0.0.1", port=8766):
+        """Set up the internal registry and build the FastAPI app; call `start()` to begin serving."""
         self._host = host
         self._port = port
         self._devices = {}      # articulation_id -> RobotArticulation | GripperArticulation
@@ -89,7 +91,7 @@ class BridgeServer:
         # handling, and don't let uvicorn hijack Ctrl+C.
         self._server.install_signal_handlers = lambda: None
         self._serve_task = asyncio.ensure_future(self._server.serve())
-        print(f"[bridge] server listening on {self._host}:{self._port}")
+        logger.info(f"[bridge] server listening on {self._host}:{self._port}")
 
     def stop(self):
         """Ask uvicorn to exit and drop every bound device."""
@@ -102,7 +104,7 @@ class BridgeServer:
         if self._serve_task is not None:
             self._serve_task.cancel()
             self._serve_task = None
-        print("[bridge] server stopped.")
+        logger.info("[bridge] server stopped.")
 
     # -- articulation registry (used by the routers via app.state.registry) --
 
@@ -223,6 +225,7 @@ class BridgeServer:
         return device
 
     def list_articulations(self):
+        """Return a ``{articulation_id: prim_path}`` map of every registered articulation."""
         return {articulation_id: device.prim_path for articulation_id, device in self._devices.items()}
 
     # -- internals ----------------------------------------------------------

@@ -18,11 +18,14 @@ import omni.ui as ui
 from isaacsim.gui.components.element_wrappers import CollapsableFrame
 from isaacsim.gui.components.ui_utils import get_style
 
+from ..global_variables import BRIDGE_HOST, BRIDGE_PORT
+
 
 class UIBuilder:
     """Minimal status panel for the bridge. Robot UI lands in task 2."""
 
     def __init__(self):
+        """Initialise frame/element lists and capture the timeline interface."""
         # Frames are sub-windows that can contain multiple UI elements.
         self.frames = []
         # UI elements created using a UIElementWrapper instance.
@@ -62,5 +65,4 @@ class UIBuilder:
         with status_frame:
             with ui.VStack(style=get_style(), spacing=5, height=0):
                 ui.Label("Telekinesis Isaac Sim Bridge")
-                ui.Label("Arm server:     127.0.0.1:8765")
-                ui.Label("Gripper server: 127.0.0.1:8766")
+                ui.Label(f"Bridge server: {BRIDGE_HOST}:{BRIDGE_PORT}")

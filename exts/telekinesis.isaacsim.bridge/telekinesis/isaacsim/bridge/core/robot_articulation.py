@@ -15,6 +15,7 @@ import omni.kit.app
 import omni.timeline
 from isaacsim.core.prims import SingleArticulation
 from isaacsim.core.utils.types import ArticulationAction
+from loguru import logger
 
 # A PhysX position drive settles with a small steady-state offset (gravity, drive
 # stiffness, the URDF importer's default gains), so an over-tight position
@@ -35,6 +36,7 @@ class RobotArticulation:
     """Binds an arm articulation at ``prim_path`` and moves its joints (radians)."""
 
     def __init__(self, prim_path, name="robot", joint_names=None):
+        """Store prim path and initialise joint state; call `bind()` before use."""
         self.prim_path = prim_path
         self._name = name
         self._articulation = None
@@ -71,7 +73,7 @@ class RobotArticulation:
                 self._articulation.initialize()
                 if self._articulation.num_dof and self._articulation.get_joint_positions() is not None:
                     self._resolve_driven_joints()
-                    print(f"[bridge] bound robot {self.prim_path}: {self.num_dof} dof {self.dof_names}")
+                    logger.info(f"[bridge] bound robot {self.prim_path}: {self.num_dof} dof {self.dof_names}")
                     return
             except Exception:
                 pass
@@ -107,7 +109,7 @@ class RobotArticulation:
         self.joint_names = list(joint_names)
         self._resolve_driven_joints()
         self._target = None
-        print(f"[bridge] arm {self.prim_path} on shared articulation: drives {self.dof_names} at {self.joint_indices}")
+        logger.info(f"[bridge] arm {self.prim_path} on shared articulation: drives {self.dof_names} at {self.joint_indices}")
 
     async def move_j(self, q_rad):
         """Move all joints to ``q_rad`` and return once the move completes.

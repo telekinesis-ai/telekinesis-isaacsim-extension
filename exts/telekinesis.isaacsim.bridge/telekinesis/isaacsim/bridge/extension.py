@@ -27,14 +27,11 @@ from isaacsim.gui.components.menu import MenuItemDescription
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 from omni.usd import StageEventType
 
-from .comm.bridge_server import BridgeServer
-from .global_variables import EXTENSION_DESCRIPTION, EXTENSION_TITLE
-from .ui.ui_builder import UIBuilder
+from loguru import logger
 
-# Well-known entry point. Clients PUT /articulations here, name a prim (+ optional
-# URDF), and get back an articulation_id. Multi-robot scales by adding more
-# create calls -- the bridge server tracks one articulation per prim, all on one port.
-CONNECTION_PORT = 8765
+from .comm.server import BridgeServer
+from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_DESCRIPTION, EXTENSION_TITLE
+from .ui.ui_builder import UIBuilder
 
 """
 This file serves as a basic template for the standard boilerplate operations
@@ -94,17 +91,18 @@ class Extension(omni.ext.IExt):
         # Host the single bridge server. Clients create articulations here and
         # address them by the articulation_id it returns (see BridgeServer). A bind
         # failure (e.g. port already in use) must never break startup.
-        self._connection_server = BridgeServer(port=CONNECTION_PORT)
+        self._bridge_server = BridgeServer(host=BRIDGE_HOST, port=BRIDGE_PORT)
         try:
-            self._connection_server.start()
+            self._bridge_server.start()
         except Exception as exc:
-            print(f"[bridge] bridge server on port {CONNECTION_PORT} failed to start: {exc}")
+            logger.error(f"[bridge] bridge server on port {BRIDGE_PORT} failed to start: {exc}")
 
     def on_shutdown(self):
+        """Stop the bridge server and release all subscriptions, menu items, and UI resources."""
         self._models = {}
-        if getattr(self, "_connection_server", None) is not None:
-            self._connection_server.stop()
-            self._connection_server = None
+        if getattr(self, "_bridge_server", None) is not None:
+            self._bridge_server.stop()
+            self._bridge_server = None
         remove_menu_items(self._menu_items, EXTENSION_TITLE)
 
         action_registry = omni.kit.actions.core.get_action_registry()
@@ -116,6 +114,7 @@ class Extension(omni.ext.IExt):
         gc.collect()
 
     def _on_window(self, visible):
+        """Subscribe/unsubscribe stage and timeline events as the panel is shown or hidden."""
         if self._window.visible:
             # Subscribe to Stage and Timeline Events
             self._usd_context = omni.usd.get_context()
@@ -132,6 +131,7 @@ class Extension(omni.ext.IExt):
             self.ui_builder.cleanup()
 
     def _build_ui(self):
+        """Rebuild the extension panel inside the ScrollingWindow and dock it left of the Viewport."""
         with self._window.frame:
             with ui.VStack(spacing=5, height=0):
                 self._build_extension_ui()
@@ -156,10 +156,12 @@ class Extension(omni.ext.IExt):
     #################################################################
 
     def _menu_callback(self):
+        """Toggle the extension window visibility and notify UIBuilder."""
         self._window.visible = not self._window.visible
         self.ui_builder.on_menu_callback()
 
     def _on_timeline_event(self, event):
+        """Subscribe physics steps on play; unsubscribe on stop; forward to UIBuilder."""
         if event.type == int(omni.timeline.TimelineEventType.PLAY):
             if not self._physx_subscription:
                 self._physx_subscription = self._physxIFace.subscribe_physics_step_events(self._on_physics_step)
@@ -169,9 +171,11 @@ class Extension(omni.ext.IExt):
         self.ui_builder.on_timeline_event(event)
 
     def _on_physics_step(self, step):
+        """Forward each physics step to UIBuilder (only fires while the timeline is playing)."""
         self.ui_builder.on_physics_step(step)
 
     def _on_stage_event(self, event):
+        """Clean up physics subscription on stage open/close; forward event to UIBuilder."""
         if event.type == int(StageEventType.OPENED) or event.type == int(StageEventType.CLOSED):
             # stage was opened or closed, cleanup
             self._physx_subscription = None
@@ -180,5 +184,5 @@ class Extension(omni.ext.IExt):
         self.ui_builder.on_stage_event(event)
 
     def _build_extension_ui(self):
-        # Call user function for building UI
+        """Delegate UI construction to UIBuilder.build_ui()."""
         self.ui_builder.build_ui()

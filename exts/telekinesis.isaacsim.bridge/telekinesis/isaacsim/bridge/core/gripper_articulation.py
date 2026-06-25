@@ -13,6 +13,7 @@ import asyncio
 import omni.kit.app
 import omni.timeline
 import omni.usd
+from loguru import logger
 from isaacsim.core.prims import SingleArticulation
 from isaacsim.core.utils.types import ArticulationAction
 from pxr import Usd, UsdPhysics
@@ -73,6 +74,7 @@ class GripperArticulation:
     """Binds a gripper articulation and drives its actuated joint by closed-ness fraction."""
 
     def __init__(self, prim_path, name="gripper"):
+        """Store prim path and initialise drive state; call `bind()` before use."""
         self.prim_path = prim_path
         self._name = name
         self._articulation = None
@@ -122,7 +124,7 @@ class GripperArticulation:
         self._opened_target_rad, self._closed_target_rad = driven_joint_limits(
             self._articulation, self._driven_index
         )
-        print(
+        logger.info(
             f"[bridge] bound gripper {self.prim_path}: driver '{driver_joint}' "
             f"open={self._opened_target_rad:.3f} closed={self._closed_target_rad:.3f} rad"
         )
@@ -144,7 +146,7 @@ class GripperArticulation:
         self._opened_target_rad, self._closed_target_rad = driven_joint_limits(
             articulation, self._driven_index
         )
-        print(
+        logger.info(
             f"[bridge] gripper {self.prim_path} on shared articulation: driver "
             f"'{driver_name}' at index {self._driven_index} "
             f"open={self._opened_target_rad:.3f} closed={self._closed_target_rad:.3f} rad"
@@ -185,9 +187,11 @@ class GripperArticulation:
         return {"done": True, "reached": reached, "status": STATUS_AT_DEST, **self.gripper_state()}
 
     async def gripper_open(self):
+        """Fully open the gripper (fraction=0.0)."""
         return await self.gripper_move(0.0)
 
     async def gripper_close(self):
+        """Fully close the gripper (fraction=1.0)."""
         return await self.gripper_move(1.0)
 
     def gripper_state(self):
