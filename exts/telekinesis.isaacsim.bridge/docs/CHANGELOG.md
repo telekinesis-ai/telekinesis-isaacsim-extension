@@ -8,7 +8,7 @@
 - Per-device servers now expose typed REST routes (`POST /move_j`, `GET /state`,
   `POST /gripper/move|open|close`, `GET /gripper/state`) with pydantic models instead of
   a single `{"type": ...}` envelope. Success is HTTP 2xx; failures are 4xx with `{"error"}`.
-- Per-device-port topology preserved: `POST /connect` on 8765 still returns a dedicated port.
+- Per-device-port topology preserved: `POST /connect` on 8766 still returns a dedicated port.
 ### Added
 - `fastapi`, `uvicorn`, `pydantic` declared via `[python.pipapi]`.
 

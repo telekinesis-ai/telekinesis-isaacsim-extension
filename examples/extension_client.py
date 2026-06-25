@@ -8,11 +8,11 @@ calls the endpoints the extension actually implements today -- the General
 routes -- so you can run it end to end against the live bridge and see real
 responses.
 
-The bridge listens on 127.0.0.1:8765 (see telekinesis_isaacsim_bridge). With
+The bridge listens on 127.0.0.1:8766 (see telekinesis_isaacsim_bridge). With
 Isaac Sim running and the extension enabled::
 
     python extension_client.py
-    python extension_client.py --base_url http://127.0.0.1:8765
+    python extension_client.py --base_url http://127.0.0.1:8766
 
 Add a function here each time another mirrored route graduates from a stub to a
 real implementation.
@@ -24,7 +24,7 @@ import argparse
 
 import requests
 
-DEFAULT_BASE_URL = "http://127.0.0.1:8765"
+DEFAULT_BASE_URL = "http://127.0.0.1:8766"
 DEFAULT_TIMEOUT = 30.0
 
 
@@ -167,21 +167,102 @@ def update_colliders(base_url, prim_path, enable):
     return _request(base_url, "PATCH", "/prims/physics/colliders/", body=body)
 
 
+def test_stage(base_url):
+    """Exercise every implemented stage route in a meaningful read → mutate → restore order."""
+    print("  active scene:      ", get_active_scene(base_url))
+    print("  motion groups:     ", list_stage_motion_groups(base_url))
+
+    original_units = get_stage_units(base_url)["meters_per_unit"]
+    print(f"  units (original):  {original_units}")
+    update_stage_units(base_url, 1.0)
+    print("  units (set 1.0):   ", get_stage_units(base_url))
+    update_stage_units(base_url, original_units)
+    print("  units (restored):  ", get_stage_units(base_url))
+
+    print("  sim (initial):     ", simulation_state(base_url))
+    timeline_action(base_url, "play")
+    print("  sim (after play):  ", simulation_state(base_url))
+    timeline_action(base_url, "pause")
+    print("  sim (after pause): ", simulation_state(base_url))
+    timeline_action(base_url, "stop")
+    print("  sim (after stop):  ", simulation_state(base_url))
+
+
+def test_prims(base_url, prim_path):
+    """Exercise every implemented prim route in a meaningful read → mutate → restore order."""
+    # --- Pose lifecycle ---
+    original_pose = get_pose(base_url, prim_path, "world")["pose"]
+    print(f"  pose (original):       {original_pose}")
+
+    assign_default_poses(base_url, prim_path)
+    print("  default poses (saved): ", list_default_poses(base_url))
+
+    nudged_pose = list(original_pose)
+    nudged_pose[0] += 0.01
+    update_pose(base_url, prim_path, nudged_pose)
+    print("  pose (after move +X):  ", get_pose(base_url, prim_path, "world"))
+
+    print("  relative pose (self):  ", get_relative_pose(base_url, prim_path, prim_path))
+
+    apply_relative_pose(base_url, prim_path, [0.01, 0, 0, 0, 0, 0])
+    print("  pose (after nudge):    ", get_pose(base_url, prim_path, "world"))
+
+    # --- Restore ---
+    reset_to_default_poses(base_url, prim_path)
+    restored_pose = get_pose(base_url, prim_path, "world")["pose"]
+    print(f"  pose (restored):       {restored_pose}")
+    print(f"  matches original:      {restored_pose == original_pose}")
+
+    clear_default_poses(base_url)
+    print("  default poses (clear): ", list_default_poses(base_url))
+
+    # --- Metadata ---
+    set_prim_metadata(base_url, prim_path, "test_category", "test_type")
+    print("  metadata (set):        ok")
+    remove_prim_metadata(base_url, prim_path)
+    print("  metadata (removed):    ok")
+
+    # --- Visibility ---
+    set_prim_visibility(base_url, prim_path, "hide")
+    print("  visibility (hidden):   ok")
+    set_prim_visibility(base_url, prim_path, "show")
+    print("  visibility (shown):    ok")
+
+    # --- Physics (may fail if prim has no joint or collider) ---
+    try:
+        set_joint_state(base_url, prim_path, enable=False)
+        set_joint_state(base_url, prim_path, enable=True)
+        print("  joint toggle:          ok")
+    except Exception as exc:
+        print(f"  joint toggle:          skipped ({exc})")
+
+    try:
+        update_colliders(base_url, prim_path, enable=False)
+        update_colliders(base_url, prim_path, enable=True)
+        print("  collider toggle:       ok")
+    except Exception as exc:
+        print(f"  collider toggle:       skipped ({exc})")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Call the implemented bridge extension routes.")
-    parser.add_argument("--base_url", default=DEFAULT_BASE_URL, help="base_url URL of the running bridge")
-    parser.add_argument("--prim", default=None, help="prim path to query its pose (Prims demo)")
+    parser.add_argument("--base_url", default=DEFAULT_BASE_URL,
+                        help="Base URL of the running bridge")
+    parser.add_argument("--prim", required=True, metavar="PRIM_PATH",
+                        help="Prim path to use for the Prims test (e.g. /World/Cube)")
     args = parser.parse_args()
 
-    print(f"bridge: {args.base_url}")
-    print("status:         ", get_status(args.base_url))
-    print("version:        ", get_versions(args.base_url))
-    print("active scene:   ", get_active_scene(args.base_url))
-    print("motion groups:  ", list_stage_motion_groups(args.base_url))
-    print("stage units:    ", get_stage_units(args.base_url))
-    print("simulation:     ", simulation_state(args.base_url))
-    if args.prim:
-        print(f"pose {args.prim}:", get_pose(args.base_url, args.prim, "world"))
+    print(f"bridge: {args.base_url}\n")
+
+    print("=== General ===")
+    print("  status:  ", get_status(args.base_url))
+    print("  version: ", get_versions(args.base_url))
+
+    print("\n=== Stage ===")
+    test_stage(args.base_url)
+
+    print("\n=== Prims ===")
+    test_prims(args.base_url, args.prim)
 
 
 if __name__ == "__main__":

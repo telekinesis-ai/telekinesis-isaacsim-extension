@@ -40,7 +40,7 @@ except ImportError as e:
     ) from e
 
 HOST = "127.0.0.1"
-PORT = 8765
+PORT = 8766
 
 ARM_PRIM_PATH = "/World/ur10e"
 GRIPPER_PRIM_PATH = "/World/Robotiq_2F_85_edit"
@@ -84,14 +84,23 @@ def _request(base, method, path, body=None):
     return response.json() if response.content else None
 
 
-def run(base, arm_prim, arm_urdf, gripper_prim, gripper_urdf, arm_mount_link, gripper_mount_link, offset):
+def run(
+        base,
+        arm_prim,
+        arm_urdf,
+        gripper_prim,
+        gripper_urdf,
+        arm_mount_link,
+        gripper_mount_link,
+        offset):
     # 1) Create the arm (urdf_path imports it if arm_prim isn't in the stage).
     arm = _request(
         base, "PUT", "/articulations",
         {"prim_path": arm_prim, "device_type": "robot", "urdf_path": arm_urdf},
     )
     arm_id = arm["articulation_id"]
-    print(f"created arm: articulation_id={arm_id} prim_path={arm['prim_path']} dof={arm['num_dof']}")
+    print(
+        f"created arm: articulation_id={arm_id} prim_path={arm['prim_path']} dof={arm['num_dof']}")
 
     # 2) Create the gripper.
     gripper = _request(
@@ -112,7 +121,8 @@ def run(base, arm_prim, arm_urdf, gripper_prim, gripper_urdf, arm_mount_link, gr
         },
     )
     print(f"attached: shared articulation {merged['articulation']} num_dof={merged['num_dof']}")
-    print(f"  mounts: arm={merged['arm_mount_link']} gripper={merged['gripper_mount_link']} (resolved)")
+    print(
+        f"  mounts: arm={merged['arm_mount_link']} gripper={merged['gripper_mount_link']} (resolved)")
     print(f"  arm drives {merged['robot']['num_dof']} dof: {merged['robot']['dof_names']}")
 
     # 4) Move the arm with the same 6-value payload as a standalone arm.
@@ -130,16 +140,26 @@ def run(base, arm_prim, arm_urdf, gripper_prim, gripper_urdf, arm_mount_link, gr
         print(f"  done (reached={status['reached']} fraction={status['fraction']:.3f})")
 
 
-
 def main():
-    parser = argparse.ArgumentParser(description="Attach a gripper onto an arm via the Isaac Sim bridge.")
+    parser = argparse.ArgumentParser(
+        description="Attach a gripper onto an arm via the Isaac Sim bridge.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--arm-prim", default=ARM_PRIM_PATH, help="prim path to import/bind the arm at")
-    parser.add_argument("--gripper-prim", default=GRIPPER_PRIM_PATH, help="prim path of the gripper in the stage")
+    parser.add_argument(
+        "--arm-prim",
+        default=ARM_PRIM_PATH,
+        help="prim path to import/bind the arm at")
+    parser.add_argument("--gripper-prim", default=GRIPPER_PRIM_PATH,
+                        help="prim path of the gripper in the stage")
     parser.add_argument("--arm-urdf", default=ARM_URDF_PATH, help="path to the arm URDF to import")
-    parser.add_argument("--gripper-urdf", default=None, help="optional URDF to import the gripper from")
-    parser.add_argument("--arm-mount-link", default=ARM_MOUNT_LINK, help="flange link (or Site) on the arm")
+    parser.add_argument(
+        "--gripper-urdf",
+        default=None,
+        help="optional URDF to import the gripper from")
+    parser.add_argument(
+        "--arm-mount-link",
+        default=ARM_MOUNT_LINK,
+        help="flange link (or Site) on the arm")
     parser.add_argument(
         "--gripper-mount-link",
         default=GRIPPER_MOUNT_LINK,

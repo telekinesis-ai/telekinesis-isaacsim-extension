@@ -6,7 +6,7 @@ Same as robot_set_joint.py but targets a second robot prim (``/World/ur10e_01``)
 (run this and robot_set_joint.py side by side; each gets its own articulation_id).
 
 Converted from the old socket protocol. The bridge is now a single HTTP/JSON
-server on 127.0.0.1:8765; articulations are addressed by the id from
+server on 127.0.0.1:8766; articulations are addressed by the id from
 PUT /articulations (e.g. ``robot1``), not a per-device TCP port.
 
 Run:  python robot_set_joint2.py
@@ -21,7 +21,7 @@ import math
 import requests
 
 HOST = "127.0.0.1"
-PORT = 8765
+PORT = 8766
 ROBOT_PRIM_PATH = "/World/ur10e_01"
 
 # Joint targets (degrees here for readability; converted to radians on the wire).
@@ -63,12 +63,15 @@ def run_robot(base, prim_path):
         print(f"  done={status['done']} (max_error={status['max_error']:.2e} rad)")
 
 
-
 def main():
-    parser = argparse.ArgumentParser(description="Second-robot joint-target example for the Isaac Sim bridge.")
+    parser = argparse.ArgumentParser(
+        description="Second-robot joint-target example for the Isaac Sim bridge.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--prim", default=ROBOT_PRIM_PATH, help="prim path of the robot in the stage")
+    parser.add_argument(
+        "--prim",
+        default=ROBOT_PRIM_PATH,
+        help="prim path of the robot in the stage")
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

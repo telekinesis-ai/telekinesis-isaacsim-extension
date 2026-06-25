@@ -32,7 +32,7 @@ except ImportError as e:
     ) from e
 
 HOST = "127.0.0.1"
-PORT = 8765
+PORT = 8766
 ROBOT_PRIM_PATH = "/World/ur10e"
 
 # Path to the robot's URDF to import. Left blank on purpose -- set it to the URDF
@@ -49,7 +49,7 @@ except Exception as e:
         "https://github.com/telekinesis-ai/telekinesis-urdfs"
     ) from e
 
-URDF_PATH = str(robot_description.urdf_path )
+URDF_PATH = str(robot_description.urdf_path)
 
 # Joint target once loaded (degrees here for readability; radians on the wire).
 TARGET_DEG = [-90.0, -90.0, 0.0, 0.0, 90.0, 0.0]
@@ -75,7 +75,8 @@ def run_robot(base, prim_path, urdf_path):
         {"prim_path": prim_path, "device_type": "robot", "urdf_path": urdf_path},
     )
     articulation_id = info["articulation_id"]
-    print(f"loaded + created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
+    print(
+        f"loaded + created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
 
     print(f"move_j target (deg): {TARGET_DEG}")

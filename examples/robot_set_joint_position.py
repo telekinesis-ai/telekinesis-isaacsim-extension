@@ -2,7 +2,7 @@
 Standalone bridge example: create articulation -> move through joint targets.
 
 Converted from the old socket protocol. The bridge is now a single HTTP/JSON
-server on 127.0.0.1:8765 (see telekinesis_isaacsim_bridge); articulations are
+server on 127.0.0.1:8766 (see telekinesis_isaacsim_bridge); articulations are
 addressed by the id from PUT /articulations (e.g. ``robot1``), not a per-device
 TCP port.
 
@@ -26,7 +26,7 @@ import math
 import requests
 
 HOST = "127.0.0.1"
-PORT = 8765
+PORT = 8766
 ROBOT_PRIM_PATH = "/World/ur10e"
 
 # Joint targets (degrees here for readability; converted to radians on the wire).
@@ -69,10 +69,14 @@ def run_robot(base, prim_path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Robot joint-target example for the Isaac Sim bridge.")
+    parser = argparse.ArgumentParser(
+        description="Robot joint-target example for the Isaac Sim bridge.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--prim", default=ROBOT_PRIM_PATH, help="prim path of the robot in the stage")
+    parser.add_argument(
+        "--prim",
+        default=ROBOT_PRIM_PATH,
+        help="prim path of the robot in the stage")
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

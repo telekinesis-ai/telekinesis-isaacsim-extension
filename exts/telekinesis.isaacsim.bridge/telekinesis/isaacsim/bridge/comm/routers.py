@@ -6,19 +6,25 @@ Prim and articulation:
 - https://isaac-sim.github.io/IsaacLab/main/source/api/lab/isaaclab.assets.html#isaaclab.assets.Articulation
 - https://isaac-sim.github.io/IsaacLab/main/source/api/lab/isaaclab.sim.utils.html#module-isaaclab.sim.utils.prims
 
-Three ``APIRouter``s -- articulations (create/get/delete/list), robot, and
-gripper -- so each device kind owns a parallel namespace under
-``/articulations/{articulation_id}/<kind>/...``. They are intentionally thin:
-every handler just resolves the shared registry and forwards to it.
+The routers are intentionally thin: every handler receives the request, calls one
+service method, and returns the result. All orchestration / USD logic lives in
+:mod:`..services`; the services are injected via ``Depends`` (see
+:mod:`.dependencies`), which pulls each shared service off ``app.state`` where
+:class:`..comm.server.BridgeServer` stashed it. Request bodies live in
+:mod:`.models`.
 
-The registry is the ``BridgeServer`` instance itself, stashed on ``app.state`` by
-``BridgeServer._build_app`` and pulled back here via the ``get_registry``
-dependency. That keeps these routers as plain module-level objects (no closure
-over ``self``, no circular import) while still sharing one device table.
+Routes mirrored from the spec but not yet wired up answer 501 via
+``not_implemented()``.
 """
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 
+from .dependencies import (
+    get_articulation_service,
+    get_general_service,
+    get_prim_service,
+    get_stage_service,
+)
 from .models import (
     ApplyRelativePoseRequest,
     AttachToolRequest,
@@ -37,11 +43,6 @@ from .models import (
 )
 
 
-def get_registry(request: Request):
-    """Return the shared device registry attached to the app by BridgeServer."""
-    return request.app.state.registry
-
-
 def not_implemented():
     """Uniform 501 for routes we mirror from the spec but haven't wired up yet."""
     raise HTTPException(
@@ -56,26 +57,26 @@ articulations = APIRouter(tags=["articulations"])
 
 
 @articulations.put("/articulations", summary="Create Articulation")
-async def create_articulation(req: CreateArticulationRequest, reg=Depends(get_registry)):
+async def create_articulation(req: CreateArticulationRequest, articulation_service=Depends(get_articulation_service)):
     # Register (and bind) one articulation; returns its id, prim, dof and state.
-    return await reg.create_articulation(req.prim_path, req.device_type, req.urdf_path)
+    return await articulation_service.create_articulation(req.prim_path, req.device_type, req.urdf_path)
 
 
 @articulations.get("/articulations", summary="List Articulations")
-async def list_articulations(reg=Depends(get_registry)):
-    return reg.list_articulations()
+async def list_articulations(articulation_service=Depends(get_articulation_service)):
+    return articulation_service.list_articulations()
 
 
 @articulations.get("/articulations/{articulation_id}", summary="Get Articulation")
-async def get_articulation(articulation_id: str, reg=Depends(get_registry)):
+async def get_articulation(articulation_id: str, articulation_service=Depends(get_articulation_service)):
     # Id + static description (prim, dof, names, current state). 404 if unknown.
-    return reg.get_articulation_info(articulation_id)
+    return articulation_service.get_articulation(articulation_id)
 
 
 @articulations.delete("/articulations/{articulation_id}", summary="Delete Articulation")
-async def delete_articulation(articulation_id: str, reg=Depends(get_registry)):
+async def delete_articulation(articulation_id: str, articulation_service=Depends(get_articulation_service)):
     # Unregister the articulation (the USD prim is left in the stage).
-    return reg.delete_articulation(articulation_id)
+    return articulation_service.delete_articulation(articulation_id)
 
 
 # -- robot ------------------------------------------------------------------
@@ -84,20 +85,20 @@ robot = APIRouter(prefix="/articulations/{articulation_id}/robot", tags=["robot"
 
 
 @robot.post("/move_j")
-async def move_j(articulation_id: str, req: MoveJRequest, reg=Depends(get_registry)):
+async def move_j(articulation_id: str, req: MoveJRequest, articulation_service=Depends(get_articulation_service)):
     # Blocks until the move completes, then returns the final motion status.
-    return await reg.get_device(articulation_id).move_j(req.q)
+    return await articulation_service.get_device(articulation_id).move_j(req.q)
 
 
 @robot.get("/state")
-async def get_state(articulation_id: str, reg=Depends(get_registry)):
-    return reg.get_device(articulation_id).get_state()
+async def get_state(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+    return articulation_service.get_device(articulation_id).get_state()
 
 
 @robot.post("/attach_tool", summary="Attach Tool")
-async def attach_tool(articulation_id: str, req: AttachToolRequest, reg=Depends(get_registry)):
+async def attach_tool(articulation_id: str, req: AttachToolRequest, articulation_service=Depends(get_articulation_service)):
     # Assemble a gripper onto this arm; both devices then share one articulation.
-    return await reg.attach_tool(
+    return await articulation_service.attach_tool(
         articulation_id, req.gripper_articulation_id, req.arm_mount_link, req.gripper_mount_link, req.offset
     )
 
@@ -108,24 +109,24 @@ gripper = APIRouter(prefix="/articulations/{articulation_id}/gripper", tags=["gr
 
 
 @gripper.post("/move")
-async def gripper_move(articulation_id: str, req: GripperMoveRequest, reg=Depends(get_registry)):
+async def gripper_move(articulation_id: str, req: GripperMoveRequest, articulation_service=Depends(get_articulation_service)):
     # Blocks until the finger reaches the target or stalls; returns final state.
-    return await reg.get_device(articulation_id).gripper_move(req.fraction)
+    return await articulation_service.get_device(articulation_id).gripper_move(req.fraction)
 
 
 @gripper.post("/open")
-async def gripper_open(articulation_id: str, reg=Depends(get_registry)):
-    return await reg.get_device(articulation_id).gripper_open()
+async def gripper_open(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+    return await articulation_service.get_device(articulation_id).gripper_open()
 
 
 @gripper.post("/close")
-async def gripper_close(articulation_id: str, reg=Depends(get_registry)):
-    return await reg.get_device(articulation_id).gripper_close()
+async def gripper_close(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+    return await articulation_service.get_device(articulation_id).gripper_close()
 
 
 @gripper.get("/state")
-async def gripper_state(articulation_id: str, reg=Depends(get_registry)):
-    return reg.get_device(articulation_id).gripper_state()
+async def gripper_state(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+    return articulation_service.get_device(articulation_id).gripper_state()
 
 
 # ---------------------------------------------------------------------------
@@ -134,138 +135,67 @@ async def gripper_state(articulation_id: str, reg=Depends(get_registry)):
 # bridge can grow into a drop-in replacement. General, Stage (bar configuration
 # import/export) and Prims are implemented; remaining stubs answer
 # 501 Not Implemented until their logic is wired up.
-#
-# Omni/pxr imports are done lazily inside the handlers so this module still
-# imports outside Isaac Sim (e.g. in tests).
 # ---------------------------------------------------------------------------
-
-
-def _extension_versions():
-    """Best-effort map of enabled Kit extensions -> version.
-
-    Runs inside Isaac Sim, so ``omni.kit.app`` is importable (imported lazily so
-    this module still loads outside Isaac, e.g. in tests). Defensive: the
-    manager's summary dict shape varies across Kit releases, so a missing
-    ``version`` is recovered from the id (``"<name>-<version>"``) rather than
-    raising.
-    """
-    import omni.kit.app
-
-    manager = omni.kit.app.get_app().get_extension_manager()
-    versions = {}
-    for ext in manager.get_extensions():
-        if not ext.get("enabled"):
-            continue
-        name = ext.get("name", "")
-        version = ext.get("version")
-        if version is None:
-            ext_id = ext.get("id", "")
-            version = ext_id[len(name) + 1:] or None  # strip the "<name>-" prefix
-        versions[name] = version
-    return versions
 
 
 general = APIRouter(tags=["general"])
 
 
 @general.get("/status", summary="Get Status")
-async def get_status():
+async def get_status(general_service=Depends(get_general_service)):
     """Service health. Returns ``OK`` while the bridge is running."""
-    return {"status": "OK"}
+    return general_service.status()
 
 
 @general.get("/version", summary="Get Versions")
-async def get_versions():
+async def get_versions(general_service=Depends(get_general_service)):
     """List installed (enabled) extensions with their versions."""
-    return _extension_versions()
+    return general_service.versions()
 
 
 stage = APIRouter(prefix="/stage", tags=["stage"])
 
 
-def _stage():
-    """Current USD stage, or 409 if no stage is open."""
-    import omni.usd
-
-    stage = omni.usd.get_context().get_stage()
-    if stage is None:
-        raise HTTPException(status_code=409, detail="no USD stage is open")
-    return stage
-
-
 @stage.get("/scene", summary="Get Active Scene")
-async def get_active_scene():
+async def get_active_scene(stage_service=Depends(get_stage_service)):
     """URI/identifier of the open USD stage (empty string if none)."""
-    import omni.usd
-
-    return omni.usd.get_context().get_stage_url() or ""
+    return stage_service.get_active_scene()
 
 
 @stage.put("/scene", summary="Open Scene")
-async def open_scene(req: OpenSceneRequest):
+async def open_scene(req: OpenSceneRequest, stage_service=Depends(get_stage_service)):
     """Open the USD stage at ``uri`` (replaces the current stage)."""
-    import omni.usd
-
-    success, error = await omni.usd.get_context().open_stage_async(req.uri)
-    if not success:
-        raise HTTPException(status_code=400, detail=f"could not open '{req.uri}': {error}")
+    await stage_service.open_scene(req.uri)
 
 
 @stage.get("/motion-groups", summary="List Stage Motion Groups")
-async def list_stage_motion_groups():
+async def list_stage_motion_groups(stage_service=Depends(get_stage_service)):
     """Prim paths of every articulation root in the stage (potential robots)."""
-    from pxr import Usd, UsdPhysics
-
-    stage = _stage()
-    return [
-        prim.GetPath().pathString
-        for prim in Usd.PrimRange(stage.GetPseudoRoot())
-        if prim.HasAPI(UsdPhysics.ArticulationRootAPI)
-    ]
+    return stage_service.list_motion_groups()
 
 
 @stage.get("/units", summary="Get Stage Units")
-async def get_stage_units():
+async def get_stage_units(stage_service=Depends(get_stage_service)):
     """Linear scale of the stage in meters per unit."""
-    from pxr import UsdGeom
-
-    return StageUnits(meters_per_unit=UsdGeom.GetStageMetersPerUnit(_stage()))
+    return StageUnits(meters_per_unit=stage_service.get_units())
 
 
 @stage.put("/units", summary="Update Stage Units")
-async def update_stage_units(units: StageUnits):
+async def update_stage_units(units: StageUnits, stage_service=Depends(get_stage_service)):
     """Set the stage's meters-per-unit scale."""
-    from pxr import UsdGeom
-
-    UsdGeom.SetStageMetersPerUnit(_stage(), units.meters_per_unit)
+    stage_service.update_units(units.meters_per_unit)
 
 
 @stage.patch("/simulation/timeline/{action}", summary="Timeline Action")
-async def timeline_action(action: TimelineAction):
+async def timeline_action(action: TimelineAction, stage_service=Depends(get_stage_service)):
     """Drive the simulation timeline: play / pause / stop."""
-    import omni.timeline
-
-    timeline = omni.timeline.get_timeline_interface()
-    {
-        TimelineAction.play: timeline.play,
-        TimelineAction.pause: timeline.pause,
-        TimelineAction.stop: timeline.stop,
-    }[action]()
+    stage_service.timeline_action(action)
 
 
 @stage.get("/simulation", summary="Simulation State")
-async def simulation_state():
+async def simulation_state(stage_service=Depends(get_stage_service)):
     """Current timeline state: ``playing`` / ``paused`` / ``stopped``."""
-    import omni.timeline
-
-    timeline = omni.timeline.get_timeline_interface()
-    if timeline.is_playing():
-        state = "playing"
-    elif timeline.is_stopped():
-        state = "stopped"
-    else:
-        state = "paused"
-    return {"timeline": state}
+    return stage_service.simulation_state()
 
 
 @stage.get("/configuration", summary="Export Configuration")
@@ -280,105 +210,22 @@ async def import_configuration():
 
 prims = APIRouter(prefix="/prims", tags=["prims"])
 
-# customData namespace where we persist a prim's "default pose" (local-space,
-# 6-float rotation-vector form). Mirrors how the extension remembers a pose to
-# reset prims back to.
-_DEFAULT_POSE_KEY = "telekinesis:default_pose"
-
-
-def _prim_or_404(prim_path):
-    """Resolve a prim path on the open stage, or raise 404."""
-    prim = _stage().GetPrimAtPath(prim_path)
-    if not prim or not prim.IsValid():
-        raise HTTPException(status_code=404, detail=f"prim '{prim_path}' not found")
-    return prim
-
-
-def _matrix_to_pose(matrix, rotation_type):
-    """Gf.Matrix4d -> {"pose": [...]} in cartesian (rotvec) or quaternion form."""
-    import math
-
-    translation = matrix.ExtractTranslation()
-    rotation = matrix.ExtractRotation()
-    head = [translation[0], translation[1], translation[2]]
-    if rotation_type == "quaternions":
-        quat = rotation.GetQuat()
-        imaginary = quat.GetImaginary()
-        return {"pose": head + [quat.GetReal(), imaginary[0], imaginary[1], imaginary[2]]}
-    # cartesian: rotation vector = axis * angle (radians)
-    axis = rotation.GetAxis()
-    angle = math.radians(rotation.GetAngle())
-    return {"pose": head + [axis[0] * angle, axis[1] * angle, axis[2] * angle]}
-
-
-def _wspose_to_matrix(pose):
-    """6-float rotation-vector pose -> Gf.Matrix4d."""
-    import math
-
-    from pxr import Gf
-
-    x, y, z, rx, ry, rz = pose
-    angle = math.sqrt(rx * rx + ry * ry + rz * rz)
-    if angle:
-        rotation = Gf.Rotation(Gf.Vec3d(rx / angle, ry / angle, rz / angle), math.degrees(angle))
-    else:
-        rotation = Gf.Rotation(Gf.Vec3d(1, 0, 0), 0)
-    matrix = Gf.Matrix4d(1.0)
-    matrix.SetRotateOnly(rotation)
-    matrix.SetTranslateOnly(Gf.Vec3d(x, y, z))
-    return matrix
-
-
-def _world_matrix(prim):
-    from pxr import Usd, UsdGeom
-
-    return UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
-
-
-def _local_matrix(prim):
-    from pxr import Usd, UsdGeom
-
-    return UsdGeom.Xformable(prim).GetLocalTransformation(Usd.TimeCode.Default())
-
-
-def _set_local_matrix(prim, local_matrix):
-    from pxr import UsdGeom
-
-    xform = UsdGeom.Xformable(prim)
-    xform.ClearXformOpOrder()
-    xform.AddTransformOp().Set(local_matrix)
-
-
-def _set_world_matrix(prim, world_matrix):
-    """Set a prim's pose given a world-space matrix (converts through the parent)."""
-    from pxr import Usd, UsdGeom
-
-    parent = prim.GetParent()
-    if parent and parent.IsValid() and parent.IsA(UsdGeom.Xformable):
-        parent_world = UsdGeom.Xformable(parent).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
-        local_matrix = world_matrix * parent_world.GetInverse()
-    else:
-        local_matrix = world_matrix
-    _set_local_matrix(prim, local_matrix)
-
 
 @prims.get("/poses", summary="Get Pose")
 async def get_pose(
     prim_path: str,
     coordinate_system: str = Query("local", pattern="^(world|local)$"),
     rotation_type: str = Query("cartesian", pattern="^(cartesian|quaternions)$"),
+    prim_service=Depends(get_prim_service),
 ):
     """Pose of a prim, in world or local space, as rotvec or quaternion."""
-    prim = _prim_or_404(prim_path)
-    matrix = _world_matrix(prim) if coordinate_system == "world" else _local_matrix(prim)
-    return _matrix_to_pose(matrix, rotation_type)
+    return prim_service.get_pose(prim_path, coordinate_system, rotation_type)
 
 
 @prims.put("/poses", summary="Update Pose")
-async def update_pose(req: UpdatePoseRequest):
+async def update_pose(req: UpdatePoseRequest, prim_service=Depends(get_prim_service)):
     """Set a prim's world-space pose from a rotation-vector ``WSPose``."""
-    prim = _prim_or_404(req.prim_path)
-    _set_world_matrix(prim, _wspose_to_matrix(req.input_pose.pose))
+    prim_service.update_pose(req.prim_path, req.input_pose.pose)
 
 
 @prims.get("/poses/relative", summary="Get Relative Pose")
@@ -387,123 +234,70 @@ async def get_relative_pose(
     prim_path_2: str,
     mode: str = Query("normal", pattern="^(normal|inverse_first|inverse_second|inverse_both)$"),
     rotation_type: str = Query("cartesian", pattern="^(cartesian|quaternions)$"),
+    prim_service=Depends(get_prim_service),
 ):
-    """Pose of prim 2 expressed in prim 1's frame.
-
-    ``mode`` optionally inverts either world transform before composing:
-    ``relative = world2 * inverse(world1)``.
-    """
-    a = _world_matrix(_prim_or_404(prim_path_1))
-    b = _world_matrix(_prim_or_404(prim_path_2))
-    if mode in ("inverse_first", "inverse_both"):
-        a = a.GetInverse()
-    if mode in ("inverse_second", "inverse_both"):
-        b = b.GetInverse()
-    return _matrix_to_pose(b * a.GetInverse(), rotation_type)
+    """Pose of prim 2 expressed in prim 1's frame."""
+    return prim_service.get_relative_pose(prim_path_1, prim_path_2, mode, rotation_type)
 
 
 @prims.post("/poses/relative", summary="Apply Relative Pose")
-async def apply_relative_pose(req: ApplyRelativePoseRequest):
-    """Pre/post-multiply a prim's world pose by a relative ``WSPose``.
-
-    ``object_first`` chooses the multiplication order: ``world * relative`` when
-    true (move in the prim's own frame), ``relative * world`` otherwise (move in
-    world frame).
-    """
-    prim = _prim_or_404(req.prim_path)
-    relative = _wspose_to_matrix(req.relative_pose.pose)
-    current = _world_matrix(prim)
-    new_world = (current * relative) if req.object_first else (relative * current)
-    _set_world_matrix(prim, new_world)
+async def apply_relative_pose(req: ApplyRelativePoseRequest, prim_service=Depends(get_prim_service)):
+    """Pre/post-multiply a prim's world pose by a relative ``WSPose``."""
+    prim_service.apply_relative_pose(req.prim_path, req.relative_pose.pose, req.object_first)
 
 
 @prims.get("/poses/default", summary="List Default Poses")
-async def list_default_poses():
+async def list_default_poses(prim_service=Depends(get_prim_service)):
     """Map every prim that has a stored default pose to that pose (local rotvec)."""
-    from pxr import Usd
-
-    poses = {}
-    for prim in Usd.PrimRange(_stage().GetPseudoRoot()):
-        stored = prim.GetCustomDataByKey(_DEFAULT_POSE_KEY)
-        if stored is not None:
-            poses[prim.GetPath().pathString] = {"pose": list(stored)}
-    return poses
+    return prim_service.list_default_poses()
 
 
 @prims.put("/poses/default", summary="Assign Default Poses")
-async def assign_default_poses(prim_path: str = Body(..., embed=False)):
+async def assign_default_poses(prim_path: str = Body(..., embed=False), prim_service=Depends(get_prim_service)):
     """Record the prim's current local pose as its default (for later reset)."""
-    prim = _prim_or_404(prim_path)
-    prim.SetCustomDataByKey(_DEFAULT_POSE_KEY, _matrix_to_pose(_local_matrix(prim), "cartesian")["pose"])
+    prim_service.assign_default_pose(prim_path)
 
 
 @prims.delete("/poses/default", summary="Clear Default Poses")
-async def clear_default_poses():
+async def clear_default_poses(prim_service=Depends(get_prim_service)):
     """Forget every stored default pose."""
-    from pxr import Usd
-
-    for prim in Usd.PrimRange(_stage().GetPseudoRoot()):
-        if prim.GetCustomDataByKey(_DEFAULT_POSE_KEY) is not None:
-            prim.ClearCustomDataByKey(_DEFAULT_POSE_KEY)
+    prim_service.clear_default_poses()
 
 
 @prims.post("/poses/default/reset", summary="Reset Prim Poses To Default")
-async def reset_to_default_poses(prim_path: str = Body(..., embed=False)):
+async def reset_to_default_poses(prim_path: str = Body(..., embed=False), prim_service=Depends(get_prim_service)):
     """Restore a prim to its stored default pose (404 if none was assigned)."""
-    prim = _prim_or_404(prim_path)
-    stored = prim.GetCustomDataByKey(_DEFAULT_POSE_KEY)
-    if stored is None:
-        raise HTTPException(status_code=404, detail=f"prim '{prim_path}' has no default pose")
-    _set_local_matrix(prim, _wspose_to_matrix(list(stored)))
+    prim_service.reset_to_default_pose(prim_path)
 
 
 @prims.put("/metadata", summary="Set Prim Metadata")
-async def set_prim_metadata(req: SetPrimMetadataRequest):
+async def set_prim_metadata(req: SetPrimMetadataRequest, prim_service=Depends(get_prim_service)):
     """Store user metadata (category/type) on a prim under customData."""
-    prim = _prim_or_404(req.prim_path)
-    prim.SetCustomDataByKey("telekinesis:metadata", req.metadata.model_dump())
+    prim_service.set_metadata(req.prim_path, req.metadata.model_dump())
 
 
 @prims.delete("/metadata", summary="Remove Prim Metadata")
-async def remove_prim_metadata(prim_path: str):
+async def remove_prim_metadata(prim_path: str, prim_service=Depends(get_prim_service)):
     """Remove the user metadata previously stored on a prim."""
-    prim = _prim_or_404(prim_path)
-    prim.ClearCustomDataByKey("telekinesis:metadata")
+    prim_service.remove_metadata(prim_path)
 
 
 @prims.patch("/visibility", summary="Set Prim Visibility")
-async def set_prim_visibility(req: SetVisibilityRequest):
+async def set_prim_visibility(req: SetVisibilityRequest, prim_service=Depends(get_prim_service)):
     """Show or hide a prim (UsdGeom imageable visibility)."""
-    from pxr import UsdGeom
-
-    imageable = UsdGeom.Imageable(_prim_or_404(req.prim_path))
-    if req.visibility == VisibilityAction.show:
-        imageable.MakeVisible()
-    else:
-        imageable.MakeInvisible()
+    prim_service.set_visibility(req.prim_path, req.visibility == VisibilityAction.show)
 
 
 @prims.patch("/physics/joints", summary="Set Joints")
-async def set_joint_state(req: SetJointStateRequest):
+async def set_joint_state(req: SetJointStateRequest, prim_service=Depends(get_prim_service)):
     """Enable or disable a physics joint."""
-    from pxr import UsdPhysics
-
-    prim = _prim_or_404(req.prim_path)
-    if not prim.IsA(UsdPhysics.Joint):
-        raise HTTPException(status_code=400, detail=f"prim '{req.prim_path}' is not a physics joint")
-    UsdPhysics.Joint(prim).CreateJointEnabledAttr(req.enable)
+    prim_service.set_joint_state(req.prim_path, req.enable)
 
 
 @prims.patch("/physics/colliders/", summary="Update Colliders")
-async def update_colliders(req: UpdateCollidersRequest):
+async def update_colliders(req: UpdateCollidersRequest, prim_service=Depends(get_prim_service)):
     """Enable or disable collision on a prim (applies the CollisionAPI as needed)."""
-    from pxr import UsdPhysics
-
-    prim = _prim_or_404(req.prim_path)
-    collision = UsdPhysics.CollisionAPI(prim)
-    if not collision:
-        collision = UsdPhysics.CollisionAPI.Apply(prim)
-    collision.CreateCollisionEnabledAttr(req.enable)
+    prim_service.update_colliders(req.prim_path, req.enable)
 
 
 @prims.put("/labels", summary="Set Semantic Label")

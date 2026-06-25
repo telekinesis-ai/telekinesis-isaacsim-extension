@@ -2,7 +2,7 @@
 Gripper-only example for the FastAPI bridge: create -> close -> open.
 
 Replaces the old ``robot_gripper.py`` socket flow. The bridge no longer speaks
-the per-device TCP protocol -- it's a single HTTP/JSON server on 127.0.0.1:8765
+the per-device TCP protocol -- it's a single HTTP/JSON server on 127.0.0.1:8766
 (see telekinesis_isaacsim_bridge).
 
 Flow (all over HTTP):
@@ -48,10 +48,10 @@ except Exception as e:
         "https://github.com/telekinesis-ai/telekinesis-urdfs"
     ) from e
 
-URDF_PATH = str(robot_description.urdf_path )
+URDF_PATH = str(robot_description.urdf_path)
 
 HOST = "127.0.0.1"
-PORT = 8765
+PORT = 8766
 GRIPPER_PRIM_PATH = "/World/rg6"
 
 # A move blocks server-side until it finishes, so allow well over the bridge's
@@ -84,11 +84,18 @@ def run_gripper(base, prim_path, urdf_path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Gripper-only smoke test for the Isaac Sim bridge.")
+    parser = argparse.ArgumentParser(
+        description="Gripper-only smoke test for the Isaac Sim bridge.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--prim", default=GRIPPER_PRIM_PATH, help="prim path of the gripper in the stage")
-    parser.add_argument("--urdf", default=URDF_PATH, help="optional URDF to import if the prim isn't in the stage")
+    parser.add_argument(
+        "--prim",
+        default=GRIPPER_PRIM_PATH,
+        help="prim path of the gripper in the stage")
+    parser.add_argument(
+        "--urdf",
+        default=URDF_PATH,
+        help="optional URDF to import if the prim isn't in the stage")
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
