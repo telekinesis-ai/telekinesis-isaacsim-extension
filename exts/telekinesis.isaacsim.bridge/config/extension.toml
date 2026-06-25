@@ -24,4 +24,4 @@ requirements = ["fastapi", "uvicorn", "pydantic"]
 use_online_index = true
 
 [[python.module]]
-name = "telekinesis_isaacsim_bridge"
+name = "telekinesis.isaacsim.bridge"
