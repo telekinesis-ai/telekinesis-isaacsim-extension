@@ -27,7 +27,7 @@ from isaacsim.gui.components.menu import MenuItemDescription
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 from omni.usd import StageEventType
 
-from loguru import logger
+import carb
 
 from .comm.server import BridgeServer
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_DESCRIPTION, EXTENSION_TITLE
@@ -101,7 +101,7 @@ class Extension(omni.ext.IExt):
         try:
             self._bridge_server.start()
         except Exception as exc:
-            logger.error(f"[bridge] bridge server on port {BRIDGE_PORT} failed to start: {exc}")
+            carb.log_error(f"[bridge] bridge server on port {BRIDGE_PORT} failed to start: {exc}")
 
         # Clear the bridge's device registry whenever the stage is replaced. This
         # subscription is tied to the server (always active while the extension is

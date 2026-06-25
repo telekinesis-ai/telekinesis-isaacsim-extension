@@ -49,7 +49,7 @@ import asyncio
 
 import uvicorn
 from fastapi import FastAPI
-from loguru import logger
+import carb
 
 from ..services.articulations import ArticulationService
 from ..services.general import GeneralService
@@ -82,7 +82,7 @@ class BridgeServer:
         # handling, and don't let uvicorn hijack Ctrl+C.
         self._server.install_signal_handlers = lambda: None
         self._serve_task = asyncio.ensure_future(self._server.serve())
-        logger.info(f"[bridge] server listening on {self._host}:{self._port}")
+        carb.log_info(f"[bridge] server listening on {self._host}:{self._port}")
 
     def reset_devices(self):
         """Drop every bound device while leaving the server running.
@@ -95,7 +95,7 @@ class BridgeServer:
         """
         if self._articulation_service is not None:
             self._articulation_service.clear()
-            logger.info("[bridge] cleared device registry (stage changed).")
+            carb.log_info("[bridge] cleared device registry (stage changed).")
 
     def stop(self):
         """Ask uvicorn to exit and drop every bound device."""
@@ -107,7 +107,7 @@ class BridgeServer:
         if self._serve_task is not None:
             self._serve_task.cancel()
             self._serve_task = None
-        logger.info("[bridge] server stopped.")
+        carb.log_info("[bridge] server stopped.")
 
     def _build_app(self):
         """Construct the FastAPI app: build the shared services, stash them on

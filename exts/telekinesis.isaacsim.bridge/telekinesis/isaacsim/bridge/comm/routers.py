@@ -27,11 +27,11 @@ from .dependencies import (
 )
 from .models import (
     ApplyRelativePoseRequest,
-    AttachToolRequest,
+    AssembleRobotRequest,
     CreateArticulationRequest,
-    GripperMoveRequest,
-    MoveJRequest,
+    JointPositionsRequest,
     OpenSceneRequest,
+    SetDrivenJointsRequest,
     SetJointStateRequest,
     SetPrimMetadataRequest,
     SetVisibilityRequest,
@@ -59,7 +59,7 @@ articulations = APIRouter(tags=["articulations"])
 @articulations.put("/articulations", summary="Create Articulation")
 async def create_articulation(req: CreateArticulationRequest, articulation_service=Depends(get_articulation_service)):
     # Register (and bind) one articulation; returns its id, prim, dof and state.
-    return await articulation_service.create_articulation(req.prim_path, req.device_type, req.urdf_path)
+    return await articulation_service.create_articulation(req.prim_path, req.urdf_path)
 
 
 @articulations.get("/articulations", summary="List Articulations")
@@ -79,54 +79,47 @@ async def delete_articulation(articulation_id: str, articulation_service=Depends
     return articulation_service.delete_articulation(articulation_id)
 
 
-# -- robot ------------------------------------------------------------------
-
-robot = APIRouter(prefix="/articulations/{articulation_id}/robot", tags=["robot"])
-
-
-@robot.post("/move_j")
-async def move_j(articulation_id: str, req: MoveJRequest, articulation_service=Depends(get_articulation_service)):
-    # Blocks until the move completes, then returns the final motion status.
-    return await articulation_service.get_device(articulation_id).move_j(req.q)
+@articulations.post("/articulations/{articulation_id}/joint_positions", summary="Set Joint Positions")
+async def set_joint_positions(
+    articulation_id: str, req: JointPositionsRequest, articulation_service=Depends(get_articulation_service)
+):
+    # Drive the joints (radians). Blocks until reached/stalled unless asynchronous.
+    return await articulation_service.set_joint_positions(articulation_id, req.positions, req.indices, req.asynchronous)
 
 
-@robot.get("/state")
-async def get_state(articulation_id: str, articulation_service=Depends(get_articulation_service)):
-    return articulation_service.get_device(articulation_id).get_state()
+@articulations.get("/articulations/{articulation_id}/joint_state", summary="Get Joint State")
+async def get_joint_state(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+    # Current positions / velocities / torques of the driven joints.
+    return articulation_service.get_joint_state(articulation_id)
 
 
-@robot.post("/attach_tool", summary="Attach Tool")
-async def attach_tool(articulation_id: str, req: AttachToolRequest, articulation_service=Depends(get_articulation_service)):
+@articulations.get("/articulations/{articulation_id}/joint_limits", summary="Get Joint Limits")
+async def get_joint_limits(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+    # [lower, upper] radian limits per driven joint (in joint_state q order).
+    return articulation_service.get_joint_limits(articulation_id)
+
+
+@articulations.get("/articulations/{articulation_id}/driver_joint", summary="Get Driver Joint")
+async def get_driver_joint(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+    # Discover a gripper's actuated driver joint (name + DOF index) via USD schema.
+    return articulation_service.get_driver_joint(articulation_id)
+
+
+@articulations.put("/articulations/{articulation_id}/driven_joints", summary="Set Driven Joints")
+async def set_driven_joints(
+    articulation_id: str, req: SetDrivenJointsRequest, articulation_service=Depends(get_articulation_service)
+):
+    # Narrow which joints this device drives (e.g. a gripper to its driver joint).
+    return articulation_service.set_driven_joints(articulation_id, req.joint_names)
+
+
+@articulations.post("/articulations/{articulation_id}/assemble_robot", summary="Assemble Robot")
+async def assemble_robot(articulation_id: str, req: AssembleRobotRequest, articulation_service=Depends(get_articulation_service)):
     # Assemble a gripper onto this arm; both devices then share one articulation.
-    return await articulation_service.attach_tool(
+    # A no-op if this arm and gripper are already assembled.
+    return await articulation_service.assemble_robot(
         articulation_id, req.gripper_articulation_id, req.arm_mount_link, req.gripper_mount_link, req.offset
     )
-
-
-# -- gripper ----------------------------------------------------------------
-
-gripper = APIRouter(prefix="/articulations/{articulation_id}/gripper", tags=["gripper"])
-
-
-@gripper.post("/move")
-async def gripper_move(articulation_id: str, req: GripperMoveRequest, articulation_service=Depends(get_articulation_service)):
-    # Blocks until the finger reaches the target or stalls; returns final state.
-    return await articulation_service.get_device(articulation_id).gripper_move(req.fraction)
-
-
-@gripper.post("/open")
-async def gripper_open(articulation_id: str, articulation_service=Depends(get_articulation_service)):
-    return await articulation_service.get_device(articulation_id).gripper_open()
-
-
-@gripper.post("/close")
-async def gripper_close(articulation_id: str, articulation_service=Depends(get_articulation_service)):
-    return await articulation_service.get_device(articulation_id).gripper_close()
-
-
-@gripper.get("/state")
-async def gripper_state(articulation_id: str, articulation_service=Depends(get_articulation_service)):
-    return articulation_service.get_device(articulation_id).gripper_state()
 
 
 # ---------------------------------------------------------------------------
@@ -556,7 +549,7 @@ async def sweep_collisions():
 
 
 ALL_ROUTERS = (
-    articulations, robot, gripper,
+    articulations,
     general, stage, prims,
     nucleus, manipulators, periphery,
     trajectories, teaching, trajectory_planner,

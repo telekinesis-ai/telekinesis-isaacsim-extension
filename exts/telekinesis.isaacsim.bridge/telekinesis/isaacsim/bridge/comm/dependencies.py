@@ -3,6 +3,7 @@
 
 Reference:
 - https://github.com/fastapi/full-stack-fastapi-template/blob/master/backend/app/api/deps.py
+- https://github.com/zhanymkanov/fastapi-best-practices
 
 Each provider pulls one service off ``app.state``, where :class:`BridgeServer`
 stashed it when it built the app. The routers declare exactly the service they

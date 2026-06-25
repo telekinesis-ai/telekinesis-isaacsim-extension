@@ -5,8 +5,9 @@ Reference:
 -https://github.com/fastapi/full-stack-fastapi-template/blob/master/backend/app/models.py
 
 Kept separate from the routers so the wire schema is one obvious place to look
-as the API grows. Wire units are native Isaac: radians for joints, the gripper
-``fraction`` is closed-ness (0.0 open .. 1.0 closed).
+as the API grows. Wire units are native Isaac: radians for joints. The bridge is
+device-agnostic -- robot/gripper semantics (e.g. a gripper ``fraction``) live in
+the client, which maps them to joint angles before calling these routes.
 """
 
 from enum import Enum
@@ -18,22 +19,38 @@ class CreateArticulationRequest(BaseModel):
     """Body of PUT /articulations -- register (and bind) one articulation."""
 
     prim_path: str
-    device_type: str  # "robot" | "gripper"
     urdf_path: str | None = None
 
 
-class MoveJRequest(BaseModel):
-    q: list[float]
+class JointPositionsRequest(BaseModel):
+    """Body of POST /articulations/{id}/joint_positions -- drive joints (radians).
+
+    ``positions`` are the target angles for ``indices`` (default: the device's
+    current driven joints, so a robot sends all of them and a gripper narrowed to
+    its driver sends one). ``asynchronous`` true applies the action and returns
+    immediately (the client decides when the move is done); false blocks until the
+    joints reach the target or stall.
+    """
+
+    positions: list[float]
+    indices: list[int] | None = None
+    asynchronous: bool = False
 
 
-class GripperMoveRequest(BaseModel):
-    fraction: float
+class SetDrivenJointsRequest(BaseModel):
+    """Body of PUT /articulations/{id}/driven_joints -- narrow the driven joints.
+
+    ``joint_names`` are the joints the device should drive from now on (e.g. a
+    gripper client passes ``[driver_name]`` discovered via GET /driver_joint).
+    """
+
+    joint_names: list[str]
 
 
 class Transformation(BaseModel):
     """A rigid transform: translation (meters) + rotation (XYZ Euler degrees).
 
-    Generic on purpose -- used here as the gripper mount offset for attach_tool,
+    Generic on purpose -- used here as the gripper mount offset for assemble_robot,
     but reusable wherever a request needs a pose delta. An all-zero transform (the
     default) is the identity.
     """
@@ -42,18 +59,19 @@ class Transformation(BaseModel):
     rotation: list[float] = [0.0, 0.0, 0.0]      # XYZ Euler degrees
 
 
-class AttachToolRequest(BaseModel):
-    """Body of POST /articulations/{articulation_id}/robot/attach_tool.
+class AssembleRobotRequest(BaseModel):
+    """Body of POST /articulations/{articulation_id}/assemble_robot.
 
     The path ``articulation_id`` is the arm. This names the *gripper* articulation
-    to attach and the links to join them at. ``arm_mount_link`` is the arm's flange
-    (e.g. UR ``wrist_3_link``) -- a RigidBodyAPI link or a Site, not an empty frame
-    like ``tool0``. ``gripper_mount_link`` is the gripper's base link; leave it
-    null/omitted to auto-discover the gripper articulation's root link (its base),
-    which is what the fixed joint must attach to. After attaching, arm and gripper
-    share one articulation; each device keeps driving only its own joints.
+    to assemble onto it and the links to join them at. ``arm_mount_link`` is the
+    arm's flange (e.g. UR ``wrist_3_link``) -- a RigidBodyAPI link or a Site, not an
+    empty frame like ``tool0``. ``gripper_mount_link`` is the gripper's base link;
+    leave it null/omitted to auto-discover the gripper articulation's root link (its
+    base), which is what the fixed joint must attach to. After assembling, arm and
+    gripper share one articulation; each device keeps driving only its own joints.
     ``offset`` is an optional mount transform baked into the fixed joint
-    (null/omitted => flush attach).
+    (null/omitted => flush attach). Assembling the same pair again is a no-op (the
+    bridge records that they are already assembled and just returns the merged info).
     """
 
     gripper_articulation_id: str

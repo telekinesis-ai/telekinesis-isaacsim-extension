@@ -2,8 +2,8 @@
 """
 Assemble a gripper onto an arm with ``RobotAssembler`` and bind the result as one
 articulation. Adapted from the prototyping example
-(`manipulator_gripper_extension_assemble.py`); used by the robot device's
-``attach_tool`` path.
+(`manipulator_gripper_extension_assemble.py`); used by the articulation service's
+``assemble_robot`` path.
 
 After assembly the arm + gripper are a SINGLE articulation rooted at the arm
 (n arm DOF + m gripper DOF). One ``SingleArticulation`` handle drives both; the
@@ -20,7 +20,7 @@ import omni.kit.commands
 import omni.timeline
 import omni.usd
 from isaacsim.core.prims import SingleArticulation
-from loguru import logger
+import carb
 from pxr import Gf, Usd
 
 _BIND_RETRIES = 60
@@ -37,7 +37,7 @@ def find_prim_by_name(stage, root_path, name):
 def get_articulation_base_link_name(articulation):
     """Root/base link name of an already-initialized ``SingleArticulation``.
 
-    Used to auto-discover the gripper's mount link for ``attach_tool``: the gripper
+    Used to auto-discover the gripper's mount link for ``assemble_robot``: the gripper
     must be joined at its *base* link (the root of its kinematic tree), not an
     internal frame. Isaac orders an articulation's links root-first, so the base
     link is ``body_names[0]``. The name is read off the physics view (the wrapper
@@ -148,7 +148,7 @@ async def assemble_tool(
 async def bind_shared_articulation(prim_path, name):
     """Play the timeline and return the single, initialized articulation at ``prim_path``.
 
-    Same retry shape as ``RobotArticulation.bind``: physics may need a few frames
+    Same retry shape as ``Articulation.bind``: physics may need a few frames
     to stabilize the merged topology after assembly. This one handle is shared by
     both the arm and the gripper devices.
     """
@@ -162,7 +162,7 @@ async def bind_shared_articulation(prim_path, name):
             articulation = SingleArticulation(prim_path=prim_path, name=name)
             articulation.initialize()
             if articulation.num_dof and articulation.get_joint_positions() is not None:
-                logger.info(f"[bridge] bound shared articulation {prim_path}: {articulation.num_dof} dof {list(articulation.dof_names)}")
+                carb.log_info(f"[bridge] bound shared articulation {prim_path}: {articulation.num_dof} dof {list(articulation.dof_names)}")
                 return articulation
         except Exception:
             pass
