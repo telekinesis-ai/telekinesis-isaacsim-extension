@@ -1,21 +1,22 @@
 """
 Standalone bridge example: create articulation -> move through joint targets.
 
-Converted from the old socket protocol. The bridge is now a single HTTP/JSON
-server on 127.0.0.1:8766 (see telekinesis_isaacsim_bridge); articulations are
-addressed by the id from PUT /articulations (e.g. ``robot1``), not a per-device
-TCP port.
+The bridge is a single HTTP/JSON server on 127.0.0.1:8766
+(see telekinesis_isaacsim_bridge). It is device-agnostic: it drives an
+articulation's joints in radians and reports reached/stalled -- there is no
+"robot" notion on the wire, so a robot is just an articulation whose joints you
+set directly.
 
 Flow (all over HTTP):
-  1. PUT /articulations {prim_path, device_type:"robot", urdf_path?} -> {articulation_id, num_dof, ...}
-  2. for each target: POST /articulations/{id}/robot/move_j {q}  (radians)
-     -> blocks until the move completes, returns {done, max_error, ...}
+  1. PUT /articulations {prim_path, urdf_path?} -> {articulation_id, num_dof, ...}
+  2. for each target: POST /articulations/{id}/joint_positions {positions}  (radians)
+     -> blocks until the move reaches the target or stalls; returns {done, reached, ...}
 
 The bridge runs each move to completion server-side (it steps physics on Isaac's
-own loop), so the POST blocks until done -- no client-side /motion polling.
+own loop), so the POST blocks until done -- no client-side polling.
 
-Run:  python robot_set_joint.py
-      python robot_set_joint.py --prim /World/ur10e
+Run:  python robot_set_joint_position.py
+      python robot_set_joint_position.py --prim /World/ur10e
 
 Requires the ``requests`` package (``pip install requests``).
 """
@@ -47,25 +48,20 @@ def _request(base, method, path, body=None):
 
 
 def run_robot(base, prim_path):
-    info = _request(
-        base,
-        "PUT",
-        "/articulations",
-        {"prim_path": prim_path, "device_type": "robot", "urdf_path": None},
-    )
+    info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": None})
     articulation_id = info["articulation_id"]
     print(f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
 
     for target_deg in TARGETS_DEG:
-        print(f"move_j target (deg): {target_deg}")
+        print(f"move target (deg): {target_deg}")
         status = _request(
             base,
             "POST",
-            f"/articulations/{articulation_id}/robot/move_j",
-            {"q": [math.radians(d) for d in target_deg]},
+            f"/articulations/{articulation_id}/joint_positions",
+            {"positions": [math.radians(d) for d in target_deg]},
         )
-        print(f"  done={status['done']} (max_error={status['max_error']:.2e} rad)")
+        print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
 
 
 def main():

@@ -4,16 +4,16 @@ Bridge example: load a robot from a URDF, then drive it.
 Most examples assume the robot prim already exists in the stage. This one
 exercises the *loading* path instead: when ``PUT /articulations`` is given a
 ``urdf_path`` and the ``prim_path`` is not yet in the stage, the bridge imports
-the URDF at that prim path before binding it. After that it's an ordinary robot
-articulation (move_j, poll motion).
+the URDF at that prim path before binding it. After that it's an ordinary
+articulation you drive with POST /articulations/{id}/joint_positions.
 
 Flow (all over HTTP):
-  1. PUT /articulations {prim_path, device_type:"robot", urdf_path} -> imports + binds
-  2. POST /articulations/{id}/robot/move_j {q}  (radians)
-     -> blocks until the move completes, returns {done, max_error, ...}
+  1. PUT /articulations {prim_path, urdf_path} -> imports + binds
+  2. POST /articulations/{id}/joint_positions {positions}  (radians)
+     -> blocks until the move reaches the target or stalls; returns {done, reached, ...}
 
-Run:  python robot_urdf.py
-      python robot_urdf.py --prim /World/my_robot
+Run:  python robot_load_from_urdf.py
+      python robot_load_from_urdf.py --prim /World/my_robot
 
 Requires the ``requests`` package (``pip install requests``).
 """
@@ -68,25 +68,19 @@ def _request(base, method, path, body=None):
 
 def run_robot(base, prim_path, urdf_path):
     # urdf_path tells the bridge to import the robot if prim_path isn't in the stage.
-    info = _request(
-        base,
-        "PUT",
-        "/articulations",
-        {"prim_path": prim_path, "device_type": "robot", "urdf_path": urdf_path},
-    )
+    info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": urdf_path})
     articulation_id = info["articulation_id"]
-    print(
-        f"loaded + created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
+    print(f"loaded + created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
 
-    print(f"move_j target (deg): {TARGET_DEG}")
+    print(f"move target (deg): {TARGET_DEG}")
     status = _request(
         base,
         "POST",
-        f"/articulations/{articulation_id}/robot/move_j",
-        {"q": [math.radians(d) for d in TARGET_DEG]},
+        f"/articulations/{articulation_id}/joint_positions",
+        {"positions": [math.radians(d) for d in TARGET_DEG]},
     )
-    print(f"  done={status['done']} (max_error={status['max_error']:.2e} rad)")
+    print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
 
 
 def main():

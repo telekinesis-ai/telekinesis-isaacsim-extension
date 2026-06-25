@@ -1,23 +1,21 @@
 """
-Gripper-only example for the bridge: create -> close -> open.
+Bridge example: load a gripper from a URDF, then close/open it.
 
-The bridge is device-agnostic -- it has no notion of a "gripper", a fraction, or
-open/close. A gripper is just an articulation whose single actuated joint you
-drive. This example does the gripper-specific bits explicitly, over HTTP, so the
-extension calls are visible:
+Exercises the *loading* path: when ``PUT /articulations`` is given a ``urdf_path``
+and the ``prim_path`` is not yet in the stage, the bridge imports the URDF at that
+prim path before binding it. After that the gripper-specific steps are the same as
+gripper_control.py -- discover the driver joint, narrow the device to it, and drive
+it by mapping a closed-ness fraction to a joint angle.
 
-  1. PUT  /articulations {prim_path, urdf_path?}            -> {articulation_id, ...}
+Flow (all over HTTP):
+  1. PUT  /articulations {prim_path, urdf_path}             -> imports + binds
   2. GET  /articulations/{id}/driver_joint                 -> {name, index}
-       (USD schema walk on the bridge: the actuated joint, skipping mimic joints)
   3. PUT  /articulations/{id}/driven_joints {[driver_name]} -> narrow to that joint
   4. GET  /articulations/{id}/joint_limits                 -> {limits: [[open, closed]]}
-  5. close/open: map a closed-ness fraction (1.0 / 0.0) to a joint angle and
-       POST /articulations/{id}/joint_positions {positions:[rad]}
-       -> blocks until the finger reaches the target or stalls; returns {done, reached, q}
+  5. close/open: POST /articulations/{id}/joint_positions {positions:[rad]} -> blocks
 
-Run:  python gripper_control.py
-      python gripper_control.py --prim /World/rg6
-      python gripper_control.py --prim /World/robotiq --urdf C:/path/to/robotiq.urdf
+Run:  python gripper_load_from_urdf.py
+      python gripper_load_from_urdf.py --prim /World/my_gripper
 
 Requires the ``requests`` package (``pip install requests``).
 """
@@ -34,10 +32,14 @@ except ImportError as e:
         "Install it from: https://github.com/telekinesis-ai/telekinesis-urdfs"
     ) from e
 
-# Path to the grippers's URDF to import. Left blank on purpose -- set it to the URDF
+HOST = "127.0.0.1"
+PORT = 8766
+GRIPPER_PRIM_PATH = "/World/robotiq"
+
+# Path to the gripper's URDF to import. Left blank on purpose -- set it to the URDF
 # you want to load (an absolute path or a path the bridge process can read).
 try:
-    robot_description = telekinesis_urdfs.load("OnRobotRG6")
+    robot_description = telekinesis_urdfs.load("Robotiq2F85")
     if not robot_description.urdf_path.is_file():
         raise ValueError(f"No urdf found, i.e. {robot_description.urdf_path} is not a file")
 
@@ -50,12 +52,8 @@ except Exception as e:
 
 URDF_PATH = str(robot_description.urdf_path)
 
-HOST = "127.0.0.1"
-PORT = 8766
-GRIPPER_PRIM_PATH = "/World/rg6"
-
-# A move blocks server-side until it finishes, so allow well over the bridge's
-# own motion cap (~30 s) before the HTTP client gives up.
+# A URDF import plus the blocking move can both take a while server-side, so give
+# the HTTP client a generous timeout (well over the bridge's ~30 s motion cap).
 DEFAULT_TIMEOUT = 120.0
 
 
@@ -67,22 +65,16 @@ def _request(base, method, path, body=None):
 
 
 def run_gripper(base, prim_path, urdf_path):
+    # urdf_path tells the bridge to import the gripper if prim_path isn't in the stage.
     info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": urdf_path})
     articulation_id = info["articulation_id"]
-    print(f"created gripper: articulation_id={articulation_id} prim_path={info['prim_path']}")
+    print(f"loaded + created gripper: articulation_id={articulation_id} prim_path={info['prim_path']}")
 
-    # Discover the actuated joint (the bridge walks the USD/PhysX schema) and narrow
-    # the device to it -- after this the gripper drives exactly one joint.
     driver = _request(base, "GET", f"/articulations/{articulation_id}/driver_joint")
     _request(base, "PUT", f"/articulations/{articulation_id}/driven_joints", {"joint_names": [driver["name"]]})
-
-    # With the device narrowed to the driver, joint_limits is a single pair.
-    # Convention: lower = open, upper = closed.
     opened_rad, closed_rad = _request(base, "GET", f"/articulations/{articulation_id}/joint_limits")["limits"][0]
     print(f"  driver joint='{driver['name']}' open={opened_rad:.3f} closed={closed_rad:.3f} rad")
 
-    # Map a closed-ness fraction to a joint angle (this is the only gripper-specific
-    # math, done client-side): close = 1.0, open = 0.0.
     for label, fraction in (("close", 1.0), ("open", 0.0)):
         target_rad = opened_rad + fraction * (closed_rad - opened_rad)
         print(f"gripper {label} (fraction={fraction})")
@@ -94,18 +86,18 @@ def run_gripper(base, prim_path, urdf_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Gripper-only smoke test for the Isaac Sim bridge.")
+        description="Load a gripper from URDF via the Isaac Sim bridge.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
         "--prim",
         default=GRIPPER_PRIM_PATH,
-        help="prim path of the gripper in the stage")
-    parser.add_argument(
-        "--urdf",
-        default=URDF_PATH,
-        help="optional URDF to import if the prim isn't in the stage")
+        help="prim path to import the gripper at")
+    parser.add_argument("--urdf", default=URDF_PATH, help="path to the gripper URDF to import")
     args = parser.parse_args()
+
+    if args.urdf is ... or not args.urdf:
+        parser.error("set URDF_PATH in this file or pass --urdf <path/to/gripper.urdf>")
 
     base = f"http://{args.host}:{args.port}"
     print(f"bridge: {base}  articulations: {_request(base, 'GET', '/articulations')}")

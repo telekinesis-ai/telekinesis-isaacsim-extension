@@ -1,18 +1,27 @@
 """
 Standalone smoke test for the FastAPI bridge: create -> move.
 
-Pure stdlib (urllib + JSON), no synapse / no Isaac Sim client libs. Talks to the
+Pure stdlib (urllib + JSON), no synapse / no Isaac Sim client libs, and -- unlike
+the other examples -- not even the ``requests`` package, so it stays a single
+self-contained file you can run from any Python. Talks to the
 telekinesis_isaacsim_bridge extension's single HTTP server (127.0.0.1:8766).
 
-The bridge runs each move to completion server-side, so a move_j / gripper POST
-blocks until the move is done -- no client-side polling. (Synapse's `asynchronous`
-flag can simply not await the request.)
+The bridge is device-agnostic: it drives an articulation's joints (radians) and
+reports reached/stalled; there is no robot/gripper notion on the wire. This script
+shows the raw calls a client makes:
 
 Robot flow:
-  1. PUT /articulations {prim_path, device_type:"robot", urdf_path?} -> {articulation_id, num_dof, dof_names, state}
-  2. POST /articulations/{id}/robot/move_j {q}   (radians) -> blocks, returns {done, max_error, q, target}
+  1. PUT /articulations {prim_path, urdf_path?} -> {articulation_id, num_dof, dof_names, state}
+  2. POST /articulations/{id}/joint_positions {positions}  (radians)
+     -> blocks, returns {done, reached, max_error, q, target}
 
-Gripper flow: close (fraction 1.0) -> open (fraction 0.0), each POST blocking.
+Gripper flow (the robot/gripper-specific bits done inline here):
+  1. PUT /articulations {prim_path, urdf_path?}
+  2. GET /articulations/{id}/driver_joint                  -> {name, index}
+  3. PUT /articulations/{id}/driven_joints {[driver_name]} -> narrow to one joint
+  4. GET /articulations/{id}/joint_limits                  -> {limits: [[open, closed]]}
+  5. close (fraction 1.0) -> open (fraction 0.0): map fraction to a joint angle and
+     POST /articulations/{id}/joint_positions {positions:[rad]}, each blocking.
 
 Run from any Python:  python bridge_smoke_test.py --prim /World/ur10e2
                       python bridge_smoke_test.py --device gripper --prim /World/robotiq
@@ -52,12 +61,7 @@ def _request(base, method, path, body=None):
 
 
 def run_robot(base, prim_path, urdf_path):
-    info = _request(base,
-                    "PUT",
-                    "/articulations",
-                    {"prim_path": prim_path,
-                     "device_type": "robot",
-                     "urdf_path": urdf_path})
+    info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": urdf_path})
     articulation_id = info["articulation_id"]
     print(f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
@@ -65,27 +69,31 @@ def run_robot(base, prim_path, urdf_path):
     for target_deg in ROBOT_TARGETS_DEG:
         target_rad = [math.radians(d) for d in target_deg]
         print(f"move_j target (deg): {target_deg}")
-        status = _request(base,
-                          "POST",
-                          f"/articulations/{articulation_id}/robot/move_j",
-                          {"q": target_rad})
-        print(f"  done={status['done']} (max_error={status['max_error']:.2e} rad)")
+        status = _request(
+            base, "POST", f"/articulations/{articulation_id}/joint_positions", {"positions": target_rad}
+        )
+        print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
 
 
 def run_gripper(base, prim_path, urdf_path):
-    info = _request(base,
-                    "PUT",
-                    "/articulations",
-                    {"prim_path": prim_path,
-                     "device_type": "gripper",
-                     "urdf_path": urdf_path})
+    info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": urdf_path})
     articulation_id = info["articulation_id"]
     print(f"created gripper: articulation_id={articulation_id} prim_path={info['prim_path']}")
 
-    for label, path in (("close", "gripper/close"), ("open", "gripper/open")):
+    # Discover the actuated joint and narrow the device to it (gripper-specific,
+    # done client-side -- the bridge only does the USD discovery and the narrowing).
+    driver = _request(base, "GET", f"/articulations/{articulation_id}/driver_joint")
+    _request(base, "PUT", f"/articulations/{articulation_id}/driven_joints", {"joint_names": [driver["name"]]})
+    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{articulation_id}/joint_limits")["limits"][0]
+    print(f"  driver joint='{driver['name']}' open={opened_rad:.3f} closed={closed_rad:.3f} rad")
+
+    for label, fraction in (("close", 1.0), ("open", 0.0)):
+        target_rad = opened_rad + fraction * (closed_rad - opened_rad)
         print(f"gripper {label}")
-        status = _request(base, "POST", f"/articulations/{articulation_id}/{path}")
-        print(f"  done (reached={status['reached']} fraction={status['fraction']:.3f})")
+        status = _request(
+            base, "POST", f"/articulations/{articulation_id}/joint_positions", {"positions": [target_rad]}
+        )
+        print(f"  done (reached={status['reached']} q={status['q'][0]:.3f} rad)")
 
 
 def main():

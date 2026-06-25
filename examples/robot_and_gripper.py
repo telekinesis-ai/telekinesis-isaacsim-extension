@@ -1,20 +1,20 @@
 """
 Standalone bridge example: robot AND gripper, over HTTP.
 
-Converted from the old socket protocol. The bridge is now a single HTTP/JSON
-server on 127.0.0.1:8766 (see telekinesis_isaacsim_bridge); there is no
-per-device TCP port anymore, so this talks plain HTTP like gripper.py and
-bridge_smoke_test.py.
+The bridge is a single HTTP/JSON server on 127.0.0.1:8766
+(see telekinesis_isaacsim_bridge), device-agnostic at the wire: both the robot and
+the gripper are articulations driven by POST /articulations/{id}/joint_positions.
+The only difference is the client: a robot sets all joints in radians; a gripper
+narrows itself to its actuated joint and maps a closed-ness fraction to an angle.
 
-Robot:   create -> read joints -> move_j -> read joints.
-Gripper: create -> read -> close -> read -> open -> read.
+Robot:   create -> read joints -> move -> read joints.
+Gripper: create -> discover/narrow driver -> read -> close -> read -> open -> read.
 
-Each articulation is addressed by the id returned from PUT /articulations (e.g.
-``robot1`` / ``gripper1``). Moves block server-side: the POST returns only once
-the move has completed -- no client-side polling.
+Each articulation is addressed by the id returned from PUT /articulations. Moves
+block server-side: the call returns only once the move has completed.
 
-Run:  python robot_gripper.py
-      python robot_gripper.py --robot-prim /World/ur10e --gripper-prim /World/Robotiq_2F_85_edit
+Run:  python robot_and_gripper.py
+      python robot_and_gripper.py --robot-prim /World/ur10e --gripper-prim /World/Robotiq_2F_85_edit
 
 Requires the ``requests`` package (``pip install requests``).
 """
@@ -43,59 +43,50 @@ def _request(base, method, path, body=None):
     return response.json() if response.content else None
 
 
-def create_articulation(base, prim_path, device_type):
-    """Register an articulation on the bridge; return its id and create info."""
-    info = _request(
-        base,
-        "PUT",
-        "/articulations",
-        {"prim_path": prim_path, "device_type": device_type, "urdf_path": None},
-    )
-    print(
-        f"created {device_type}: articulation_id={info['articulation_id']} prim_path={info['prim_path']}")
-    return info["articulation_id"], info
-
-
 def robot_joints_deg(base, articulation_id):
-    """Current robot joint positions in degrees (wire is radians)."""
-    return [
-        round(
-            math.degrees(q),
-            3) for q in _request(
-            base,
-            "GET",
-            f"/articulations/{articulation_id}/robot/state")["q"]]
+    """Current joint positions in degrees (wire is radians)."""
+    q = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["q"]
+    return [round(math.degrees(v), 3) for v in q]
 
 
 def run_robot(base, prim_path):
-    articulation_id, info = create_articulation(base, prim_path, "robot")
+    info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": None})
+    articulation_id = info["articulation_id"]
+    print(f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
     print(f"joints before (deg): {robot_joints_deg(base, articulation_id)}")
-    print(f"move_j target (deg): {TARGET_DEG}")
-    _request(base,
-             "POST",
-             f"/articulations/{articulation_id}/robot/move_j",
-             {"q": [math.radians(d) for d in TARGET_DEG]})
+    print(f"move target (deg): {TARGET_DEG}")
+    _request(
+        base,
+        "POST",
+        f"/articulations/{articulation_id}/joint_positions",
+        {"positions": [math.radians(d) for d in TARGET_DEG]},
+    )
     print(f"joints after  (deg): {robot_joints_deg(base, articulation_id)}")
 
 
-def gripper_fraction(base, articulation_id):
-    """Current gripper closed-ness fraction (0.0 open .. 1.0 closed)."""
-    return round(
-        _request(
-            base,
-            "GET",
-            f"/articulations/{articulation_id}/gripper/state")["fraction"],
-        3)
+def gripper_fraction(base, articulation_id, opened_rad, closed_rad):
+    """Current closed-ness fraction (0.0 open .. 1.0 closed), inverted from the angle."""
+    current = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["q"][0]
+    span = closed_rad - opened_rad
+    return round(0.0 if span == 0 else (current - opened_rad) / span, 3)
 
 
 def run_gripper(base, prim_path):
-    articulation_id, _ = create_articulation(base, prim_path, "gripper")
-    print(f"gripper fraction (start): {gripper_fraction(base, articulation_id)}")
-    _request(base, "POST", f"/articulations/{articulation_id}/gripper/close")
-    print(f"gripper fraction (closed): {gripper_fraction(base, articulation_id)}")
-    _request(base, "POST", f"/articulations/{articulation_id}/gripper/open")
-    print(f"gripper fraction (opened): {gripper_fraction(base, articulation_id)}")
+    info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": None})
+    articulation_id = info["articulation_id"]
+    print(f"created gripper: articulation_id={articulation_id} prim_path={info['prim_path']}")
+
+    driver = _request(base, "GET", f"/articulations/{articulation_id}/driver_joint")
+    _request(base, "PUT", f"/articulations/{articulation_id}/driven_joints", {"joint_names": [driver["name"]]})
+    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{articulation_id}/joint_limits")["limits"][0]
+    print(f"  driver joint='{driver['name']}' open={opened_rad:.3f} closed={closed_rad:.3f} rad")
+
+    print(f"gripper fraction (start): {gripper_fraction(base, articulation_id, opened_rad, closed_rad)}")
+    _request(base, "POST", f"/articulations/{articulation_id}/joint_positions", {"positions": [closed_rad]})
+    print(f"gripper fraction (closed): {gripper_fraction(base, articulation_id, opened_rad, closed_rad)}")
+    _request(base, "POST", f"/articulations/{articulation_id}/joint_positions", {"positions": [opened_rad]})
+    print(f"gripper fraction (opened): {gripper_fraction(base, articulation_id, opened_rad, closed_rad)}")
 
 
 def main():

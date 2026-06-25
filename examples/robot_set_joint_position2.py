@@ -1,16 +1,17 @@
 """
-Standalone bridge example: create articulation -> move through joint target.
+Standalone bridge example: create articulation -> move through joint targets.
 
-Same as robot_set_joint.py but targets a second robot prim (``/World/ur10e_01``)
--- handy for checking that two robots in one stage are driven independently
-(run this and robot_set_joint.py side by side; each gets its own articulation_id).
+Same as robot_set_joint_position.py but targets a second robot prim
+(``/World/ur10e_01``) -- handy for checking that two robots in one stage are
+driven independently (run this and robot_set_joint_position.py side by side; each
+gets its own articulation_id).
 
-Converted from the old socket protocol. The bridge is now a single HTTP/JSON
-server on 127.0.0.1:8766; articulations are addressed by the id from
-PUT /articulations (e.g. ``robot1``), not a per-device TCP port.
+The bridge is a single HTTP/JSON server on 127.0.0.1:8766; articulations are
+addressed by the id from PUT /articulations and driven via
+POST /articulations/{id}/joint_positions (radians).
 
-Run:  python robot_set_joint2.py
-      python robot_set_joint2.py --prim /World/ur10e_01
+Run:  python robot_set_joint_position2.py
+      python robot_set_joint_position2.py --prim /World/ur10e_01
 
 Requires the ``requests`` package (``pip install requests``).
 """
@@ -42,25 +43,20 @@ def _request(base, method, path, body=None):
 
 
 def run_robot(base, prim_path):
-    info = _request(
-        base,
-        "PUT",
-        "/articulations",
-        {"prim_path": prim_path, "device_type": "robot", "urdf_path": None},
-    )
+    info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": None})
     articulation_id = info["articulation_id"]
     print(f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
 
     for target_deg in TARGETS_DEG:
-        print(f"move_j target (deg): {target_deg}")
+        print(f"move target (deg): {target_deg}")
         status = _request(
             base,
             "POST",
-            f"/articulations/{articulation_id}/robot/move_j",
-            {"q": [math.radians(d) for d in target_deg]},
+            f"/articulations/{articulation_id}/joint_positions",
+            {"positions": [math.radians(d) for d in target_deg]},
         )
-        print(f"  done={status['done']} (max_error={status['max_error']:.2e} rad)")
+        print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
 
 
 def main():
