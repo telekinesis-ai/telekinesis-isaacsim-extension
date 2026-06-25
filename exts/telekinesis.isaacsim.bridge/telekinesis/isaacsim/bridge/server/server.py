@@ -51,10 +51,10 @@ import uvicorn
 from fastapi import FastAPI
 import carb
 
-from ..services.articulations import ArticulationService
-from ..services.general import GeneralService
-from ..services.prims import PrimService
-from ..services.stage import StageService
+from .services.articulations import ArticulationService
+from .services.general import GeneralService
+from .services.prims import PrimService
+from .services.stage import StageService
 from .routers import ALL_ROUTERS
 
 

@@ -23,9 +23,9 @@ Wire units mirror the rest of the bridge: radians for joints, meters for lengths
 
 from fastapi import HTTPException
 
-from ..core.articulation import Articulation, find_driver_joint
-from ..core.robot_assembler import assemble_tool, bind_shared_articulation, get_articulation_base_link_name
-from ..core.urdf_loader import import_urdf_at
+from ...core.articulation import Articulation, find_driver_joint
+from ...core.robot_assembler import assemble_tool, bind_shared_articulation, get_articulation_base_link_name
+from ...core.urdf_loader import import_urdf_at
 
 
 class ArticulationService:

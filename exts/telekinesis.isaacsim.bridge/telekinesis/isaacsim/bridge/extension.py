@@ -29,9 +29,9 @@ from omni.usd import StageEventType
 
 import carb
 
-from .comm.server import BridgeServer
+from .server.server import BridgeServer
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_DESCRIPTION, EXTENSION_TITLE
-from .ui.ui_builder import UIBuilder
+from .ui_builder import UIBuilder
 
 """
 This file serves as a basic template for the standard boilerplate operations

@@ -18,7 +18,7 @@ import omni.ui as ui
 from isaacsim.gui.components.element_wrappers import CollapsableFrame
 from isaacsim.gui.components.ui_utils import get_style
 
-from ..global_variables import BRIDGE_HOST, BRIDGE_PORT
+from .global_variables import BRIDGE_HOST, BRIDGE_PORT
 
 
 class UIBuilder:
