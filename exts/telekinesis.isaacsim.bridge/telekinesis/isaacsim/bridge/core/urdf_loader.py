@@ -28,6 +28,13 @@ async def import_urdf_at(stage, urdf_path, dest_prim_path):
     articulation. Skipping this (importing synchronously, then calling play()
     immediately) leaves the articulation half-composed -- which froze the bind in
     the live extension. Mirrors the known-good urdf_loading prototyping examples.
+
+    Leaves the stage with a VALID default prim. The importer would otherwise point
+    the default prim at the imported robot (``make_default_prim``); our MovePrim
+    then relocates that prim, leaving the default-prim metadata dangling, which
+    crashes anything that later reads ``GetDefaultPrim().GetPath()`` -- e.g. the
+    viewport's drag-drop handler. We disable that flag and repair the default prim
+    to a top-level container so dropped assets land under it.
     """
     app = omni.kit.app.get_app()
     omni.timeline.get_timeline_interface().stop()
@@ -39,6 +46,7 @@ async def import_urdf_at(stage, urdf_path, dest_prim_path):
     import_config.fix_base = True
     import_config.distance_scale = 1.0
     import_config.parse_mimic = True  # let single-input grippers' mimic joints follow
+    import_config.make_default_prim = False  # don't hijack the default prim; MovePrim would dangle it
 
     parent = Sdf.Path(dest_prim_path).GetParentPath()
     if parent.pathString not in ("", "/") and not stage.GetPrimAtPath(parent).IsValid():
@@ -58,6 +66,18 @@ async def import_urdf_at(stage, urdf_path, dest_prim_path):
 
     if top.pathString != dest_prim_path:
         omni.kit.commands.execute("MovePrim", path_from=top.pathString, path_to=dest_prim_path)
+
+    # Guarantee a valid default prim. With make_default_prim disabled a pre-existing
+    # default prim survives the import; if there is none (or the importer left a
+    # dangling one), point it at a top-level container so the viewport drag-drop
+    # handler (make_prim_path -> GetDefaultPrim().GetPath()) never reads an empty
+    # path. SetDefaultPrim requires a root-level prim, which `container` always is.
+    default_prim = stage.GetDefaultPrim()
+    if not default_prim or not default_prim.IsValid():
+        container = parent if parent.pathString not in ("", "/") else Sdf.Path(dest_prim_path)
+        container_prim = stage.GetPrimAtPath(container)
+        if container_prim and container_prim.IsValid():
+            stage.SetDefaultPrim(container_prim)
 
     # Let the stage recompose after the import/move before the caller plays the
     # timeline and binds (timeline is still stopped here, matching the examples).

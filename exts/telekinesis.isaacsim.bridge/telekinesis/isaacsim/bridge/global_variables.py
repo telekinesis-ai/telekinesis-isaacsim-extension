@@ -13,6 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-EXTENSION_TITLE = "TelekinesisIsaacSimExtension"
+EXTENSION_TITLE = "TelekinesisIsaacSimBridge"
 
 EXTENSION_DESCRIPTION = ""

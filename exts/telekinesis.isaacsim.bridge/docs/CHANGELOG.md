@@ -21,4 +21,4 @@
 
 ### Added
 
-- Initial version of TelekinesisIsaacSimExtension Extension
+- Initial version of TelekinesisIsaacSimBridge Extension
