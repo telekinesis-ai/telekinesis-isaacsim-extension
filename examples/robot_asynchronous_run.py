@@ -33,7 +33,7 @@ import requests
 
 HOST = "127.0.0.1"
 PORT = 8766
-ROBOT_PRIM_PATH = "/World/ur10e"
+ROBOT_PRIM_PATH = "/World/kuka_kr210"
 
 # Joint targets (degrees here for readability; converted to radians on the wire).
 TARGET_A_DEG = [-90.0, -90.0, 0.0, 0.0, 90.0, 0.0]
