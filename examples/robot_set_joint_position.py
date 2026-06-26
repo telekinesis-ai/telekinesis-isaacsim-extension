@@ -20,7 +20,7 @@ Run:  python robot_set_joint_position.py
 
 Requires the ``requests`` package (``pip install requests``).
 """
-
+import time
 import argparse
 import numpy as np
 
@@ -28,11 +28,11 @@ import requests
 
 HOST = "127.0.0.1"
 PORT = 8766
-ROBOT_PRIM_PATH = "/World/ur10e"
+ROBOT_PRIM_PATH = "/World/high_pedestal/robot_assembly/kuka_kr210"
 
 # Joint targets (degrees here for readability; converted to radians on the wire).
 TARGET_DEG = [-90.0, -90.0, 0.0, 0.0, 90.0, 0.0]
-TARGET_DEG2 = [90.0, -90.0, 0.0, 0.0, 90.0, 0.0]
+TARGET_DEG2 = [-20.0, 20.0, 0.0, 0.0, 80.0, 90.0]
 TARGETS_DEG = [TARGET_DEG, TARGET_DEG2, TARGET_DEG]
 
 # A move blocks server-side until it finishes, so allow well over the bridge's
@@ -62,7 +62,7 @@ def run_robot(base, prim_path):
             {"positions": np.deg2rad(target_deg).tolist()},
         )
         print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
-
+        time.sleep(3)
 
 def main():
     parser = argparse.ArgumentParser(
