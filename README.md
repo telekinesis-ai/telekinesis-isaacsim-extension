@@ -181,3 +181,11 @@ The core resource. One articulation maps to a USD prim path and drives a subset 
 - **Articulation IDs are stable.** IDs are 1-based (`articulation1`, `articulation2`, …) and the same prim path always gets the same ID across repeated `PUT` calls.
 - **Assembly is idempotent.** `POST /articulations/{id}/assemble_robot` for the same arm+gripper pair is a no-op; it returns `already_assembled=true`. The registry is cleared when the stage changes.
 - **URDF import.** Pass `urdf_path` in the `PUT /articulations` body to have the bridge import the URDF and place it at `prim_path` automatically.
+
+---
+
+## License
+
+Proprietary. Copyright (c) 2024-2026 Telekinesis. All rights reserved.
+Unauthorized copying, distribution, modification, or use is prohibited without
+prior written permission. See [LICENSE](LICENSE).
