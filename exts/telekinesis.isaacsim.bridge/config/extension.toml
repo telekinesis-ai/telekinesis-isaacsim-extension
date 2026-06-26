@@ -17,8 +17,6 @@ writeTarget.kit = true
 "isaacsim.gui.components" = {}
 "omni.kit.uiapp" = {}
 
-# FastAPI/uvicorn/pydantic are not in Isaac Sim's bundled Python -- pull them into
-# the extension environment. If the deployment forbids online pip, vendor wheels.
 [python.pipapi]
 requirements = ["fastapi", "uvicorn", "pydantic"]
 use_online_index = true
