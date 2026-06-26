@@ -29,7 +29,7 @@ from omni.usd import StageEventType
 
 import carb
 
-from .server.server import BridgeServer
+from .comm.server import BridgeServer
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_DESCRIPTION, EXTENSION_TITLE
 from .ui_builder import UIBuilder
 

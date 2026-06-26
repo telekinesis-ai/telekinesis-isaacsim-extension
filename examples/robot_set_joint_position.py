@@ -28,7 +28,7 @@ import requests
 
 HOST = "127.0.0.1"
 PORT = 8766
-ROBOT_PRIM_PATH = "/World/high_pedestal/robot_assembly/kuka_kr210"
+ROBOT_PRIM_PATH = "/World/kuka_kr210"
 
 # Joint targets (degrees here for readability; converted to radians on the wire).
 TARGET_DEG = [-90.0, -90.0, 0.0, 0.0, 90.0, 0.0]
@@ -61,8 +61,10 @@ def run_robot(base, prim_path):
             f"/articulations/{articulation_id}/joint_positions",
             {"positions": np.deg2rad(target_deg).tolist()},
         )
-        print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
+        print(
+            f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
         time.sleep(3)
+
 
 def main():
     parser = argparse.ArgumentParser(
