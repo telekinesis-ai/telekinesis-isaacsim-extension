@@ -37,6 +37,23 @@ class JointPositionsRequest(BaseModel):
     asynchronous: bool = False
 
 
+class JointVelocitiesRequest(BaseModel):
+    """Body of POST /articulations/{id}/joint_velocities -- drive joints (rad/s).
+
+    The velocity counterpart to :class:`JointPositionsRequest`, for driving joints
+    at a target rate rather than to a pose (drive wheels, a spinning tool, a
+    conveyor, or slewing any joint at a controlled speed). ``velocities`` are the
+    target angular speeds for ``indices`` (default: the device's current driven
+    joints). Fire-and-forget: the commanded speeds hold until the next call, so
+    ``{0, ...}`` stops the joints (there is no ``asynchronous`` flag -- a
+    velocity-driven joint never "reaches" a target). Any higher-level kinematics
+    (e.g. twist->wheel) live in the client.
+    """
+
+    velocities: list[float]
+    indices: list[int] | None = None
+
+
 class SetDrivenJointsRequest(BaseModel):
     """Body of PUT /articulations/{id}/driven_joints -- narrow the driven joints.
 

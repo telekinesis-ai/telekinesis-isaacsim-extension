@@ -30,6 +30,7 @@ from .models import (
     AssembleRobotRequest,
     CreateArticulationRequest,
     JointPositionsRequest,
+    JointVelocitiesRequest,
     OpenSceneRequest,
     SetDrivenJointsRequest,
     SetJointStateRequest,
@@ -85,6 +86,14 @@ async def set_joint_positions(
 ):
     # Drive the joints (radians). Blocks until reached/stalled unless asynchronous.
     return await articulation_service.set_joint_positions(articulation_id, req.positions, req.indices, req.asynchronous)
+
+
+@articulations.post("/articulations/{articulation_id}/joint_velocities", summary="Set Joint Velocities")
+async def set_joint_velocities(
+    articulation_id: str, req: JointVelocitiesRequest, articulation_service=Depends(get_articulation_service)
+):
+    # Drive the joints at a velocity (rad/s). Fire-and-forget; holds until the next call.
+    return articulation_service.set_joint_velocities(articulation_id, req.velocities, req.indices)
 
 
 @articulations.get("/articulations/{articulation_id}/joint_state", summary="Get Joint State")

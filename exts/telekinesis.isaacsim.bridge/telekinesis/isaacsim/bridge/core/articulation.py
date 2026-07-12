@@ -224,6 +224,32 @@ class Articulation:
             "target": target.tolist(),
         }
 
+    def set_joint_velocities(self, velocities, indices=None):
+        """Drive ``velocities`` (rad/s) onto the chosen joint ``indices``.
+
+        The velocity counterpart to :meth:`set_joint_positions`, for driving joints
+        at a target rate rather than to a pose (drive wheels, a spinning tool, a
+        conveyor, or slewing any joint at a controlled speed). PhysX velocity drive
+        holds the commanded speeds until the next command, so this is fire-and-forget:
+        there is no reach/stall loop and nothing to await (a velocity-driven joint
+        never "arrives"). ``{0, ...}`` stops the joints.
+
+        ``indices`` defaults to this device's driven subset. The client owns any
+        higher-level kinematics (e.g. a nav stack resolving a twist into per-wheel
+        velocities) and sends the resolved values to their DOF indices -- the
+        extension stays joint-space and device-agnostic, exactly like
+        ``set_joint_positions``.
+        """
+        target = np.asarray(velocities, dtype=float)
+        idx = list(self.joint_indices) if indices is None else list(indices)
+        if target.shape != (len(idx),):
+            raise ValueError(f"expected {len(idx)} joint velocities, got {target.shape[0]}")
+
+        self._articulation.apply_action(
+            ArticulationAction(joint_velocities=target, joint_indices=idx)
+        )
+        return {"applied": True, "dq": target.tolist(), "indices": idx}
+
     def get_state(self):
         """Snapshot of the driven joints' positions / velocities / torques (rad) +
         a timestamp. Reports only the driven columns (``joint_indices``), so a
@@ -233,7 +259,7 @@ class Articulation:
         efforts = self._articulation.get_measured_joint_efforts()
         return {
             "q": positions[self.joint_indices].tolist(),
-            "qd": velocities[self.joint_indices].tolist() if velocities is not None else [0.0] * self.num_dof,
+            "dq": velocities[self.joint_indices].tolist() if velocities is not None else [0.0] * self.num_dof,
             "torque": efforts[self.joint_indices].tolist() if efforts is not None else [0.0] * self.num_dof,
             "timestamp": time.monotonic() - self._start_time,
         }

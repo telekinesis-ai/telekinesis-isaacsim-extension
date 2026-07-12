@@ -118,6 +118,15 @@ class ArticulationService:
         """
         return await self.get_device(articulation_id).set_joint_positions(positions, indices, asynchronous)
 
+    def set_joint_velocities(self, articulation_id, velocities, indices):
+        """Drive joint ``velocities`` (rad/s) onto the device's chosen joints.
+
+        Fire-and-forget (velocity drive holds until the next command). ``indices``
+        may be None (drive the device's current driven subset). See
+        :meth:`..core.articulation.Articulation.set_joint_velocities`.
+        """
+        return self.get_device(articulation_id).set_joint_velocities(velocities, indices)
+
     def get_joint_state(self, articulation_id):
         """Current joint positions / velocities / torques of the driven subset."""
         return self.get_device(articulation_id).get_state()
