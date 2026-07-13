@@ -111,11 +111,13 @@ class Articulation:
         for _ in range(_BIND_RETRIES):
             try:
                 if self._articulation is None:
-                    self._articulation = SingleArticulation(prim_path=self.prim_path, name=self._name)
+                    self._articulation = SingleArticulation(
+                        prim_path=self.prim_path, name=self._name)
                 self._articulation.initialize()
                 if self._articulation.num_dof and self._articulation.get_joint_positions() is not None:
                     self._resolve_driven_joints()
-                    carb.log_info(f"[bridge] bound articulation {self.prim_path}: {self.num_dof} dof {self.dof_names}")
+                    carb.log_info(
+                        f"[bridge] bound articulation {self.prim_path}: {self.num_dof} dof {self.dof_names}")
                     return
             except Exception:
                 pass
@@ -150,7 +152,8 @@ class Articulation:
         self.joint_names = list(joint_names)
         self._resolve_driven_joints()
         self._target = None
-        carb.log_info(f"[bridge] articulation {self.prim_path} drives {self.dof_names} at {self.joint_indices}")
+        carb.log_info(
+            f"[bridge] articulation {self.prim_path} drives {self.dof_names} at {self.joint_indices}")
 
     def adopt_shared_articulation(self, articulation, joint_names):
         """Re-point this device at a shared (assembled) articulation.
@@ -212,7 +215,10 @@ class Articulation:
                     reached = True
                     break
                 velocities = self._articulation.get_joint_velocities()
-                max_speed = float(np.max(np.abs(velocities[idx]))) if velocities is not None else 0.0
+                max_speed = float(
+                    np.max(
+                        np.abs(
+                            velocities[idx]))) if velocities is not None else 0.0
                 stalled_frames = stalled_frames + 1 if max_speed < _SETTLED_VELOCITY_RAD_S else 0
                 if stalled_frames >= _SETTLED_FRAMES:
                     break
@@ -246,7 +252,8 @@ class Articulation:
 
         async with self._move_lock:
             self._articulation.set_joint_positions(target, joint_indices=idx)
-            self._articulation.set_joint_velocities(np.zeros(len(idx), dtype=float), joint_indices=idx)
+            self._articulation.set_joint_velocities(
+                np.zeros(len(idx), dtype=float), joint_indices=idx)
             self._articulation.apply_action(
                 ArticulationAction(joint_positions=target, joint_indices=idx)
             )
@@ -278,6 +285,32 @@ class Articulation:
         self._articulation.set_joint_positions(target, joint_indices=idx)
         self._target = target
 
+    def set_joint_velocities(self, velocities, indices=None):
+        """Drive ``velocities`` (rad/s) onto the chosen joint ``indices``.
+
+        The velocity counterpart to :meth:`set_joint_positions`, for driving joints
+        at a target rate rather than to a pose (drive wheels, a spinning tool, a
+        conveyor, or slewing any joint at a controlled speed). PhysX velocity drive
+        holds the commanded speeds until the next command, so this is fire-and-forget:
+        there is no reach/stall loop and nothing to await (a velocity-driven joint
+        never "arrives"). ``{0, ...}`` stops the joints.
+
+        ``indices`` defaults to this device's driven subset. The client owns any
+        higher-level kinematics (e.g. a nav stack resolving a twist into per-wheel
+        velocities) and sends the resolved values to their DOF indices -- the
+        extension stays joint-space and device-agnostic, exactly like
+        ``set_joint_positions``.
+        """
+        target = np.asarray(velocities, dtype=float)
+        idx = list(self.joint_indices) if indices is None else list(indices)
+        if target.shape != (len(idx),):
+            raise ValueError(f"expected {len(idx)} joint velocities, got {target.shape[0]}")
+
+        self._articulation.apply_action(
+            ArticulationAction(joint_velocities=target, joint_indices=idx)
+        )
+        return {"applied": True, "dq": target.tolist(), "indices": idx}
+
     def get_state(self):
         """Snapshot of the driven joints' positions / velocities / torques (rad) +
         a timestamp. Reports only the driven columns (``joint_indices``), so a
@@ -287,7 +320,7 @@ class Articulation:
         efforts = self._articulation.get_measured_joint_efforts()
         return {
             "q": positions[self.joint_indices].tolist(),
-            "qd": velocities[self.joint_indices].tolist() if velocities is not None else [0.0] * self.num_dof,
+            "dq": velocities[self.joint_indices].tolist() if velocities is not None else [0.0] * self.num_dof,
             "torque": efforts[self.joint_indices].tolist() if efforts is not None else [0.0] * self.num_dof,
             "timestamp": time.monotonic() - self._start_time,
         }

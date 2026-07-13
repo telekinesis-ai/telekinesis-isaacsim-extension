@@ -19,8 +19,8 @@ The bridge is **device-agnostic**: a robot arm and a gripper are both just artic
 
 1. Open Isaac Sim
 2. Click on Window -> Extensions
-3. Click on the burge menu (3 dots) -> Settings -> Extension Registries -> Check kit/community  
-3. Clear the serch bar from other word and then search for telekinesis.isaacsim.bridge
+3. Click on the hamburger menu (3 dots) -> Settings -> Extension Registries -> Check kit/community  
+4. Search for telekinesis.isaacsim.bridge
 
 Isaac Sim will install `fastapi`, `uvicorn`, and `pydantic` automatically on first load via `pipapi`.
 
