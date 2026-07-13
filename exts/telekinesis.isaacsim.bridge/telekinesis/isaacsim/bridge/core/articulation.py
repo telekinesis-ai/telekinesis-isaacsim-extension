@@ -10,7 +10,8 @@ whether the move reached its target or stalled. All robot/gripper *semantics*
 live in the client:
 
 * A robot drives every DOF: leave the driven subset at its default (all joints)
-  and send raw joint angles (radians) to :meth:`set_joint_positions`.
+  and send raw joint angles (radians) to :meth:`move_j` (drive to the target over
+  time) or :meth:`set_j` (teleport there instantly).
 * A gripper drives one actuated joint: the client first reads the driver joint
   (:func:`find_driver_joint`, exposed as a getter), narrows the driven subset to
   it via :meth:`set_driven_joints`, then sends a single angle. The
@@ -128,7 +129,7 @@ class Articulation:
         By joint NAME, so it survives a merged (assembled) rig's DOF ordering.
         ``joint_names is None`` => drive every DOF. The reported
         ``dof_names``/``num_dof`` are the driven subset, so ``info``, ``get_state``,
-        and ``get_joint_limits`` all match what ``set_joint_positions`` moves.
+        and ``get_joint_limits`` all match what ``move_j`` moves.
         """
         all_names = list(self._articulation.dof_names)
         if self.joint_names is None:
@@ -168,8 +169,8 @@ class Articulation:
             f"drives {self.dof_names} at {self.joint_indices}"
         )
 
-    async def set_joint_positions(self, positions, indices=None, asynchronous=False):
-        """Drive ``positions`` (radians) onto the chosen joint ``indices``.
+    async def move_j(self, positions, indices=None, asynchronous=False):
+        """Move ``positions`` (radians) onto the chosen joint ``indices`` via the drive.
 
         ``indices`` defaults to this device's driven subset (``joint_indices``), so
         a robot client sends all joint angles and a gripper client (narrowed to its
@@ -223,6 +224,59 @@ class Articulation:
             "q": q.tolist(),
             "target": target.tolist(),
         }
+
+    async def set_j(self, positions, indices=None):
+        """Teleport the chosen joint ``indices`` directly to ``positions`` (radians).
+
+        Unlike :meth:`move_j`, this does not drive the joints to the
+        target over time: it writes the DOF state immediately, so the joints jump
+        to ``positions`` in a single step. It also zeros those joints' velocities
+        (so the teleport does not carry over any motion) and retargets the position
+        drive to the same values, so the controller holds the new pose instead of
+        pulling the joints back toward the previous target.
+
+        ``indices`` defaults to this device's driven subset (``joint_indices``),
+        matching :meth:`move_j`. The ``_move_lock`` serializes this
+        against any in-flight move on the same device.
+        """
+        target = np.asarray(positions, dtype=float)
+        idx = list(self.joint_indices) if indices is None else list(indices)
+        if target.shape != (len(idx),):
+            raise ValueError(f"expected {len(idx)} joint positions, got {target.shape[0]}")
+
+        async with self._move_lock:
+            self._articulation.set_joint_positions(target, joint_indices=idx)
+            self._articulation.set_joint_velocities(np.zeros(len(idx), dtype=float), joint_indices=idx)
+            self._articulation.apply_action(
+                ArticulationAction(joint_positions=target, joint_indices=idx)
+            )
+            self._target = target
+            q = self._articulation.get_joint_positions()[idx]
+
+        return {"done": True, "teleported": True, "q": q.tolist(), "target": target.tolist()}
+
+    def stream_joint_positions(self, positions, indices=None):
+        """Teleport joints for high-rate streaming: write the DOF state directly, with
+        no drive command, no velocity zeroing, and no completion read-back.
+
+        Intended to be called repeatedly (e.g. from a WebSocket): the direct state
+        write is the whole operation, so consecutive updates flow smoothly and
+        cheaply. Because it issues no position-drive command, keep streaming to hold
+        a pose -- if updates stop, the position drive settles toward its last
+        commanded target.
+
+        ``indices`` defaults to this device's driven subset (``joint_indices``),
+        matching :meth:`set_j`. This is synchronous and lock-free: it performs no
+        ``await``, so it runs atomically with respect to other coroutines on the
+        loop; the ``_move_lock`` only needs to guard the awaiting :meth:`move_j`.
+        """
+        target = np.asarray(positions, dtype=float)
+        idx = list(self.joint_indices) if indices is None else list(indices)
+        if target.shape != (len(idx),):
+            raise ValueError(f"expected {len(idx)} joint positions, got {target.shape[0]}")
+
+        self._articulation.set_joint_positions(target, joint_indices=idx)
+        self._target = target
 
     def get_state(self):
         """Snapshot of the driven joints' positions / velocities / torques (rad) +

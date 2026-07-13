@@ -109,14 +109,28 @@ class ArticulationService:
 
     # -- driving + introspection ------------------------------------------------
 
-    async def set_joint_positions(self, articulation_id, positions, indices, asynchronous):
+    async def move_j(self, articulation_id, positions, indices, asynchronous):
         """Drive joint ``positions`` (radians) onto the device's chosen joints.
 
         ``indices`` may be None (drive the device's current driven subset).
         Blocking unless ``asynchronous`` is true. See
-        :meth:`..core.articulation.Articulation.set_joint_positions`.
+        :meth:`..core.articulation.Articulation.move_j`.
         """
-        return await self.get_device(articulation_id).set_joint_positions(positions, indices, asynchronous)
+        return await self.get_device(articulation_id).move_j(positions, indices, asynchronous)
+
+    async def set_j(self, articulation_id, positions, indices):
+        """Teleport the device's chosen joints directly to ``positions`` (radians).
+
+        ``indices`` may be None (teleport the device's current driven subset). The
+        move is immediate. See
+        :meth:`..core.articulation.Articulation.set_j`.
+        """
+        return await self.get_device(articulation_id).set_j(positions, indices)
+
+    def stream_joint_positions(self, articulation_id, positions, indices):
+        """Teleport the device's chosen joints for a high-rate stream. See
+        :meth:`..core.articulation.Articulation.stream_joint_positions`."""
+        self.get_device(articulation_id).stream_joint_positions(positions, indices)
 
     def get_joint_state(self, articulation_id):
         """Current joint positions / velocities / torques of the driven subset."""
@@ -156,7 +170,7 @@ class ArticulationService:
         raw indices may not survive the topology change), assemble the two prims
         with ``RobotAssembler``, bind the single merged articulation, and hand that
         same handle to both devices -- each re-resolving its own joints by name.
-        After this, the unchanged ``set_joint_positions`` route drives the shared rig.
+        After this, the unchanged ``move_j`` route drives the shared rig.
 
         Assembly mutates USD and is not idempotent: running it twice on the same pair
         would build a second fixed joint and re-root an already-merged tree. So we

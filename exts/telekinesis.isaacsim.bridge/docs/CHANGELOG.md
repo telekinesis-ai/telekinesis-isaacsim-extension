@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.3.0] - 2026-07-10
+### Changed
+- Rename `POST /articulations/{id}/joint_positions` to
+  `POST /articulations/{id}/move_j` (drive the joints to the target over time;
+  keeps the `asynchronous` flag). No alias for the old path.
+### Added
+- `POST /articulations/{id}/set_j`: teleport the driven joints directly to the
+  target (radians). Writes the DOF state immediately, zeros those joints'
+  velocities, and retargets the position drive so the controller holds the new pose
+  instead of pulling the joints back toward the previous target.
+- `WS /articulations/{id}/stream_joint_positions`: stream teleport targets
+  (radians) over a WebSocket for fast, high-rate updates. Each JSON frame
+  (`{"positions": [...], "indices": [...]?}`) writes the DOF state directly;
+  fire-and-forget (no per-frame reply). Adds the `websockets` runtime dependency
+  (uvicorn needs it to serve the WebSocket protocol).
+
 ## [1.2.0] - 2026-06-25
 ### Changed
 - Collapse the separate robot and gripper devices into one generic `Articulation`

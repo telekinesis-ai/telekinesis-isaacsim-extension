@@ -1,7 +1,7 @@
 """
-Bridge example: the three ways to drive a robot through joint_positions.
+Bridge example: the three ways to drive a robot through move_j.
 
-POST /articulations/{id}/joint_positions takes an ``asynchronous`` flag. This
+POST /articulations/{id}/move_j takes an ``asynchronous`` flag. This
 script shows all three resulting styles against one robot, with raw HTTP calls so
 the difference is visible on the wire:
 
@@ -52,11 +52,11 @@ def _request(base, method, path, body=None):
     return response.json() if response.content else None
 
 
-def set_joint_positions(base, articulation_id, positions, asynchronous):
+def move_j(base, articulation_id, positions, asynchronous):
     return _request(
         base,
         "POST",
-        f"/articulations/{articulation_id}/joint_positions",
+        f"/articulations/{articulation_id}/move_j",
         {"positions": positions, "asynchronous": asynchronous},
     )
 
@@ -94,7 +94,7 @@ def run(base, prim_path):
     # 1) asynchronous, fire-and-forget -------------------------------------------
     print(f"\n[1] async fire-and-forget -> {TARGET_A_DEG}")
     target_a = np.deg2rad(TARGET_A_DEG).tolist()
-    result = set_joint_positions(base, articulation_id, target_a, asynchronous=True)
+    result = move_j(base, articulation_id, target_a, asynchronous=True)
     print(f"  returned immediately: {result}")
     time.sleep(2)
     q = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["q"]
@@ -103,14 +103,14 @@ def run(base, prim_path):
     # 2) asynchronous, then wait client-side for a tolerance ---------------------
     print(f"\n[2] async + client-side wait -> {TARGET_B_DEG}")
     target_b = np.deg2rad(TARGET_B_DEG).tolist()
-    set_joint_positions(base, articulation_id, target_b, asynchronous=True)
+    move_j(base, articulation_id, target_b, asynchronous=True)
     status = wait_until_reached(base, articulation_id, target_b, tolerance_rad=5e-3)
     print(f"  client saw reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
 
     # 3) blocking ----------------------------------------------------------------
     print(f"\n[3] blocking -> {TARGET_C_DEG}")
     target_c = np.deg2rad(TARGET_C_DEG).tolist()
-    status = set_joint_positions(base, articulation_id, target_c, asynchronous=False)
+    status = move_j(base, articulation_id, target_c, asynchronous=False)
     print(f"  server returned done={status['done']} reached={status['reached']} "
           f"(max_error={status['max_error']:.2e} rad)")
 

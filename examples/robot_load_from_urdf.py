@@ -5,11 +5,11 @@ Most examples assume the robot prim already exists in the stage. This one
 exercises the *loading* path instead: when ``PUT /articulations`` is given a
 ``urdf_path`` and the ``prim_path`` is not yet in the stage, the bridge imports
 the URDF at that prim path before binding it. After that it's an ordinary
-articulation you drive with POST /articulations/{id}/joint_positions.
+articulation you drive with POST /articulations/{id}/move_j.
 
 Flow (all over HTTP):
   1. PUT /articulations {prim_path, urdf_path} -> imports + binds
-  2. POST /articulations/{id}/joint_positions {positions}  (radians)
+  2. POST /articulations/{id}/move_j {positions}  (radians)
      -> blocks until the move reaches the target or stalls; returns {done, reached, ...}
 
 Run:  python robot_load_from_urdf.py
@@ -77,7 +77,7 @@ def run_robot(base, prim_path, urdf_path):
     status = _request(
         base,
         "POST",
-        f"/articulations/{articulation_id}/joint_positions",
+        f"/articulations/{articulation_id}/move_j",
         {"positions": np.deg2rad(TARGET_DEG).tolist()},
     )
     print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")

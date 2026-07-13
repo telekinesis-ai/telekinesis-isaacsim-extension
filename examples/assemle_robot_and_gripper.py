@@ -4,7 +4,7 @@ Bridge example: assemble a gripper onto an arm, then drive the assembled rig.
 Creates an arm and a gripper as two separate articulations, then POSTs
 ``/articulations/{arm_id}/assemble_robot`` to assemble them with ``RobotAssembler``.
 After that the arm and gripper share ONE articulation, but each keeps driving only
-its own joints -- so the same joint_positions calls work unchanged whether or not
+its own joints -- so the same move_j calls work unchanged whether or not
 the gripper is attached.
 
 The gripper is narrowed to its actuated driver joint *before* assembling (discover
@@ -20,8 +20,8 @@ Flow (all over HTTP):
   3. GET  /articulations/{grip}/driver_joint  +  PUT driven_joints  (narrow gripper)
   4. POST /articulations/{arm_id}/assemble_robot {gripper_articulation_id,
          arm_mount_link, gripper_mount_link?, offset?}      -> merged articulation
-  5. POST /articulations/{arm_id}/joint_positions {positions}  (radians) -> blocks
-  6. POST /articulations/{grip_id}/joint_positions {positions:[rad]}     -> blocks
+  5. POST /articulations/{arm_id}/move_j {positions}  (radians) -> blocks
+  6. POST /articulations/{grip_id}/move_j {positions:[rad]}     -> blocks
 
 ``arm_mount_link`` is the arm's flange (a RigidBodyAPI link or a Site, e.g. UR
 ``wrist_3_link``), NOT an empty frame like ``tool0`` / ``flange``. Omit
@@ -133,7 +133,7 @@ def run(
     # 4) Move the arm with the same 6-value payload as a standalone arm.
     print(f"move arm target (deg): {TARGET_DEG}")
     status = _request(
-        base, "POST", f"/articulations/{arm_id}/joint_positions",
+        base, "POST", f"/articulations/{arm_id}/move_j",
         {"positions": np.deg2rad(TARGET_DEG).tolist()},
     )
     print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
@@ -142,7 +142,7 @@ def run(
     for label, fraction in (("close", 1.0), ("open", 0.0)):
         target_rad = opened_rad + fraction * (closed_rad - opened_rad)
         print(f"gripper {label} (fraction={fraction})")
-        status = _request(base, "POST", f"/articulations/{gripper_id}/joint_positions", {"positions": [target_rad]})
+        status = _request(base, "POST", f"/articulations/{gripper_id}/move_j", {"positions": [target_rad]})
         print(f"  done (reached={status['reached']} q={status['q'][0]:.3f} rad)")
 
 

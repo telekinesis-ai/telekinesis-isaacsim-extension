@@ -23,7 +23,7 @@ class CreateArticulationRequest(BaseModel):
 
 
 class JointPositionsRequest(BaseModel):
-    """Body of POST /articulations/{id}/joint_positions -- drive joints (radians).
+    """Body of POST /articulations/{id}/move_j -- drive joints (radians).
 
     ``positions`` are the target angles for ``indices`` (default: the device's
     current driven joints, so a robot sends all of them and a gripper narrowed to
@@ -35,6 +35,19 @@ class JointPositionsRequest(BaseModel):
     positions: list[float]
     indices: list[int] | None = None
     asynchronous: bool = False
+
+
+class SetJointPositionsRequest(BaseModel):
+    """Body of POST /articulations/{id}/set_j -- teleport joints (radians).
+
+    ``positions`` are placed directly onto ``indices`` (default: the device's
+    current driven joints), so the joints jump to them in a single step rather than
+    being driven there over time. There is no ``asynchronous`` flag: a teleport is
+    immediate.
+    """
+
+    positions: list[float]
+    indices: list[int] | None = None
 
 
 class SetDrivenJointsRequest(BaseModel):

@@ -1,5 +1,5 @@
 [package]
-version = "1.2.0"
+version = "1.3.0"
 category = "Simulation"
 title = "Telekinesis Isaac Sim Bridge"
 description = "HTTP/JSON (FastAPI) bridge between the Synapse interface and Isaac Sim articulations."
@@ -19,7 +19,7 @@ writeTarget.kit = true
 "omni.kit.uiapp" = {}
 
 [python.pipapi]
-requirements = ["fastapi", "uvicorn", "pydantic"]
+requirements = ["fastapi", "uvicorn", "pydantic", "websockets"]
 use_online_index = true
 
 [[python.module]]

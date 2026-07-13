@@ -12,7 +12,7 @@ Flow (all over HTTP):
   2. GET  /articulations/{id}/driver_joint                 -> {name, index}
   3. PUT  /articulations/{id}/driven_joints {[driver_name]} -> narrow to that joint
   4. GET  /articulations/{id}/joint_limits                 -> {limits: [[open, closed]]}
-  5. close/open: POST /articulations/{id}/joint_positions {positions:[rad]} -> blocks
+  5. close/open: POST /articulations/{id}/move_j {positions:[rad]} -> blocks
 
 Run:  python gripper_load_from_urdf.py
       python gripper_load_from_urdf.py --prim /World/my_gripper
@@ -79,7 +79,7 @@ def run_gripper(base, prim_path, urdf_path):
         target_rad = opened_rad + fraction * (closed_rad - opened_rad)
         print(f"gripper {label} (fraction={fraction})")
         status = _request(
-            base, "POST", f"/articulations/{articulation_id}/joint_positions", {"positions": [target_rad]}
+            base, "POST", f"/articulations/{articulation_id}/move_j", {"positions": [target_rad]}
         )
         print(f"  done (reached={status['reached']} q={status['q'][0]:.3f} rad)")
 

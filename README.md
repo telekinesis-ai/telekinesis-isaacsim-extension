@@ -58,7 +58,7 @@ python robot_set_joint_position.py --prim /World/ur10e
 
 1. Registers the robot: `PUT /articulations` with the prim path.
 2. Receives back an `articulation_id` (`"articulation1"`), the number of DOFs, and joint names.
-3. Sends three joint targets in sequence (blocking): each `POST /articulations/articulation1/joint_positions` waits server-side until the arm reaches the target (or stalls), then returns.
+3. Sends three joint targets in sequence (blocking): each `POST /articulations/articulation1/move_j` waits server-side until the arm reaches the target (or stalls), then returns.
 4. Prints the result - `done`, `reached`, and the final position error in radians.
 
 Expected output:
@@ -90,6 +90,7 @@ All examples are in the [`examples/`](../../../../examples/) directory and only 
 | `gripper_load_from_urdf.py` | Import a gripper URDF, narrow to driver joint, open/close via joint limits |
 | `assemble_robot.py` | Assemble a gripper onto an arm, then drive both through the shared articulation |
 | `robot_and_gripper.py` | Control an arm and a gripper as two independent articulations (no assembly) |
+| `robot_stream_joint_positions.py` | Stream a joint trajectory over the WebSocket (`stream_joint_positions`) for fast, continuous updates |
 | `extension_client.py` | Exercise all implemented General, Stage, and Prims routes end-to-end |
 
 ---
@@ -108,7 +109,9 @@ The core resource. One articulation maps to a USD prim path and drives a subset 
 | `GET` | `/articulations` | List all registered articulation IDs and their prim paths |
 | `GET` | `/articulations/{id}` | Get info and current state for one articulation |
 | `DELETE` | `/articulations/{id}` | Unregister (USD prim stays in the stage) |
-| `POST` | `/articulations/{id}/joint_positions` | Move to joint targets (radians); blocks until reached or stalled |
+| `POST` | `/articulations/{id}/move_j` | Move to joint targets (radians); blocks until reached or stalled |
+| `POST` | `/articulations/{id}/set_j` | Teleport directly to joint targets (radians); immediate, no blocking |
+| `WS` | `/articulations/{id}/stream_joint_positions` | Stream teleport targets (radians) over a WebSocket; fire-and-forget, no reply |
 | `GET` | `/articulations/{id}/joint_state` | Current positions, velocities, and efforts |
 | `GET` | `/articulations/{id}/joint_limits` | Per-joint position limits (radians) |
 | `GET` | `/articulations/{id}/driver_joint` | Discover a gripper's single actuated joint |
