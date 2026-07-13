@@ -25,14 +25,14 @@ class CreateArticulationRequest(BaseModel):
 class JointPositionsRequest(BaseModel):
     """Body of POST /articulations/{id}/move_j -- drive joints (radians).
 
-    ``positions`` are the target angles for ``indices`` (default: the device's
-    current driven joints, so a robot sends all of them and a gripper narrowed to
-    its driver sends one). ``asynchronous`` true applies the action and returns
-    immediately (the client decides when the move is done); false blocks until the
-    joints reach the target or stall.
+    ``joint_positions`` are the target angles for ``indices`` (default: the
+    device's current driven joints, so a robot sends all of them and a gripper
+    narrowed to its driver sends one). ``asynchronous`` true applies the action and
+    returns immediately (the client decides when the move is done); false blocks
+    until the joints reach the target or stall.
     """
 
-    positions: list[float]
+    joint_positions: list[float]
     indices: list[int] | None = None
     asynchronous: bool = False
 
@@ -40,27 +40,30 @@ class JointPositionsRequest(BaseModel):
 class SetJointPositionsRequest(BaseModel):
     """Body of POST /articulations/{id}/set_j -- teleport joints (radians).
 
-    ``positions`` are placed directly onto ``indices`` (default: the device's
-    current driven joints), so the joints jump to them in a single step rather than
-    being driven there over time. There is no ``asynchronous`` flag: a teleport is
-    immediate.
+    ``joint_positions`` are placed directly onto ``indices`` (default: the
+    device's current driven joints), so the joints jump to them in a single step
+    rather than being driven there over time. There is no ``asynchronous`` flag: a
+    teleport is immediate.
     """
 
-    positions: list[float]
+    joint_positions: list[float]
+    indices: list[int] | None = None
+
+
 class JointVelocitiesRequest(BaseModel):
     """Body of POST /articulations/{id}/joint_velocities -- drive joints (rad/s).
 
     The velocity counterpart to :class:`JointPositionsRequest`, for driving joints
     at a target rate rather than to a pose (drive wheels, a spinning tool, a
-    conveyor, or slewing any joint at a controlled speed). ``velocities`` are the
-    target angular speeds for ``indices`` (default: the device's current driven
-    joints). Fire-and-forget: the commanded speeds hold until the next call, so
-    ``{0, ...}`` stops the joints (there is no ``asynchronous`` flag -- a
-    velocity-driven joint never "reaches" a target). Any higher-level kinematics
+    conveyor, or slewing any joint at a controlled speed). ``joint_velocities`` are
+    the target angular speeds for ``indices`` (default: the device's current
+    driven joints). Fire-and-forget: the commanded speeds hold until the next
+    call, so ``{0, ...}`` stops the joints (there is no ``asynchronous`` flag --
+    a velocity-driven joint never "reaches" a target). Any higher-level kinematics
     (e.g. twist->wheel) live in the client.
     """
 
-    velocities: list[float]
+    joint_velocities: list[float]
     indices: list[int] | None = None
 
 

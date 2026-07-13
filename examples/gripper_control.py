@@ -12,8 +12,8 @@ extension calls are visible:
   3. PUT  /articulations/{id}/driven_joints {[driver_name]} -> narrow to that joint
   4. GET  /articulations/{id}/joint_limits                 -> {limits: [[open, closed]]}
   5. close/open: map a closed-ness fraction (1.0 / 0.0) to a joint angle and
-       POST /articulations/{id}/move_j {positions:[rad]}
-       -> blocks until the finger reaches the target or stalls; returns {done, reached, q}
+       POST /articulations/{id}/move_j {joint_positions:[rad]}
+       -> blocks until the finger reaches the target or stalls; returns {done, reached, joint_positions}
 
 Run:  python gripper_control.py
       python gripper_control.py --prim /World/rg6
@@ -87,9 +87,9 @@ def run_gripper(base, prim_path, urdf_path):
         target_rad = opened_rad + fraction * (closed_rad - opened_rad)
         print(f"gripper {label} (fraction={fraction})")
         status = _request(
-            base, "POST", f"/articulations/{articulation_id}/move_j", {"positions": [target_rad]}
+            base, "POST", f"/articulations/{articulation_id}/move_j", {"joint_positions": [target_rad]}
         )
-        print(f"  done (reached={status['reached']} q={status['q'][0]:.3f} rad)")
+        print(f"  done (reached={status['reached']} joint_positions={status['joint_positions'][0]:.3f} rad)")
 
 
 def main():

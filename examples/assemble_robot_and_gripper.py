@@ -20,8 +20,8 @@ Flow (all over HTTP):
   3. GET  /articulations/{grip}/driver_joint  +  PUT driven_joints  (narrow gripper)
   4. POST /articulations/{arm_id}/assemble_robot {gripper_articulation_id,
          arm_mount_link, gripper_mount_link?, offset?}      -> merged articulation
-  5. POST /articulations/{arm_id}/move_j {positions}  (radians) -> blocks
-  6. POST /articulations/{grip_id}/move_j {positions:[rad]}     -> blocks
+  5. POST /articulations/{arm_id}/move_j {joint_positions}  (radians) -> blocks
+  6. POST /articulations/{grip_id}/move_j {joint_positions:[rad]}     -> blocks
 
 ``arm_mount_link`` is the arm's flange (a RigidBodyAPI link or a Site, e.g. UR
 ``wrist_3_link``), NOT an empty frame like ``tool0`` / ``flange``. Omit
@@ -134,7 +134,7 @@ def run(
     print(f"move arm target (deg): {TARGET_DEG}")
     status = _request(
         base, "POST", f"/articulations/{arm_id}/move_j",
-        {"positions": np.deg2rad(TARGET_DEG).tolist()},
+        {"joint_positions": np.deg2rad(TARGET_DEG).tolist()},
     )
     print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
 
@@ -142,8 +142,9 @@ def run(
     for label, fraction in (("close", 1.0), ("open", 0.0)):
         target_rad = opened_rad + fraction * (closed_rad - opened_rad)
         print(f"gripper {label} (fraction={fraction})")
-        status = _request(base, "POST", f"/articulations/{gripper_id}/move_j", {"positions": [target_rad]})
-        print(f"  done (reached={status['reached']} q={status['q'][0]:.3f} rad)")
+        status = _request(
+            base, "POST", f"/articulations/{gripper_id}/move_j", {"joint_positions": [target_rad]})
+        print(f"  done (reached={status['reached']} joint_positions={status['joint_positions'][0]:.3f} rad)")
 
 
 def main():

@@ -52,12 +52,12 @@ def _request(base, method, path, body=None):
     return response.json() if response.content else None
 
 
-def move_j(base, articulation_id, positions, asynchronous):
+def move_j(base, articulation_id, joint_positions, asynchronous):
     return _request(
         base,
         "POST",
         f"/articulations/{articulation_id}/move_j",
-        {"positions": positions, "asynchronous": asynchronous},
+        {"joint_positions": joint_positions, "asynchronous": asynchronous},
     )
 
 
@@ -76,12 +76,12 @@ def wait_until_reached(
     """
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
-        q = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["q"]
+        q = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["joint_positions"]
         max_error = max(abs(a - b) for a, b in zip(q, target))
         if max_error < tolerance_rad:
             return {"reached": True, "max_error": max_error}
         time.sleep(poll_s)
-    q = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["q"]
+    q = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["joint_positions"]
     return {"reached": False, "max_error": max(abs(a - b) for a, b in zip(q, target))}
 
 
@@ -97,8 +97,8 @@ def run(base, prim_path):
     result = move_j(base, articulation_id, target_a, asynchronous=True)
     print(f"  returned immediately: {result}")
     time.sleep(2)
-    q = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["q"]
-    print(f"  state shortly after (still moving): q={[round(v, 3) for v in q]}")
+    q = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["joint_positions"]
+    print(f"  state shortly after (still moving): joint_positions={[round(v, 3) for v in q]}")
 
     # 2) asynchronous, then wait client-side for a tolerance ---------------------
     print(f"\n[2] async + client-side wait -> {TARGET_B_DEG}")

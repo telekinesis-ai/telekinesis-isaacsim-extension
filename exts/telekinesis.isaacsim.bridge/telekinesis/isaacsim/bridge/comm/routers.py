@@ -86,7 +86,8 @@ async def move_j(
     articulation_id: str, req: JointPositionsRequest, articulation_service=Depends(get_articulation_service)
 ):
     # Drive the joints (radians). Blocks until reached/stalled unless asynchronous.
-    return await articulation_service.move_j(articulation_id, req.positions, req.indices, req.asynchronous)
+    return await articulation_service.move_j(
+        articulation_id, req.joint_positions, req.indices, req.asynchronous)
 
 
 @articulations.post("/articulations/{articulation_id}/set_j", summary="Set Joint Positions")
@@ -94,13 +95,13 @@ async def set_j(
     articulation_id: str, req: SetJointPositionsRequest, articulation_service=Depends(get_articulation_service)
 ):
     # Teleport the joints directly to the targets (radians); immediate, no blocking.
-    return await articulation_service.set_j(articulation_id, req.positions, req.indices)
+    return await articulation_service.set_j(articulation_id, req.joint_positions, req.indices)
 
 
 @articulations.websocket("/articulations/{articulation_id}/stream_joint_positions")
 async def stream_joint_positions(websocket: WebSocket, articulation_id: str):
     # High-rate teleport stream: the client opens one connection bound to this
-    # articulation and pushes {"positions": [...], "indices": [...]?} frames
+    # articulation and pushes {"joint_positions": [...], "indices": [...]?} frames
     # (radians). Fire-and-forget -- the server applies each frame and sends nothing
     # back, so the client streams at full rate.
     service = websocket.app.state.articulation_service
@@ -115,10 +116,10 @@ async def stream_joint_positions(websocket: WebSocket, articulation_id: str):
             message = await websocket.receive_json()
             try:
                 service.stream_joint_positions(
-                    articulation_id, message["positions"], message.get("indices")
+                    articulation_id, message["joint_positions"], message.get("indices")
                 )
             except (KeyError, ValueError):
-                # Bad frame (missing/mismatched positions): skip it, keep the stream open.
+                # Bad frame (missing/mismatched joint_positions): skip it, keep the stream open.
                 pass
     except WebSocketDisconnect:
         pass
@@ -129,7 +130,8 @@ async def set_joint_velocities(
     articulation_id: str, req: JointVelocitiesRequest, articulation_service=Depends(get_articulation_service)
 ):
     # Drive the joints at a velocity (rad/s). Fire-and-forget; holds until the next call.
-    return articulation_service.set_joint_velocities(articulation_id, req.velocities, req.indices)
+    return articulation_service.set_joint_velocities(
+        articulation_id, req.joint_velocities, req.indices)
 
 
 @articulations.get("/articulations/{articulation_id}/joint_state", summary="Get Joint State")
@@ -140,7 +142,7 @@ async def get_joint_state(articulation_id: str, articulation_service=Depends(get
 
 @articulations.get("/articulations/{articulation_id}/joint_limits", summary="Get Joint Limits")
 async def get_joint_limits(articulation_id: str, articulation_service=Depends(get_articulation_service)):
-    # [lower, upper] radian limits per driven joint (in joint_state q order).
+    # [lower, upper] radian limits per driven joint (in joint_state joint_positions order).
     return articulation_service.get_joint_limits(articulation_id)
 
 

@@ -142,11 +142,11 @@ class ArticulationService:
         return self.get_device(articulation_id).set_joint_velocities(velocities, indices)
 
     def get_joint_state(self, articulation_id):
-        """Current joint positions / velocities / torques of the driven subset."""
+        """Current joint positions / velocities / efforts of the driven subset."""
         return self.get_device(articulation_id).get_state()
 
     def get_joint_limits(self, articulation_id):
-        """``[lower, upper]`` radian limits per driven joint (``get_state`` q order)."""
+        """``[lower, upper]`` radian limits per driven joint (``get_state`` joint_positions order)."""
         return {"limits": self.get_device(articulation_id).get_joint_limits()}
 
     def set_driven_joints(self, articulation_id, joint_names):

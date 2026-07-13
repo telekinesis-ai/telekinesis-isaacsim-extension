@@ -1,8 +1,8 @@
 # Telekinesis Isaac Sim Bridge
 
-An HTTP/REST bridge between external clients and Isaac Sim physics articulations. It runs a [FastAPI](https://fastapi.tiangolo.com/) server (uvicorn) inside the Isaac Sim process and exposes joints, stage control, and prim manipulation.
+An HTTP/REST and WebSocket bridge between external clients and Isaac Sim physics articulations. It runs a [FastAPI](https://fastapi.tiangolo.com/) server (uvicorn) inside the Isaac Sim process and exposes joints, stage control, and prim manipulation, plus a WebSocket stream for high-rate joint teleport updates.
 
-The bridge is **device-agnostic**: a robot arm and a gripper are both just articulations with joint positions in radians. All higher-level semantics (open/close fractions, trajectory interpolation, "done" detection) live in the client.
+The bridge is **device-agnostic**: a robot (arm, mobile base, humanoid, ...) and an end-effector tool (e.g. a gripper) are both just articulations with joint positions in radians. All higher-level semantics (open/close fractions, trajectory interpolation, "done" detection) live in the client.
 
 **Server:** `http://127.0.0.1:8766`
 
@@ -12,17 +12,17 @@ The bridge is **device-agnostic**: a robot arm and a gripper are both just artic
 
 ### Prerequisites
 
-- NVIDIA Isaac Sim (5.1.0 or later)
+- NVIDIA Isaac Sim 5.1.0 or later, already installed and runnable. Tested
+  against **5.1.0.0** (Python 3.11) and **6.0.0.1** (Python 3.12).
 - Python 3.10+ with `pip install requests numpy` (client side only)
 
-### Step 1 - Enable the extension in Isaac Sim
+### Step 1 - Load the extension in Isaac Sim
 
-1. Open Isaac Sim
-2. Click on Window -> Extensions
-3. Click on the hamburger menu (3 dots) -> Settings -> Extension Registries -> Check kit/community  
-4. Search for telekinesis.isaacsim.bridge
+This extension isn't published to a registry yet, so it's loaded from source.
+Follow [DEVELOPMENT.md](DEVELOPMENT.md) to point Isaac Sim at this repo's `exts/`
+folder and enable `telekinesis.isaacsim.bridge`.
 
-Isaac Sim will install `fastapi`, `uvicorn`, and `pydantic` automatically on first load via `pipapi`.
+Isaac Sim will install `fastapi`, `uvicorn`, `pydantic`, and `websockets` automatically on first load via `pipapi`.
 
 ### Step 2 - Open a stage and start the simulation
 
@@ -79,17 +79,16 @@ move target (deg): [-90.0, -90.0, 0.0, 0.0, 90.0, 0.0]
 
 ## Examples
 
-All examples are in the [`examples/`](../../../../examples/) directory and only require the `requests` package (plus `numpy` for unit conversion).
+All examples are in the [`examples/`](examples/) directory and only require the `requests` package (plus `numpy` for unit conversion).
 
 | File | What it demonstrates |
 |------|----------------------|
 | `robot_set_joint_position.py` | Register a robot, drive it through multiple joint targets (blocking moves) |
 | `robot_load_from_urdf.py` | Import a URDF into the stage via the bridge, then move the arm |
-| `robot_asynchronous_run.py` | Send a joint target with `asynchronous=true` and poll for completion client-side |
+| `robot_async_set_joint_position.py` | Send a joint target with `asynchronous=true` and poll for completion client-side |
 | `gripper_control.py` | Register a gripper, discover its driver joint, narrow driven joints, open/close |
 | `gripper_load_from_urdf.py` | Import a gripper URDF, narrow to driver joint, open/close via joint limits |
-| `assemble_robot.py` | Assemble a gripper onto an arm, then drive both through the shared articulation |
-| `robot_and_gripper.py` | Control an arm and a gripper as two independent articulations (no assembly) |
+| `assemble_robot_and_gripper.py` | Assemble a gripper onto an arm, then drive both through the shared articulation |
 | `robot_stream_joint_positions.py` | Stream a joint trajectory over the WebSocket (`stream_joint_positions`) for fast, continuous updates |
 | `extension_client.py` | Exercise all implemented General, Stage, and Prims routes end-to-end |
 
@@ -112,6 +111,7 @@ The core resource. One articulation maps to a USD prim path and drives a subset 
 | `POST` | `/articulations/{id}/move_j` | Move to joint targets (radians); blocks until reached or stalled |
 | `POST` | `/articulations/{id}/set_j` | Teleport directly to joint targets (radians); immediate, no blocking |
 | `WS` | `/articulations/{id}/stream_joint_positions` | Stream teleport targets (radians) over a WebSocket; fire-and-forget, no reply |
+| `POST` | `/articulations/{id}/joint_velocities` | Drive the joints at a velocity (rad/s); fire-and-forget, holds until the next call |
 | `GET` | `/articulations/{id}/joint_state` | Current positions, velocities, and efforts |
 | `GET` | `/articulations/{id}/joint_limits` | Per-joint position limits (radians) |
 | `GET` | `/articulations/{id}/driver_joint` | Discover a gripper's single actuated joint |
@@ -122,13 +122,13 @@ The core resource. One articulation maps to a USD prim path and drives a subset 
 
 ```json
 {
-  "positions": [-1.57, -1.57, 0.0, 0.0, 1.57, 0.0],
+  "joint_positions": [-1.57, -1.57, 0.0, 0.0, 1.57, 0.0],
   "indices": null,
   "asynchronous": false
 }
 ```
 
-`positions` is in **radians**. `indices` restricts which joints to move (null = all driven joints). When `asynchronous` is false (default), the call blocks until the move completes.
+`joint_positions` is in **radians**. `indices` restricts which joints to move (null = all driven joints). When `asynchronous` is false (default), the call blocks until the move completes.
 
 #### Joint positions response (blocking)
 
@@ -137,7 +137,7 @@ The core resource. One articulation maps to a USD prim path and drives a subset 
   "done": true,
   "reached": true,
   "max_error": 0.002,
-  "q": [-1.57, -1.57, 0.0, 0.0, 1.57, 0.0],
+  "joint_positions": [-1.57, -1.57, 0.0, 0.0, 1.57, 0.0],
   "target": [-1.57, -1.57, 0.0, 0.0, 1.57, 0.0]
 }
 ```
@@ -161,7 +161,8 @@ The core resource. One articulation maps to a USD prim path and drives a subset 
 |--------|------|-------------|
 | `GET/PUT` | `/prims/poses` | Get or set a prim's world pose |
 | `GET/POST` | `/prims/poses/relative` | Get or apply a relative pose between two prims |
-| `GET/PUT/DELETE/POST` | `/prims/poses/default` | Save, list, clear, and restore default poses |
+| `GET/PUT/DELETE` | `/prims/poses/default` | List, save, and clear default poses |
+| `POST` | `/prims/poses/default/reset` | Restore a prim to its stored default pose |
 | `PUT/DELETE` | `/prims/metadata` | Store or remove `{category, type}` metadata on a prim |
 | `PATCH` | `/prims/visibility` | Show or hide a prim |
 | `PATCH` | `/prims/physics/joints` | Enable or disable a physics joint |

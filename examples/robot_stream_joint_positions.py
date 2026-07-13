@@ -7,7 +7,7 @@ and push one small frame per update:
 
   1. PUT /articulations {prim_path, urdf_path?} (HTTP) -> {articulation_id, ...}
   2. connect ws://host:port/articulations/{id}/stream_joint_positions
-  3. send {"positions": [rad, ...]} frames at a fixed rate
+  3. send {"joint_positions": [rad, ...]} frames at a fixed rate
 
 The stream is fire-and-forget: the bridge writes the joint state directly on each
 frame and sends nothing back, so the client is never blocked waiting on a reply.
@@ -61,7 +61,7 @@ async def stream_trajectory(ws_url, positions_rad):
     period = 1.0 / RATE_HZ
     async with websockets.connect(ws_url) as websocket:
         for q in positions_rad:
-            await websocket.send(json.dumps({"positions": q.tolist()}))
+            await websocket.send(json.dumps({"joint_positions": q.tolist()}))
             await asyncio.sleep(period)
 
 

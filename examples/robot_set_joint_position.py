@@ -10,10 +10,10 @@ set directly.
 
 Flow (all over HTTP):
   1. PUT /articulations {prim_path, urdf_path?} -> {articulation_id, num_dof, ...}
-  2. for each target: POST /articulations/{id}/move_j {positions}  (radians)
+  2. for each target: POST /articulations/{id}/move_j {joint_positions}  (radians)
      -> blocks until the move reaches the target or stalls; returns {done, reached, ...}
-  3. POST /articulations/{id}/set_j {positions}  (radians)
-     -> teleports the joints directly to the target; returns {done, teleported, q, ...}
+  3. POST /articulations/{id}/set_j {joint_positions}  (radians)
+     -> teleports the joints directly to the target; returns {done, teleported, joint_positions, ...}
 
 The bridge runs each move to completion server-side (it steps physics on Isaac's
 own loop), so the POST blocks until done -- no client-side polling.
@@ -62,7 +62,7 @@ def run_robot(base, prim_path):
             base,
             "POST",
             f"/articulations/{articulation_id}/move_j",
-            {"positions": np.deg2rad(target_deg).tolist()},
+            {"joint_positions": np.deg2rad(target_deg).tolist()},
         )
         print(
             f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
@@ -75,10 +75,10 @@ def run_robot(base, prim_path):
         base,
         "POST",
         f"/articulations/{articulation_id}/set_j",
-        {"positions": np.deg2rad(TARGET_DEG).tolist()},
+        {"joint_positions": np.deg2rad(TARGET_DEG).tolist()},
     )
     print(f"  done={status['done']} teleported={status['teleported']} "
-          f"q={[round(v, 3) for v in status['q']]}")
+          f"joint_positions={[round(v, 3) for v in status['joint_positions']]}")
 
 
 def main():

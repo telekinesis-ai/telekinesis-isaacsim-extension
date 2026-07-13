@@ -9,7 +9,7 @@ articulation you drive with POST /articulations/{id}/move_j.
 
 Flow (all over HTTP):
   1. PUT /articulations {prim_path, urdf_path} -> imports + binds
-  2. POST /articulations/{id}/move_j {positions}  (radians)
+  2. POST /articulations/{id}/move_j {joint_positions}  (radians)
      -> blocks until the move reaches the target or stalls; returns {done, reached, ...}
 
 Run:  python robot_load_from_urdf.py
@@ -78,7 +78,7 @@ def run_robot(base, prim_path, urdf_path):
         base,
         "POST",
         f"/articulations/{articulation_id}/move_j",
-        {"positions": np.deg2rad(TARGET_DEG).tolist()},
+        {"joint_positions": np.deg2rad(TARGET_DEG).tolist()},
     )
     print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
 

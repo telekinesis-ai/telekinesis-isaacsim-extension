@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.4.0] - 2026-07-13
+### Fixed
+- `SetJointPositionsRequest` (`set_j` body) was missing `indices`, causing an
+  `AttributeError` on every `POST /articulations/{id}/set_j` call.
+### Changed
+- Rename wire fields for consistency with Isaac Sim/ROS naming:
+  `positions`→`joint_positions`, `velocities`→`joint_velocities` (requests,
+  incl. the `stream_joint_positions` WS frame); `q`→`joint_positions`,
+  `dq`→`joint_velocities`, `torque`→`joint_efforts` (responses).
+### Added
+- `examples/articulations/`, `examples/stage/`, `examples/prims/`,
+  `examples/general/`: one script per remaining API endpoint.
+- Root `DEVELOPMENT.md`: source-install guide, Isaac Sim/Python compatibility
+  table, and a merge-to-main `ruff`/`pylint` check section.
+
 ## [1.3.0] - 2026-07-10
 ### Changed
 - Rename `POST /articulations/{id}/joint_positions` to

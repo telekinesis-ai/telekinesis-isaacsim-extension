@@ -227,7 +227,7 @@ class Articulation:
             "done": True,
             "reached": reached,
             "max_error": max_error,
-            "q": q.tolist(),
+            "joint_positions": q.tolist(),
             "target": target.tolist(),
         }
 
@@ -260,7 +260,10 @@ class Articulation:
             self._target = target
             q = self._articulation.get_joint_positions()[idx]
 
-        return {"done": True, "teleported": True, "q": q.tolist(), "target": target.tolist()}
+        return {
+            "done": True, "teleported": True,
+            "joint_positions": q.tolist(), "target": target.tolist(),
+        }
 
     def stream_joint_positions(self, positions, indices=None):
         """Teleport joints for high-rate streaming: write the DOF state directly, with
@@ -309,7 +312,7 @@ class Articulation:
         self._articulation.apply_action(
             ArticulationAction(joint_velocities=target, joint_indices=idx)
         )
-        return {"applied": True, "dq": target.tolist(), "indices": idx}
+        return {"applied": True, "joint_velocities": target.tolist(), "indices": idx}
 
     def get_state(self):
         """Snapshot of the driven joints' positions / velocities / torques (rad) +
@@ -319,15 +322,19 @@ class Articulation:
         velocities = self._articulation.get_joint_velocities()
         efforts = self._articulation.get_measured_joint_efforts()
         return {
-            "q": positions[self.joint_indices].tolist(),
-            "dq": velocities[self.joint_indices].tolist() if velocities is not None else [0.0] * self.num_dof,
-            "torque": efforts[self.joint_indices].tolist() if efforts is not None else [0.0] * self.num_dof,
+            "joint_positions": positions[self.joint_indices].tolist(),
+            "joint_velocities": (
+                velocities[self.joint_indices].tolist() if velocities is not None else [0.0] * self.num_dof
+            ),
+            "joint_efforts": (
+                efforts[self.joint_indices].tolist() if efforts is not None else [0.0] * self.num_dof
+            ),
             "timestamp": time.monotonic() - self._start_time,
         }
 
     def get_joint_limits(self):
         """``[lower, upper]`` radian limits for each driven joint, in ``get_state``'s
-        ``q`` order.
+        ``joint_positions`` order.
 
         SingleArticulation exposes no ``get_dof_limits()``; we read it off the
         physics view, whose array carries a leading per-environment batch dimension
