@@ -10,7 +10,7 @@ extension calls are visible:
   2. GET  /articulations/{id}/driver_joint                 -> {name, index}
        (USD schema walk on the bridge: the actuated joint, skipping mimic joints)
   3. PUT  /articulations/{id}/driven_joints {[driver_name]} -> narrow to that joint
-  4. GET  /articulations/{id}/joint_limits                 -> {limits: [[open, closed]]}
+  4. GET  /articulations/{id}/dof_limits                 -> {limits: [[open, closed]]}
   5. close/open: map a closed-ness fraction (1.0 / 0.0) to a joint angle and
        POST /articulations/{id}/move_j {joint_positions:[rad]}
        -> blocks until the finger reaches the target or stalls; returns {done, reached, joint_positions}
@@ -76,9 +76,9 @@ def run_gripper(base, prim_path, urdf_path):
     driver = _request(base, "GET", f"/articulations/{articulation_id}/driver_joint")
     _request(base, "PUT", f"/articulations/{articulation_id}/driven_joints", {"joint_names": [driver["name"]]})
 
-    # With the device narrowed to the driver, joint_limits is a single pair.
+    # With the device narrowed to the driver, dof_limits is a single pair.
     # Convention: lower = open, upper = closed.
-    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{articulation_id}/joint_limits")["limits"][0]
+    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{articulation_id}/dof_limits")["limits"][0]
     print(f"  driver joint='{driver['name']}' open={opened_rad:.3f} closed={closed_rad:.3f} rad")
 
     # Map a closed-ness fraction to a joint angle (this is the only gripper-specific

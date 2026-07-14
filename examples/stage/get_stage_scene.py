@@ -9,7 +9,6 @@ Run:  python get_stage_scene.py
 Requires the ``requests`` package (``pip install requests``).
 """
 import argparse
-
 import requests
 
 HOST = "127.0.0.1"
@@ -18,9 +17,31 @@ DEFAULT_TIMEOUT = 30.0
 
 
 def _request(base, method, path, body=None):
-    """Send one request and return the decoded JSON (None for an empty body)."""
-    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
-    response.raise_for_status()
+    """Send one request and return the decoded JSON (None for an empty body).
+
+    Exits with a clear, one-line message instead of a raw traceback for the
+    two failure modes a user actually hits by hand: the bridge isn't reachable
+    (Isaac Sim not running / extension not loaded), or the bridge rejected the
+    request (in which case its JSON error body's ``detail`` field is the
+    useful part -- surface that, not just the HTTP status).
+    """
+    try:
+        response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+    except requests.exceptions.ConnectionError:
+        raise SystemExit(
+            f"Could not connect to {base} -- is Isaac Sim running with the bridge extension loaded?")
+    except requests.exceptions.Timeout:
+        raise SystemExit(f"{method} {path} timed out after {DEFAULT_TIMEOUT}s.")
+
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError:
+        try:
+            detail = response.json().get("detail", response.text)
+        except ValueError:
+            detail = response.text
+        raise SystemExit(f"{method} {path} failed ({response.status_code}): {detail}")
+
     return response.json() if response.content else None
 
 

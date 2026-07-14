@@ -112,7 +112,6 @@ class Extension(omni.ext.IExt):
 
     def on_shutdown(self):
         """Stop the bridge server and release all subscriptions, menu items, and UI resources."""
-        self._models = {}
         self._bridge_stage_event_sub = None
         if getattr(self, "_bridge_server", None) is not None:
             self._bridge_server.stop()

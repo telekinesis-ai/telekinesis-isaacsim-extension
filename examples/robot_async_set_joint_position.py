@@ -11,7 +11,7 @@ the difference is visible on the wire:
        still completes in sim). We read the state right after to show it's moving.
 
   2. asynchronous=True, then wait on the client side for a tolerance
-       The bridge returns immediately; the client polls GET joint_state until the
+       The bridge returns immediately; the client polls GET joints_state until the
        joints are within a tolerance of the target. This puts the "am I done?"
        decision in the client.
 
@@ -68,7 +68,7 @@ def wait_until_reached(
         tolerance_rad=5e-3,
         timeout_s=30.0,
         poll_s=0.05):
-    """Poll joint_state until every joint is within ``tolerance_rad`` of target.
+    """Poll joints_state until every joint is within ``tolerance_rad`` of target.
 
     The client-side "done" check for an asynchronous move: the bridge applied the
     action and returned immediately, so we watch the state ourselves. Sim keeps
@@ -76,12 +76,12 @@ def wait_until_reached(
     """
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
-        q = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["joint_positions"]
+        q = _request(base, "GET", f"/articulations/{articulation_id}/joints_state")["joint_positions"]
         max_error = max(abs(a - b) for a, b in zip(q, target))
         if max_error < tolerance_rad:
             return {"reached": True, "max_error": max_error}
         time.sleep(poll_s)
-    q = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["joint_positions"]
+    q = _request(base, "GET", f"/articulations/{articulation_id}/joints_state")["joint_positions"]
     return {"reached": False, "max_error": max(abs(a - b) for a, b in zip(q, target))}
 
 
@@ -97,7 +97,7 @@ def run(base, prim_path):
     result = move_j(base, articulation_id, target_a, asynchronous=True)
     print(f"  returned immediately: {result}")
     time.sleep(2)
-    q = _request(base, "GET", f"/articulations/{articulation_id}/joint_state")["joint_positions"]
+    q = _request(base, "GET", f"/articulations/{articulation_id}/joints_state")["joint_positions"]
     print(f"  state shortly after (still moving): joint_positions={[round(v, 3) for v in q]}")
 
     # 2) asynchronous, then wait client-side for a tolerance ---------------------

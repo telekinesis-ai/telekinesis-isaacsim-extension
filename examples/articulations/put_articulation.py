@@ -1,32 +1,49 @@
 """
-PUT /articulations {prim_path, urdf_path?} -> 
-{articulation_id, num_dof, dof_names, ...}
+PUT /articulations {prim_path, urdf_path?} ->
+{articulation_id, prim_path, prim_source, num_dof, dof_names, ...}
+
+``prim_source`` reports which actually happened: ``"isaac_usd"`` if the prim
+was already in the stage (any urdf_path given had no effect), or
+``"imported_urdf"`` if it was imported from that URDF file just now.
+
+Two ways to load the articulation
+1. Pass the urdf and prim path (Recommended)
+2. Import usd and then register using it's prim path
 
 Run:  python put_articulation.py
       python put_articulation.py --prim /World/ur10e
+      python put_articulation.py --prim /World/ur10e --urdf ur10e.urdf
 """
 import argparse
 import requests
 
 HOST = "127.0.0.1"
 PORT = 8766
-ROBOT_PRIM_PATH = "/World/ur10e"
 DEFAULT_TIMEOUT = 30.0
 
+# Default prim path if you load a urd10e from isaacsim asset store
+ROBOT_PRIM_PATH = "/World/ur10e"
 
 def _request(base, method, path, body=None):
-    """Send one request and return the decoded JSON (None for an empty body)."""
-    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+    """Send one request; exit with a clear message on failure instead of a
+    traceback."""
     try:
+        response = requests.request(method, base.rstrip("/") + path,
+                                    json=body,
+                                    timeout=DEFAULT_TIMEOUT)
         response.raise_for_status()
-    except requests.exceptions.HTTPError:
-        # The useful part is the server's "detail" message, which raise_for_status()
-        # never surfaces on its own -- print it before re-raising.
-        try:
-            print(f"error detail: {response.json().get('detail')}")
-        except ValueError:
-            pass
-        raise
+    except requests.exceptions.HTTPError as exc:
+
+        # Bridge rejected the request
+        # Response JSON body always has a "detail" message.
+        raise SystemExit(f"{method} {path} failed ({response.status_code}): "
+                         f"{response.json()['detail']}") from exc
+    except requests.exceptions.RequestException as exc:
+        # No response at all -- most likely the bridge isn't running.
+        raise SystemExit(f"Could not reach {base} -- "
+                         f"is Isaac Sim running with the bridge extension "
+                         f"loaded? ({exc})") from exc
+
     return response.json() if response.content else None
 
 
@@ -44,7 +61,14 @@ def main():
     # Registering the same prim_path again just re-binds it to the same id.
     response = _request(
         base, "PUT", "/articulations", {"prim_path": args.prim, "urdf_path": args.urdf})
+
+    # Print the bridge's response
     print(f"response: {response}")
+
+    # Get detailed print
+    keys = response.keys()
+    for key in keys:
+        print(f"{key}: {response[key]}")
 
 
 if __name__ == "__main__":

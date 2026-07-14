@@ -52,12 +52,14 @@ async def import_urdf_at(stage, urdf_path, dest_prim_path):
     if parent.pathString not in ("", "/") and not stage.GetPrimAtPath(parent).IsValid():
         UsdGeom.Xform.Define(stage, parent.pathString)
 
-    _, imported = omni.kit.commands.execute(
+    success, imported = omni.kit.commands.execute(
         "URDFParseAndImportFile",
         urdf_path=str(urdf_path),
         import_config=import_config,
         get_articulation_root=True,
     )
+    if not success or not imported:
+        raise RuntimeError(f"failed to import URDF at '{urdf_path}' (check the path and file)")
 
     # Climb to the top-level imported prim (importer may return a nested root).
     top = Sdf.Path(imported)

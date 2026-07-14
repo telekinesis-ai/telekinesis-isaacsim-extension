@@ -2,7 +2,7 @@
 Standalone bridge example: record a prim's current pose as its default.
 
 Flow (all over HTTP):
-  1. PUT /prims/poses/default (body: prim_path) -> records the prim's current local pose
+  1. PUT /prims/poses/default {prim_path} -> records the prim's current local pose
   2. GET /prims/poses/default -> confirms it was stored
 
 Run:  python assign_prim_default_pose.py --prim /World/Cube
@@ -36,7 +36,7 @@ def main():
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    _request(base, "PUT", "/prims/poses/default", body=args.prim)
+    _request(base, "PUT", "/prims/poses/default", body={"prim_path": args.prim})
     print(f"default poses (after assign): {_request(base, 'GET', '/prims/poses/default')}")
 
 

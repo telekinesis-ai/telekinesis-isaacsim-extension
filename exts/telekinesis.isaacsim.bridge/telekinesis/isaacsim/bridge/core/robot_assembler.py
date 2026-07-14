@@ -148,7 +148,7 @@ async def assemble_tool(
 async def bind_shared_articulation(prim_path, name):
     """Play the timeline and return the single, initialized articulation at ``prim_path``.
 
-    Same retry shape as ``Articulation.bind``: physics may need a few frames
+    Same retry shape as ``core.articulation.SingleArticulation.bind``: physics may need a few frames
     to stabilize the merged topology after assembly. This one handle is shared by
     both the arm and the gripper devices.
     """

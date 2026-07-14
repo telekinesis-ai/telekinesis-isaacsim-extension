@@ -6,6 +6,8 @@ The bridge is **device-agnostic**: a robot (arm, mobile base, humanoid, ...) and
 
 **Server:** `http://127.0.0.1:8766`
 
+> **Security:** the bridge binds to `127.0.0.1` only and has **no authentication or authorization** -- any process that can reach that port can register articulations, drive joints, open arbitrary USD stages (`PUT /stage/scene`), and import arbitrary URDF files from the local filesystem. It is designed for a **trusted local client only** (a script or tool running on the same machine as Isaac Sim). Do not port-forward, reverse-proxy, or otherwise expose this port beyond localhost without adding your own auth layer in front of it.
+
 ---
 
 ## Getting Started
@@ -112,8 +114,8 @@ The core resource. One articulation maps to a USD prim path and drives a subset 
 | `POST` | `/articulations/{id}/set_j` | Teleport directly to joint targets (radians); immediate, no blocking |
 | `WS` | `/articulations/{id}/stream_joint_positions` | Stream teleport targets (radians) over a WebSocket; fire-and-forget, no reply |
 | `POST` | `/articulations/{id}/joint_velocities` | Drive the joints at a velocity (rad/s); fire-and-forget, holds until the next call |
-| `GET` | `/articulations/{id}/joint_state` | Current positions, velocities, and efforts |
-| `GET` | `/articulations/{id}/joint_limits` | Per-joint position limits (radians) |
+| `GET` | `/articulations/{id}/joints_state` | Current positions, velocities, and efforts |
+| `GET` | `/articulations/{id}/dof_limits` | Per-joint position limits (radians) |
 | `GET` | `/articulations/{id}/driver_joint` | Discover a gripper's single actuated joint |
 | `PUT` | `/articulations/{id}/driven_joints` | Narrow which joints this articulation drives |
 | `POST` | `/articulations/{id}/assemble_robot` | Attach a gripper articulation to this arm's flange |

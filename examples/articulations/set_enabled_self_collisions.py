@@ -1,20 +1,14 @@
 """
-POST /articulations/{id}/set_j {joint_positions}  (radians)
--> teleports the joints directly to the target; returns immediately, no blocking.
+PUT /articulations/{id}/enabled_self_collisions {enabled} -> {enabled}
 
-This differs from move_j (see robot_set_joint_position.py): set_j snaps the arm
-to the pose in a single step instead of driving it there over time.
-
+Enable/disable self-collision between this articulation's own links.
 Requires the id to already be registered -- run put_articulation.py first to
 register a prim and get its articulation_id.
 
-Run:  python articulation_teleport_joint_positions.py --id articulation1
-
-Requires the ``requests`` and ``numpy`` packages.
+Run:  python set_enabled_self_collisions.py --id articulation1
 """
 import argparse
 
-import numpy as np
 import requests
 
 HOST = "127.0.0.1"
@@ -30,8 +24,8 @@ def _request(base, method, path, body=None):
 
 
 def main():
-    """Teleport one articulation's joints straight to a target, by id."""
-    parser = argparse.ArgumentParser(description="Teleport an articulation's joints (set_j).")
+    """Set an articulation's self-collision flag."""
+    parser = argparse.ArgumentParser(description="Set an articulation's self-collision flag.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
@@ -40,16 +34,8 @@ def main():
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-
-    # Teleport: snap the joints to the target in one step (no driving/settling).
-    target_joint_positions = [-90.0, -90.0, 0.0, 0.0, 90.0, 0.0]
-    print(f"Target joint positions (deg): {target_joint_positions}")
     response = _request(
-        base,
-        "POST",
-        f"/articulations/{args.articulation_id}/set_j",
-        {"joint_positions": np.deg2rad(target_joint_positions).tolist()},
-    )
+        base, "PUT", f"/articulations/{args.articulation_id}/enabled_self_collisions", {"enabled": True})
     print(f"response: {response}")
 
 

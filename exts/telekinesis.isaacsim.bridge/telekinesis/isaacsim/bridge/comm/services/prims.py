@@ -42,6 +42,8 @@ def _wspose_to_matrix(pose):
     """6-float rotation-vector pose -> Gf.Matrix4d."""
     from pxr import Gf
 
+    if len(pose) != 6:
+        raise HTTPException(status_code=400, detail=f"expected 6 pose values (x,y,z,rx,ry,rz), got {len(pose)}")
     x, y, z, rx, ry, rz = pose
     angle = math.sqrt(rx * rx + ry * ry + rz * rz)
     if angle:

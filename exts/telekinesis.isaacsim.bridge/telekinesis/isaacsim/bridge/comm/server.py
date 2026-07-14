@@ -48,7 +48,8 @@ is closed-ness: 0.0 = fully open, 1.0 = fully closed.
 import asyncio
 
 import uvicorn
-from fastapi import FastAPI
+import fastapi
+from fastapi import responses
 import carb
 
 from .services.articulations import ArticulationService
@@ -112,7 +113,15 @@ class BridgeServer:
     def _build_app(self):
         """Construct the FastAPI app: build the shared services, stash them on
         ``app.state`` for the dependency providers, and mount every router."""
-        app = FastAPI(title="telekinesis isaac-sim bridge")
+        app = fastapi.FastAPI(title="telekinesis isaac-sim bridge")
+
+        @app.exception_handler(Exception)
+        async def _unhandled_exception_handler(request: fastapi.Request, exc: Exception):
+            # Backstop for anything a service didn't translate into an HTTPException:
+            # guarantees the client always gets JSON with a "detail", never Starlette's
+            # bare-text 500, which the client's own error-detail printing can't parse.
+            carb.log_error(f"[bridge] unhandled error on {request.method} {request.url.path}: {exc!r}")
+            return responses.JSONResponse(status_code=500, content={"detail": str(exc)})
 
         # One shared instance of each service for the app's lifetime. The routers
         # reach them via Depends (see .dependencies), keyed by these app.state names.

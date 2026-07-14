@@ -36,7 +36,7 @@ Isaac Sim discovers extensions by **search path**, and the path you register is 
 
 ---
 
-## Option A — Extension Manager UI (quickest)
+## Option A — Extension Manager UI (Recommended)
 
 1. Open Isaac Sim → **Window ▸ Extensions**.
 2. Click the hamburger/gear menu (top-left of the Extensions panel) → **Settings**.
@@ -121,10 +121,38 @@ In addition, [`examples/articulations/`](examples/articulations/), [`examples/st
 | `articulations/` | `get_articulations_list.py` | `GET /articulations` |
 | `articulations/` | `get_articulation.py` | `GET /articulations/{id}` |
 | `articulations/` | `delete_articulation.py` | `DELETE /articulations/{id}` |
-| `articulations/` | `articulation_teleport_joint_positions.py` | `POST /articulations/{id}/set_j` |
-| `articulations/` | `articulation_set_joint_velocities.py` | `POST /articulations/{id}/joint_velocities` |
-| `articulations/` | `articulation_get_joint_state.py` | `GET /articulations/{id}/joint_state` |
-| `articulations/` | `articulation_get_joint_limits.py` | `GET /articulations/{id}/joint_limits` |
+| `articulations/` | `teleport_joint_positions.py` | `POST /articulations/{id}/set_j` |
+| `articulations/` | `set_joint_velocities.py` | `POST /articulations/{id}/joint_velocities` |
+| `articulations/` | `get_joints_state.py` | `GET /articulations/{id}/joints_state` |
+| `articulations/` | `get_dof_limits.py` | `GET /articulations/{id}/dof_limits` |
+| `articulations/` | `get_handles_initialized.py` | `GET /articulations/{id}/handles_initialized` |
+| `articulations/` | `get_num_bodies.py` | `GET /articulations/{id}/num_bodies` |
+| `articulations/` | `get_dof_properties.py` | `GET /articulations/{id}/dof_properties` |
+| `articulations/` | `get_dof_index.py` | `GET /articulations/{id}/dof_index/{joint_name}` |
+| `articulations/` | `get_applied_joint_efforts.py` | `GET /articulations/{id}/applied_joint_efforts` |
+| `articulations/` | `get_measured_joint_forces.py` | `GET /articulations/{id}/measured_joint_forces` |
+| `articulations/` | `get_joints_default_state.py` | `GET /articulations/{id}/joints_default_state` |
+| `articulations/` | `set_joints_default_state.py` | `PUT /articulations/{id}/joints_default_state` |
+| `articulations/` | `get_applied_action.py` | `GET /articulations/{id}/applied_action` |
+| `articulations/` | `set_joint_efforts.py` | `POST /articulations/{id}/joint_efforts` |
+| `articulations/` | `enable_gravity.py` | `POST /articulations/{id}/enable_gravity` |
+| `articulations/` | `disable_gravity.py` | `POST /articulations/{id}/disable_gravity` |
+| `articulations/` | `get_world_velocity.py` | `GET /articulations/{id}/world_velocity` |
+| `articulations/` | `set_world_velocity.py` | `PUT /articulations/{id}/world_velocity` |
+| `articulations/` | `get_linear_velocity.py` | `GET /articulations/{id}/linear_velocity` |
+| `articulations/` | `set_linear_velocity.py` | `PUT /articulations/{id}/linear_velocity` |
+| `articulations/` | `get_angular_velocity.py` | `GET /articulations/{id}/angular_velocity` |
+| `articulations/` | `set_angular_velocity.py` | `PUT /articulations/{id}/angular_velocity` |
+| `articulations/` | `get_solver_position_iteration_count.py` | `GET /articulations/{id}/solver/position_iteration_count` |
+| `articulations/` | `set_solver_position_iteration_count.py` | `PUT /articulations/{id}/solver/position_iteration_count` |
+| `articulations/` | `get_solver_velocity_iteration_count.py` | `GET /articulations/{id}/solver/velocity_iteration_count` |
+| `articulations/` | `set_solver_velocity_iteration_count.py` | `PUT /articulations/{id}/solver/velocity_iteration_count` |
+| `articulations/` | `get_stabilization_threshold.py` | `GET /articulations/{id}/solver/stabilization_threshold` |
+| `articulations/` | `set_stabilization_threshold.py` | `PUT /articulations/{id}/solver/stabilization_threshold` |
+| `articulations/` | `get_enabled_self_collisions.py` | `GET /articulations/{id}/enabled_self_collisions` |
+| `articulations/` | `set_enabled_self_collisions.py` | `PUT /articulations/{id}/enabled_self_collisions` |
+| `articulations/` | `get_sleep_threshold.py` | `GET /articulations/{id}/solver/sleep_threshold` |
+| `articulations/` | `set_sleep_threshold.py` | `PUT /articulations/{id}/solver/sleep_threshold` |
 | `stage/` | `get_stage_scene.py` | `GET /stage/scene` |
 | `stage/` | `open_stage_scene.py` | `PUT /stage/scene` |
 | `stage/` | `list_stage_motion_groups.py` | `GET /stage/motion-groups` |
@@ -171,6 +199,22 @@ correctness issues. Neither is wired into CI yet — run them locally until they
 
 All endpoints accept and return JSON. Successful responses use `2xx`; errors use `4xx`/`5xx` with a detail message.
 
+### Error Handling
+
+Errors always come back as `{"detail": "..."}` with one of the status codes below. Every failure the bridge anticipates raises `fastapi.HTTPException` with one of these codes (at the point in `comm/services/*.py` where the failure is detected); anything unanticipated falls through to a global handler in `comm/server.py` that still returns this same JSON shape at `500`, instead of a bare-text crash.
+
+This follows FastAPI's own conventions rather than a separate error-code standard: `fastapi.HTTPException` is used directly wherever a service detects a specific failure, and `422` is left as FastAPI/pydantic's automatic default for request-body validation errors (missing/wrong-typed fields) rather than overridden. The specific case-to-code choices below (e.g. "no stage open" -> `409`, "bind/import failed" -> `422`) are this app's own convention, informed by common REST practice -- neither RFC 9110 nor the FastAPI docs prescribe a decision rule for picking among codes for a given case, they only define what each code generically means. See [FastAPI's error-handling docs](https://fastapi.tiangolo.com/tutorial/handling-errors/) and [RFC 9110 §15](https://www.rfc-editor.org/rfc/rfc9110.html#name-status-codes) for those definitions.
+
+| Status | When we use it |
+|---|---|
+| `400` | The client sent a specific value that is invalid  |
+| `404` | The referenced resource — an articulation_id or prim_path — is not currently registered/present. Nothing wrong with the request itself, the thing it points at just doesn't exist. |
+| `409` | A prerequisite isn't met for this operation right now (no USD stage open) |
+| `422` | The request was well-formed but semantically failed -- either FastAPI/pydantic's own automatic validation (missing/wrong-typed field), or an operation that couldn't complete for a deeper reason (a prim that won't bind, a URDF that fails to import) |
+| `500` | The global exception-handler backstop for anything not explicitly translated |
+| `501` | Routes mirrored from the spec but not wired up yet (`not_implemented()`) |
+
+
 ### Articulations
 
 The core resource. One articulation maps to a USD prim path and drives a subset of its joints.
@@ -185,8 +229,8 @@ The core resource. One articulation maps to a USD prim path and drives a subset 
 | `POST` | `/articulations/{id}/set_j` | Teleport directly to joint targets (radians); immediate, no blocking |
 | `WS` | `/articulations/{id}/stream_joint_positions` | Stream teleport targets (radians) over a WebSocket; fire-and-forget, no reply |
 | `POST` | `/articulations/{id}/joint_velocities` | Drive the joints at a velocity (rad/s); fire-and-forget, holds until the next call |
-| `GET` | `/articulations/{id}/joint_state` | Current positions, velocities, and efforts |
-| `GET` | `/articulations/{id}/joint_limits` | Per-joint position limits (radians) |
+| `GET` | `/articulations/{id}/joints_state` | Current positions, velocities, and efforts |
+| `GET` | `/articulations/{id}/dof_limits` | Per-joint position limits (radians) |
 | `GET` | `/articulations/{id}/driver_joint` | Discover a gripper's single actuated joint |
 | `PUT` | `/articulations/{id}/driven_joints` | Narrow which joints this articulation drives |
 | `POST` | `/articulations/{id}/assemble_robot` | Attach a gripper articulation to this arm's flange |

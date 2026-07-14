@@ -1,5 +1,59 @@
 # Changelog
 
+## [1.5.0] - 2026-07-14
+### Added
+- ~25 new `/articulations/{id}/...` endpoints covering the rest of Isaac Sim's
+  `SingleArticulation` surface: joint efforts (`set_joint_efforts`,
+  `applied_joint_efforts`), `measured_joint_forces`, `joints_default_state`
+  (get/set), `applied_action`, `enable_gravity`/`disable_gravity`,
+  `world_velocity`/`linear_velocity`/`angular_velocity` (get/set, floating-base
+  only), PhysX solver tuning (`solver/position_iteration_count`,
+  `solver/velocity_iteration_count`, `solver/stabilization_threshold`,
+  `solver/sleep_threshold`, `enabled_self_collisions`), plus introspection
+  (`handles_initialized`, `num_bodies`, `dof_properties`, `dof_index`).
+- One example script per new endpoint under `examples/articulations/`.
+- `tests/test_bridge_smoke.py`: a minimal Isaac-Sim-free smoke test suite for
+  the request models and the parts of the service layer that don't need omni.
+### Changed
+- Renamed several endpoints/fields to match Isaac Sim's own method names
+  exactly (no back-compat alias): `joint_state`→`joints_state`,
+  `joint_limits`→`dof_limits`, `joint_properties`→`dof_properties`,
+  `joint_index`→`dof_index`, `joint_forces`→`measured_joint_forces`,
+  `default_joint_state`→`joints_default_state`, `body_count`→`num_bodies`,
+  `initialized`→`handles_initialized`, solver `*_iterations`→`*_iteration_count`,
+  `self_collisions`→`enabled_self_collisions`.
+- Split `PUT .../gravity {enabled}` into `POST .../enable_gravity` and
+  `POST .../disable_gravity`, matching Isaac Sim's own two-method shape (it has
+  no boolean gravity toggle).
+- Renamed the bridge's internal `core.articulation.Articulation` class to
+  `SingleArticulation`, matching the `isaacsim.core.prims.SingleArticulation`
+  handle it wraps.
+- Renamed example scripts under `examples/articulations/` to drop the redundant
+  `articulation_` prefix, and split each get/set pair into separate files.
+- `PUT /prims/poses/default` and `POST /prims/poses/default/reset` now take a
+  named `{"prim_path": ...}` body instead of a bare JSON string, for
+  consistency with every other body-carrying route.
+### Fixed
+- The server now returns a JSON body with `detail` for every failure -- a
+  global exception handler replaces Starlette's bare-text 500 for anything an
+  endpoint doesn't translate itself, and `bind()`/URDF-import failures now
+  report the real underlying error instead of a generic message.
+- `PUT /articulations` no longer races when two clients register the same prim
+  concurrently (was possible to double-allocate an `articulation_id`).
+- `assemble_robot` no longer races when two clients assemble the same arm+
+  gripper pair concurrently (could previously build a second fixed joint).
+- `PUT .../driven_joints` now rejects unknown joint names with 400 instead of
+  silently narrowing to fewer DOFs.
+- `move_j`/`set_j`/`set_joint_velocities`/`set_joint_efforts` now validate that
+  `indices` are in range and return 400 instead of a raw PhysX error.
+- The `stream_joint_positions` WebSocket no longer crashes the connection if
+  the articulation is deleted while the stream is open.
+- `PUT /prims/poses` and `POST /prims/poses/relative` now reject a malformed
+  pose array (wrong length) with 400 instead of an unhandled exception.
+### Security
+- Documented in the README that the bridge has no authentication and is
+  intended for a trusted localhost client only.
+
 ## [1.4.0] - 2026-07-13
 ### Fixed
 - `SetJointPositionsRequest` (`set_j` body) was missing `indices`, causing an

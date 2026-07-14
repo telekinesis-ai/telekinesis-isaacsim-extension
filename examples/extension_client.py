@@ -125,7 +125,7 @@ def list_default_poses(base_url):
 
 def assign_default_poses(base_url, prim_path):
     """PUT /prims/poses/default -> record a prim's current pose as its default."""
-    return _request(base_url, "PUT", "/prims/poses/default", body=prim_path)
+    return _request(base_url, "PUT", "/prims/poses/default", body={"prim_path": prim_path})
 
 
 def clear_default_poses(base_url):
@@ -135,7 +135,7 @@ def clear_default_poses(base_url):
 
 def reset_to_default_poses(base_url, prim_path):
     """POST /prims/poses/default/reset -> restore a prim to its default pose."""
-    return _request(base_url, "POST", "/prims/poses/default/reset", body=prim_path)
+    return _request(base_url, "POST", "/prims/poses/default/reset", body={"prim_path": prim_path})
 
 
 def set_prim_metadata(base_url, prim_path, category, type_):

@@ -1,10 +1,13 @@
 """
-GET /articulations/{id}/joint_limits -> [[lower, upper], ...]  (radians)
+GET /articulations/{id}/world_velocity -> {velocity}
 
-Requires the id to already be registered -- run put_articulation.py first to
-register a prim and get its articulation_id.
+Root link's full 6-DOF world-space velocity ([vx, vy, vz, wx, wy, wz]). Only
+meaningful for a floating-base articulation (mobile base, humanoid) -- always
+zero for a fixed-base arm bolted to the world. Requires the id to already be
+registered -- run put_articulation.py first to register a prim and get its
+articulation_id.
 
-Run:  python articulation_get_joint_limits.py --id articulation1
+Run:  python get_world_velocity.py --id articulation1
 """
 import argparse
 
@@ -23,9 +26,8 @@ def _request(base, method, path, body=None):
 
 
 def main():
-    """Fetch one articulation's per-joint position limits by id."""
-    parser = argparse.ArgumentParser(
-        description="Read an articulation's per-joint position limits.")
+    """Fetch an articulation's root-link world velocity."""
+    parser = argparse.ArgumentParser(description="Read an articulation's root-link world velocity.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
@@ -34,7 +36,7 @@ def main():
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    response = _request(base, "GET", f"/articulations/{args.articulation_id}/joint_limits")
+    response = _request(base, "GET", f"/articulations/{args.articulation_id}/world_velocity")
     print(f"response: {response}")
 
 

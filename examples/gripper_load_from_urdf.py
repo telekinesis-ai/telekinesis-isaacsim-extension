@@ -11,7 +11,7 @@ Flow (all over HTTP):
   1. PUT  /articulations {prim_path, urdf_path}             -> imports + binds
   2. GET  /articulations/{id}/driver_joint                 -> {name, index}
   3. PUT  /articulations/{id}/driven_joints {[driver_name]} -> narrow to that joint
-  4. GET  /articulations/{id}/joint_limits                 -> {limits: [[open, closed]]}
+  4. GET  /articulations/{id}/dof_limits                 -> {limits: [[open, closed]]}
   5. close/open: POST /articulations/{id}/move_j {joint_positions:[rad]} -> blocks
 
 Run:  python gripper_load_from_urdf.py
@@ -72,7 +72,7 @@ def run_gripper(base, prim_path, urdf_path):
 
     driver = _request(base, "GET", f"/articulations/{articulation_id}/driver_joint")
     _request(base, "PUT", f"/articulations/{articulation_id}/driven_joints", {"joint_names": [driver["name"]]})
-    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{articulation_id}/joint_limits")["limits"][0]
+    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{articulation_id}/dof_limits")["limits"][0]
     print(f"  driver joint='{driver['name']}' open={opened_rad:.3f} closed={closed_rad:.3f} rad")
 
     for label, fraction in (("close", 1.0), ("open", 0.0)):

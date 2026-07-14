@@ -2,7 +2,7 @@
 Standalone bridge example: forget every stored default pose.
 
 Flow (all over HTTP):
-  1. PUT /prims/poses/default (body: prim_path) -> record one, so there's something to clear
+  1. PUT /prims/poses/default {prim_path} -> record one, so there's something to clear
   2. DELETE /prims/poses/default -> forgets every stored default pose
   3. GET /prims/poses/default -> confirms it's empty
 
@@ -39,7 +39,7 @@ def main():
     base = f"http://{args.host}:{args.port}"
 
     # Record one, so there's something to clear.
-    _request(base, "PUT", "/prims/poses/default", body=args.prim)
+    _request(base, "PUT", "/prims/poses/default", body={"prim_path": args.prim})
     print(f"default poses (before clear): {_request(base, 'GET', '/prims/poses/default')}")
 
     _request(base, "DELETE", "/prims/poses/default")

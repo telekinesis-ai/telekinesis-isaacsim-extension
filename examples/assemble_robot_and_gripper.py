@@ -111,7 +111,7 @@ def run(
     gripper_id = gripper["articulation_id"]
     driver = _request(base, "GET", f"/articulations/{gripper_id}/driver_joint")
     _request(base, "PUT", f"/articulations/{gripper_id}/driven_joints", {"joint_names": [driver["name"]]})
-    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{gripper_id}/joint_limits")["limits"][0]
+    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{gripper_id}/dof_limits")["limits"][0]
     print(f"created gripper: articulation_id={gripper_id} prim_path={gripper['prim_path']} driver='{driver['name']}'")
 
     # 3) Assemble the gripper onto the arm -> one shared articulation. Running this

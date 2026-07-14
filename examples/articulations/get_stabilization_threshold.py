@@ -1,10 +1,12 @@
 """
-GET /articulations/{id}/joint_state -> {joint_positions, joint_velocities, joint_efforts, timestamp}
+GET /articulations/{id}/solver/stabilization_threshold -> {threshold}
 
-Requires the id to already be registered -- run put_articulation.py first to
-register a prim and get its articulation_id.
+Mass-normalized kinetic energy below which PhysX may stabilize this
+articulation (settle small residual jitter). Requires the id to already be
+registered -- run put_articulation.py first to register a prim and get its
+articulation_id.
 
-Run:  python articulation_get_joint_state.py --id articulation1
+Run:  python get_stabilization_threshold.py --id articulation1
 """
 import argparse
 
@@ -23,8 +25,8 @@ def _request(base, method, path, body=None):
 
 
 def main():
-    """Fetch one articulation's current joint state by id."""
-    parser = argparse.ArgumentParser(description="Read an articulation's current joint state.")
+    """Fetch an articulation's stabilization threshold."""
+    parser = argparse.ArgumentParser(description="Read an articulation's stabilization threshold.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
@@ -33,7 +35,7 @@ def main():
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    response = _request(base, "GET", f"/articulations/{args.articulation_id}/joint_state")
+    response = _request(base, "GET", f"/articulations/{args.articulation_id}/solver/stabilization_threshold")
     print(f"response: {response}")
 
 

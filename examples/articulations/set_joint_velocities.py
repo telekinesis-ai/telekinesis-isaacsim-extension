@@ -5,7 +5,7 @@ POST /articulations/{id}/joint_velocities {joint_velocities}  (rad/s)
 Requires the id to already be registered -- run put_articulation.py first to
 register a prim and get its articulation_id.
 
-Run:  python articulation_set_joint_velocities.py --id articulation1
+Run:  python set_joint_velocities.py --id articulation1
 
 Requires the ``requests`` package (``pip install requests``).
 """

@@ -12,13 +12,13 @@ the client, which maps them to joint angles before calling these routes.
 
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CreateArticulationRequest(BaseModel):
     """Body of PUT /articulations -- register (and bind) one articulation."""
 
-    prim_path: str
+    prim_path: str = Field(min_length=1)
     urdf_path: str | None = None
 
 
@@ -75,6 +75,72 @@ class SetDrivenJointsRequest(BaseModel):
     """
 
     joint_names: list[str]
+
+
+class JointEffortsRequest(BaseModel):
+    """Body of POST /articulations/{id}/joint_efforts -- direct torque/force drive.
+
+    Bypasses the position/velocity drive; only takes effect if the target
+    joint's drive stiffness and damping are zero. ``indices`` defaults to the
+    device's current driven joints, matching :class:`JointVelocitiesRequest`.
+    """
+
+    joint_efforts: list[float]
+    indices: list[int] | None = None
+
+
+class DefaultJointStateRequest(BaseModel):
+    """Body of PUT /articulations/{id}/joints_default_state -- the joint-space
+    "home pose" applied on the next reset (Stop+Play). Any field left ``None``
+    is not touched.
+    """
+
+    joint_positions: list[float] | None = None
+    joint_velocities: list[float] | None = None
+    joint_efforts: list[float] | None = None
+
+
+class SetEnabledRequest(BaseModel):
+    """Body of a boolean on/off toggle (gravity, self-collisions)."""
+
+    enabled: bool
+
+
+class SetVelocityRequest(BaseModel):
+    """Body of PUT .../linear_velocity or .../angular_velocity -- a 3D vector
+    (``[x, y, z]``) for the articulation's root link. Only meaningful for a
+    floating-base articulation (mobile base, humanoid)."""
+
+    velocity: list[float]
+
+
+class SetWorldVelocityRequest(BaseModel):
+    """Body of PUT .../world_velocity -- the root link's full 6-DOF velocity
+    (``[vx, vy, vz, wx, wy, wz]``, linear then angular)."""
+
+    velocity: list[float]
+
+
+class SolverIterationCountRequest(BaseModel):
+    """Body of PUT .../solver/position_iterations or .../velocity_iterations."""
+
+    count: int
+
+
+class SolverThresholdRequest(BaseModel):
+    """Body of PUT .../solver/stabilization_threshold or .../solver/sleep_threshold."""
+
+    threshold: float
+
+
+class PrimPathRequest(BaseModel):
+    """Body of PUT /prims/poses/default or POST /prims/poses/default/reset.
+
+    A named model for consistency with every other body-carrying route (was
+    previously a bare ``Body(..., embed=False)`` string on these two only).
+    """
+
+    prim_path: str
 
 
 class Transformation(BaseModel):
