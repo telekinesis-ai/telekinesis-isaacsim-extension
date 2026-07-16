@@ -44,8 +44,10 @@ class ArticulationService:
         self._id_by_prim = {}  # requested prim_path -> articulation_id (stable on re-create)
         self._count = 0  # for ids like articulation1, articulation2
         self._assemblies = {}  # arm_id -> {gripper_id, arm_mount_link, gripper_mount_link}
-        self._create_locks = {}  # prim_path -> asyncio.Lock, serializes concurrent creates of the same prim
-        self._assembly_locks = {}  # arm_id -> asyncio.Lock, serializes concurrent assembles of the same arm
+        # prim_path -> asyncio.Lock, serializes concurrent creates of the same prim
+        self._create_locks = {}
+        # arm_id -> asyncio.Lock, serializes concurrent assembles of the same arm
+        self._assembly_locks = {}
 
     def clear(self):
         """Drop every bound device (called when the bridge stops or the stage changes)."""
@@ -131,7 +133,7 @@ class ArticulationService:
         # Forget any assembly this id took part in (as the arm or the gripper), so a
         # later re-create + assemble of the same pair is not blocked by a stale record.
         for arm_id, record in list(self._assemblies.items()):
-            if arm_id == articulation_id or record["gripper_id"] == articulation_id:
+            if articulation_id in (arm_id, record["gripper_id"]):
                 del self._assemblies[arm_id]
         self._assembly_locks.pop(articulation_id, None)
         return {"deleted": articulation_id}
@@ -195,7 +197,7 @@ class ArticulationService:
         return self.get_device(articulation_id).get_joints_state()
 
     def get_dof_limits(self, articulation_id):
-        """``[lower, upper]`` radian limits per driven joint (``get_joints_state`` joint_positions order)."""
+        """``[lower, upper]`` radian limits per driven joint (``get_joints_state`` order)."""
         return {"limits": self.get_device(articulation_id).get_dof_limits()}
 
     def set_driven_joints(self, articulation_id, joint_names):
@@ -517,7 +519,10 @@ class ArticulationService:
         if device is None:
             raise HTTPException(
                 status_code=404,
-                detail=f"no articulation registered with id '{articulation_id}', call PUT /articulations to create one",
+                detail=(
+                    f"no articulation registered with id '{articulation_id}', "
+                    "call PUT /articulations to create one"
+                ),
             )
         return device
 
@@ -548,5 +553,8 @@ class ArticulationService:
             return resolved, "imported_urdf"
         raise HTTPException(
             status_code=400,
-            detail=f"'{requested_prim_path}' is not in the stage and no urdf_path was given to load it",
+            detail=(
+                f"'{requested_prim_path}' is not in the stage and "
+                "no urdf_path was given to load it"
+            ),
         )

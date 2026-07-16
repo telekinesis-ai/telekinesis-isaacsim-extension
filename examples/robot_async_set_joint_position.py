@@ -26,9 +26,9 @@ Requires the ``requests`` package (``pip install requests``).
 """
 
 import argparse
-import numpy as np
 import time
 
+import numpy as np
 import requests
 
 HOST = "127.0.0.1"
@@ -53,6 +53,7 @@ def _request(base, method, path, body=None):
 
 
 def move_j(base, articulation_id, joint_positions, asynchronous):
+    """POST a move_j target, blocking or fire-and-forget depending on ``asynchronous``."""
     return _request(
         base,
         "POST",
@@ -84,6 +85,7 @@ def wait_until_reached(
 
 
 def run(base, prim_path):
+    """Register the robot, then drive it through all three move_j styles in turn."""
     info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": None})
     articulation_id = info["articulation_id"]
     print(f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
@@ -116,6 +118,7 @@ def run(base, prim_path):
 
 
 def main():
+    """Parse CLI args and run the example."""
     parser = argparse.ArgumentParser(
         description="Async vs blocking robot moves for the Isaac Sim bridge."
     )

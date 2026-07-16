@@ -194,9 +194,11 @@ class StageUnits(BaseModel):
 class TimelineAction(str, Enum):
     """Allowed values for PATCH /stage/simulation/timeline/{action}."""
 
-    play = "play"
-    pause = "pause"
-    stop = "stop"
+    # Lowercase on purpose: these are str Enum members, so the member name IS the
+    # wire value -- UPPER_CASE would mean the JSON value on the wire is uppercase too.
+    play = "play"  # pylint: disable=invalid-name
+    pause = "pause"  # pylint: disable=invalid-name
+    stop = "stop"  # pylint: disable=invalid-name
 
 
 # -- Prims (mirrors the extension's Omniservice schemas) --------------------
@@ -227,8 +229,12 @@ class ApplyRelativePoseRequest(BaseModel):
 
 
 class VisibilityAction(str, Enum):
-    show = "show"
-    hide = "hide"
+    """Allowed values for PATCH /prims/visibility."""
+
+    # Lowercase on purpose: these are str Enum members, so the member name IS the
+    # wire value -- UPPER_CASE would mean the JSON value on the wire is uppercase too.
+    show = "show"  # pylint: disable=invalid-name
+    hide = "hide"  # pylint: disable=invalid-name
 
 
 class SetVisibilityRequest(BaseModel):

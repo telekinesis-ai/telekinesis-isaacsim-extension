@@ -3,10 +3,9 @@ Generate the bridge's OpenAPI schema (public/openapi.json) straight from the rea
 route/model definitions -- no hand-maintained API table to keep in sync.
 
 Runnable OUTSIDE Isaac Sim: only ``comm.routers``, ``comm.dependencies``, and
-``comm.models`` are imported, none of which touch ``omni``/``carb`` (same
-Isaac-free set ``tests/test_bridge_smoke.py`` relies on). The package's real
-``__init__.py`` does `from .extension import *`, which DOES import omni, so a
-stand-in package object is registered first, exactly as the smoke test does, to
+``comm.models`` are imported, none of which touch ``omni``/``carb``. The package's
+real ``__init__.py`` does `from .extension import *`, which DOES import omni, so
+a stand-in package object is registered first, exactly as the smoke test does, to
 reach the submodules without running that import.
 
 Run:  python scripts/generate_openapi.py

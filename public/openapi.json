@@ -1,0 +1,4192 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Telekinesis Isaac Sim Bridge",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/articulations": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "List Articulations",
+        "description": "Every registered articulation id mapped to its prim path.",
+        "operationId": "list_articulations_articulations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Create Articulation",
+        "description": "Register (and bind) one articulation; returns its id, prim, dof and state.",
+        "operationId": "create_articulation_articulations_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateArticulationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Articulation",
+        "description": "Id + static description (prim, dof, names, current state). 404 if unknown.",
+        "operationId": "get_articulation_articulations__articulation_id__get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Delete Articulation",
+        "description": "Unregister the articulation (the USD prim is left in the stage).",
+        "operationId": "delete_articulation_articulations__articulation_id__delete",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/move_j": {
+      "post": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Move Joint Positions",
+        "description": "Drive the joints (radians). Blocks until reached/stalled unless asynchronous.",
+        "operationId": "move_j_articulations__articulation_id__move_j_post",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JointPositionsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/set_j": {
+      "post": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Joint Positions",
+        "description": "Teleport the joints directly to the targets (radians); immediate, no blocking.",
+        "operationId": "set_j_articulations__articulation_id__set_j_post",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetJointPositionsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/joint_velocities": {
+      "post": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Joint Velocities",
+        "description": "Drive the joints at a velocity (rad/s). Fire-and-forget; holds until the next call.",
+        "operationId": "set_joint_velocities_articulations__articulation_id__joint_velocities_post",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JointVelocitiesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/joints_state": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Joints State",
+        "description": "Current positions / velocities / torques of the driven joints.",
+        "operationId": "get_joints_state_articulations__articulation_id__joints_state_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/dof_limits": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Dof Limits",
+        "description": "[lower, upper] radian limits per driven joint (in joints_state joint_positions order).",
+        "operationId": "get_dof_limits_articulations__articulation_id__dof_limits_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/driver_joint": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Driver Joint",
+        "description": "Discover a gripper's actuated driver joint (name + DOF index) via USD schema.",
+        "operationId": "get_driver_joint_articulations__articulation_id__driver_joint_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/driven_joints": {
+      "put": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Driven Joints",
+        "description": "Narrow which joints this device drives (e.g. a gripper to its driver joint).",
+        "operationId": "set_driven_joints_articulations__articulation_id__driven_joints_put",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDrivenJointsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/assemble_robot": {
+      "post": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Assemble Robot",
+        "description": "Assemble a gripper onto this arm; both devices then share one articulation.\nA no-op if this arm and gripper are already assembled.",
+        "operationId": "assemble_robot_articulations__articulation_id__assemble_robot_post",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssembleRobotRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/handles_initialized": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Handles Initialized",
+        "description": "Whether the device's handle is currently valid, without a re-bind.",
+        "operationId": "get_handles_initialized_articulations__articulation_id__handles_initialized_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/num_bodies": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Num Bodies",
+        "description": "Number of rigid-body links in the underlying articulation.",
+        "operationId": "get_num_bodies_articulations__articulation_id__num_bodies_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/dof_properties": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Dof Properties",
+        "description": "Per-driven-joint drive properties (limits, drive mode, stiffness, damping).",
+        "operationId": "get_dof_properties_articulations__articulation_id__dof_properties_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/dof_index/{joint_name}": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Dof Index",
+        "description": "DOF index of joint_name within the device's driven subset.",
+        "operationId": "get_dof_index_articulations__articulation_id__dof_index__joint_name__get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          },
+          {
+            "name": "joint_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Joint Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/applied_joint_efforts": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Applied Joint Efforts",
+        "description": "Efforts last commanded via set_joint_efforts (what was asked for, not measured).",
+        "operationId": "get_applied_joint_efforts_articulations__articulation_id__applied_joint_efforts_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/measured_joint_forces": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Measured Joint Forces",
+        "description": "Measured 6-axis joint reaction force/torque per driven joint.",
+        "operationId": "get_measured_joint_forces_articulations__articulation_id__measured_joint_forces_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/joints_default_state": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Joints Default State",
+        "description": "Stored joint-space home pose for the driven joints.",
+        "operationId": "get_joints_default_state_articulations__articulation_id__joints_default_state_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Joints Default State",
+        "description": "Set the driven joints' stored home pose, applied on the next reset.",
+        "operationId": "set_joints_default_state_articulations__articulation_id__joints_default_state_put",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DefaultJointStateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/applied_action": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Applied Action",
+        "description": "Last ArticulationAction PhysX actually received for the whole articulation.",
+        "operationId": "get_applied_action_articulations__articulation_id__applied_action_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/joint_efforts": {
+      "post": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Joint Efforts",
+        "description": "Command raw torque/force directly on the chosen joints; bypasses the drive.",
+        "operationId": "set_joint_efforts_articulations__articulation_id__joint_efforts_post",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JointEffortsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/enable_gravity": {
+      "post": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Enable Gravity",
+        "description": "Gravity affects the whole articulation (body-level, not per-joint).",
+        "operationId": "enable_gravity_articulations__articulation_id__enable_gravity_post",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/disable_gravity": {
+      "post": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Disable Gravity",
+        "description": "Gravity no longer affects the whole articulation (body-level, not per-joint).",
+        "operationId": "disable_gravity_articulations__articulation_id__disable_gravity_post",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/world_velocity": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get World Velocity",
+        "description": "Root link's full 6-DOF world-space velocity (meaningful only for a floating base).",
+        "operationId": "get_world_velocity_articulations__articulation_id__world_velocity_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set World Velocity",
+        "description": "Set the root link's full 6-DOF world-space velocity.",
+        "operationId": "set_world_velocity_articulations__articulation_id__world_velocity_put",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetWorldVelocityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/linear_velocity": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Linear Velocity",
+        "description": "Root link's linear (translational) velocity.",
+        "operationId": "get_linear_velocity_articulations__articulation_id__linear_velocity_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Linear Velocity",
+        "description": "Set the root link's linear velocity only (leaves angular untouched).",
+        "operationId": "set_linear_velocity_articulations__articulation_id__linear_velocity_put",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVelocityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/angular_velocity": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Angular Velocity",
+        "description": "Root link's angular (rotational) velocity.",
+        "operationId": "get_angular_velocity_articulations__articulation_id__angular_velocity_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Angular Velocity",
+        "description": "Set the root link's angular velocity only (leaves linear untouched).",
+        "operationId": "set_angular_velocity_articulations__articulation_id__angular_velocity_put",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVelocityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/solver/position_iteration_count": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Solver Position Iteration Count",
+        "description": "PhysX position-solver iteration count for this articulation.",
+        "operationId": "get_solver_position_iteration_count_articulations__articulation_id__solver_position_iteration_count_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Solver Position Iteration Count",
+        "description": "Set the PhysX position-solver iteration count (accuracy vs. perf).",
+        "operationId": "set_solver_position_iteration_count_articulations__articulation_id__solver_position_iteration_count_put",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolverIterationCountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/solver/velocity_iteration_count": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Solver Velocity Iteration Count",
+        "description": "PhysX velocity-solver iteration count for this articulation.",
+        "operationId": "get_solver_velocity_iteration_count_articulations__articulation_id__solver_velocity_iteration_count_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Solver Velocity Iteration Count",
+        "description": "Set the PhysX velocity-solver iteration count (accuracy vs. perf).",
+        "operationId": "set_solver_velocity_iteration_count_articulations__articulation_id__solver_velocity_iteration_count_put",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolverIterationCountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/solver/stabilization_threshold": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Stabilization Threshold",
+        "description": "Mass-normalized kinetic energy below which PhysX may stabilize this articulation.",
+        "operationId": "get_stabilization_threshold_articulations__articulation_id__solver_stabilization_threshold_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Stabilization Threshold",
+        "description": "Set the stabilization threshold.",
+        "operationId": "set_stabilization_threshold_articulations__articulation_id__solver_stabilization_threshold_put",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolverThresholdRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/enabled_self_collisions": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Enabled Self Collisions",
+        "description": "Whether this articulation's own links can collide with each other.",
+        "operationId": "get_enabled_self_collisions_articulations__articulation_id__enabled_self_collisions_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Enabled Self Collisions",
+        "description": "Enable/disable self-collision between this articulation's own links.",
+        "operationId": "set_enabled_self_collisions_articulations__articulation_id__enabled_self_collisions_put",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetEnabledRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/solver/sleep_threshold": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Sleep Threshold",
+        "description": "Velocity threshold below which PhysX lets this articulation sleep.",
+        "operationId": "get_sleep_threshold_articulations__articulation_id__solver_sleep_threshold_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Sleep Threshold",
+        "description": "Set the sleep threshold.",
+        "operationId": "set_sleep_threshold_articulations__articulation_id__solver_sleep_threshold_put",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolverThresholdRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status": {
+      "get": {
+        "tags": [
+          "general"
+        ],
+        "summary": "Get Status",
+        "description": "Service health. Returns ``OK`` while the bridge is running.",
+        "operationId": "get_status_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/version": {
+      "get": {
+        "tags": [
+          "general"
+        ],
+        "summary": "Get Versions",
+        "description": "List installed (enabled) extensions with their versions.",
+        "operationId": "get_versions_version_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stage/scene": {
+      "get": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Get Active Scene",
+        "description": "URI/identifier of the open USD stage (empty string if none).",
+        "operationId": "get_active_scene_stage_scene_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Open Scene",
+        "description": "Open the USD stage at ``uri`` (replaces the current stage).",
+        "operationId": "open_scene_stage_scene_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenSceneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stage/motion-groups": {
+      "get": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "List Stage Motion Groups",
+        "description": "Prim paths of every articulation root in the stage (potential robots).",
+        "operationId": "list_stage_motion_groups_stage_motion_groups_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stage/units": {
+      "get": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Get Stage Units",
+        "description": "Linear scale of the stage in meters per unit.",
+        "operationId": "get_stage_units_stage_units_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Update Stage Units",
+        "description": "Set the stage's meters-per-unit scale.",
+        "operationId": "update_stage_units_stage_units_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageUnits"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stage/simulation/timeline/{action}": {
+      "patch": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Timeline Action",
+        "description": "Drive the simulation timeline: play / pause / stop.",
+        "operationId": "timeline_action_stage_simulation_timeline__action__patch",
+        "parameters": [
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TimelineAction"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stage/simulation": {
+      "get": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Simulation State",
+        "description": "Current timeline state: ``playing`` / ``paused`` / ``stopped``.",
+        "operationId": "simulation_state_stage_simulation_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stage/configuration": {
+      "get": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Export Configuration",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "export_configuration_stage_configuration_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Import Configuration",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "import_configuration_stage_configuration_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims/poses": {
+      "get": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Get Pose",
+        "description": "Pose of a prim, in world or local space, as rotvec or quaternion.",
+        "operationId": "get_pose_prims_poses_get",
+        "parameters": [
+          {
+            "name": "prim_path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prim Path"
+            }
+          },
+          {
+            "name": "coordinate_system",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(world|local)$",
+              "default": "local",
+              "title": "Coordinate System"
+            }
+          },
+          {
+            "name": "rotation_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(cartesian|quaternions)$",
+              "default": "cartesian",
+              "title": "Rotation Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Update Pose",
+        "description": "Set a prim's world-space pose from a rotation-vector ``WSPose``.",
+        "operationId": "update_pose_prims_poses_put",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePoseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims/poses/relative": {
+      "get": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Get Relative Pose",
+        "description": "Pose of prim 2 expressed in prim 1's frame.",
+        "operationId": "get_relative_pose_prims_poses_relative_get",
+        "parameters": [
+          {
+            "name": "prim_path_1",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prim Path 1"
+            }
+          },
+          {
+            "name": "prim_path_2",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prim Path 2"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(normal|inverse_first|inverse_second|inverse_both)$",
+              "default": "normal",
+              "title": "Mode"
+            }
+          },
+          {
+            "name": "rotation_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(cartesian|quaternions)$",
+              "default": "cartesian",
+              "title": "Rotation Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Apply Relative Pose",
+        "description": "Pre/post-multiply a prim's world pose by a relative ``WSPose``.",
+        "operationId": "apply_relative_pose_prims_poses_relative_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyRelativePoseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims/poses/default": {
+      "get": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "List Default Poses",
+        "description": "Map every prim that has a stored default pose to that pose (local rotvec).",
+        "operationId": "list_default_poses_prims_poses_default_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Assign Default Poses",
+        "description": "Record the prim's current local pose as its default (for later reset).",
+        "operationId": "assign_default_poses_prims_poses_default_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrimPathRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Clear Default Poses",
+        "description": "Forget every stored default pose.",
+        "operationId": "clear_default_poses_prims_poses_default_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims/poses/default/reset": {
+      "post": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Reset Prim Poses To Default",
+        "description": "Restore a prim to its stored default pose (404 if none was assigned).",
+        "operationId": "reset_to_default_poses_prims_poses_default_reset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrimPathRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims/metadata": {
+      "put": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Set Prim Metadata",
+        "description": "Store user metadata (category/type) on a prim under customData.",
+        "operationId": "set_prim_metadata_prims_metadata_put",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPrimMetadataRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Remove Prim Metadata",
+        "description": "Remove the user metadata previously stored on a prim.",
+        "operationId": "remove_prim_metadata_prims_metadata_delete",
+        "parameters": [
+          {
+            "name": "prim_path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prim Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims/visibility": {
+      "patch": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Set Prim Visibility",
+        "description": "Show or hide a prim (UsdGeom imageable visibility).",
+        "operationId": "set_prim_visibility_prims_visibility_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVisibilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims/physics/joints": {
+      "patch": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Set Joints",
+        "description": "Enable or disable a physics joint.",
+        "operationId": "set_joint_state_prims_physics_joints_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetJointStateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims/physics/colliders/": {
+      "patch": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Update Colliders",
+        "description": "Enable or disable collision on a prim (applies the CollisionAPI as needed).",
+        "operationId": "update_colliders_prims_physics_colliders__patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCollidersRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims/labels": {
+      "get": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "List Semantic Labels",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "list_semantic_labels_prims_labels_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Set Semantic Label",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "set_semantic_label_prims_labels_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Clear Semantic Labels",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "clear_semantic_labels_prims_labels_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims/selected": {
+      "get": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "List Selected Prims",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "list_selected_prims_prims_selected_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Select Prims",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "select_prims_prims_selected_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nucleus/server": {
+      "post": {
+        "tags": [
+          "nucleus"
+        ],
+        "summary": "Add Nucleus Server",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "add_nucleus_server_nucleus_server_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nucleus/servers": {
+      "get": {
+        "tags": [
+          "nucleus"
+        ],
+        "summary": "List Nucleus Servers",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "list_nucleus_servers_nucleus_servers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nucleus/server/token": {
+      "post": {
+        "tags": [
+          "nucleus"
+        ],
+        "summary": "Add Nucleus API Token",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "add_nucleus_api_token_nucleus_server_token_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "nucleus"
+        ],
+        "summary": "Remove Nucleus API Token",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "remove_nucleus_api_token_nucleus_server_token_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nucleus/server/tokens": {
+      "delete": {
+        "tags": [
+          "nucleus"
+        ],
+        "summary": "Remove All Nucleus API Tokens",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "remove_all_nucleus_api_tokens_nucleus_server_tokens_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/manipulators/motion-groups": {
+      "get": {
+        "tags": [
+          "manipulators"
+        ],
+        "summary": "List Motion Groups",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "list_motion_groups_manipulators_motion_groups_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "manipulators"
+        ],
+        "summary": "Create Motion Group",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "create_motion_group_manipulators_motion_groups_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "manipulators"
+        ],
+        "summary": "Clear Motion Groups",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "clear_motion_groups_manipulators_motion_groups_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/manipulators/motion-groups/{prim_path}": {
+      "get": {
+        "tags": [
+          "manipulators"
+        ],
+        "summary": "Get Motion Group",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "get_motion_group_manipulators_motion_groups__prim_path__get",
+        "parameters": [
+          {
+            "name": "prim_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prim Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "manipulators"
+        ],
+        "summary": "Update Motion Group Motion Stream",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "update_motion_group_motion_stream_manipulators_motion_groups__prim_path__put",
+        "parameters": [
+          {
+            "name": "prim_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prim Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "manipulators"
+        ],
+        "summary": "Remove Motion Group",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "remove_motion_group_manipulators_motion_groups__prim_path__delete",
+        "parameters": [
+          {
+            "name": "prim_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prim Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/periphery/cameras/prims": {
+      "get": {
+        "tags": [
+          "periphery"
+        ],
+        "summary": "List Camera Prims",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "list_camera_prims_periphery_cameras_prims_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/periphery/cameras/active": {
+      "get": {
+        "tags": [
+          "periphery"
+        ],
+        "summary": "Get Active Camera",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "get_active_camera_periphery_cameras_active_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "periphery"
+        ],
+        "summary": "Set Active Camera",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "set_active_camera_periphery_cameras_active_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/periphery/cameras/capture/color": {
+      "get": {
+        "tags": [
+          "periphery"
+        ],
+        "summary": "Capture Color Image",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "capture_color_image_periphery_cameras_capture_color_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/periphery/cameras/capture/normals": {
+      "get": {
+        "tags": [
+          "periphery"
+        ],
+        "summary": "Capture Normals Image",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "capture_normals_image_periphery_cameras_capture_normals_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/periphery/cameras/capture/depth": {
+      "get": {
+        "tags": [
+          "periphery"
+        ],
+        "summary": "Capture Depth Image",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "capture_depth_image_periphery_cameras_capture_depth_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/periphery/cameras/capture/pointcloud": {
+      "get": {
+        "tags": [
+          "periphery"
+        ],
+        "summary": "Capture Point Cloud",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "capture_pointcloud_periphery_cameras_capture_pointcloud_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/periphery/cameras/capture/bounding-box-2d": {
+      "get": {
+        "tags": [
+          "periphery"
+        ],
+        "summary": "Capture Bounding Box 2D",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "capture_bounding_box_2d_periphery_cameras_capture_bounding_box_2d_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/periphery/cameras/capture/bounding-box-3d": {
+      "get": {
+        "tags": [
+          "periphery"
+        ],
+        "summary": "Capture Bounding Box 3D",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "capture_bounding_box_3d_periphery_cameras_capture_bounding_box_3d_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/periphery/cameras/capture/instance-segmentation": {
+      "get": {
+        "tags": [
+          "periphery"
+        ],
+        "summary": "Capture Instance Segmentation",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "capture_instance_segmentation_periphery_cameras_capture_instance_segmentation_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/periphery/cameras/capture/semantic-segmentation": {
+      "get": {
+        "tags": [
+          "periphery"
+        ],
+        "summary": "Capture Semantic Segmentation",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "capture_semantic_segmentation_periphery_cameras_capture_semantic_segmentation_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trajectories/": {
+      "get": {
+        "tags": [
+          "trajectories"
+        ],
+        "summary": "List Trajectories",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "list_trajectories_trajectories__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "trajectories"
+        ],
+        "summary": "Create Trajectory",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "create_trajectory_trajectories__post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trajectories/{name}": {
+      "patch": {
+        "tags": [
+          "trajectories"
+        ],
+        "summary": "Update Trajectory",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "update_trajectory_trajectories__name__patch",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "trajectories"
+        ],
+        "summary": "Remove Trajectory",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "remove_trajectory_trajectories__name__delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trajectories/{name}/markers": {
+      "post": {
+        "tags": [
+          "trajectories"
+        ],
+        "summary": "Create Trajectory Markers",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "create_trajectory_markers_trajectories__name__markers_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "trajectories"
+        ],
+        "summary": "Remove Trajectory Markers",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "remove_trajectory_markers_trajectories__name__markers_delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/teaching/ghost-objects/sources": {
+      "get": {
+        "tags": [
+          "teaching"
+        ],
+        "summary": "List Ghost Object Sources",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "list_ghost_object_sources_teaching_ghost_objects_sources_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/teaching/tcps/sources": {
+      "get": {
+        "tags": [
+          "teaching"
+        ],
+        "summary": "List TCP Sources",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "list_tcp_sources_teaching_tcps_sources_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/teaching/ghost-objects": {
+      "get": {
+        "tags": [
+          "teaching"
+        ],
+        "summary": "List Ghost Objects",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "list_ghost_objects_teaching_ghost_objects_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "teaching"
+        ],
+        "summary": "Create Ghost Object",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "create_ghost_object_teaching_ghost_objects_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "teaching"
+        ],
+        "summary": "Clear Ghost Objects",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "clear_ghost_objects_teaching_ghost_objects_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/teaching/ghost-objects/export": {
+      "get": {
+        "tags": [
+          "teaching"
+        ],
+        "summary": "Export Ghost Objects",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "export_ghost_objects_teaching_ghost_objects_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trajectory-planner/export": {
+      "get": {
+        "tags": [
+          "trajectory-planner"
+        ],
+        "summary": "Export Trajectory Plans",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "export_trajectory_plans_trajectory_planner_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trajectory-planner/{skill_name}/export": {
+      "get": {
+        "tags": [
+          "trajectory-planner"
+        ],
+        "summary": "Export Trajectory Plan Skill",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "export_trajectory_plan_skill_trajectory_planner__skill_name__export_get",
+        "parameters": [
+          {
+            "name": "skill_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Skill Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/overlays/robot/visibility": {
+      "put": {
+        "tags": [
+          "overlays"
+        ],
+        "summary": "Set Robot Overlay Visibility",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "set_robot_overlay_visibility_overlays_robot_visibility_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/physics/collision/sweep": {
+      "post": {
+        "tags": [
+          "physics"
+        ],
+        "summary": "Sweep Collisions",
+        "description": "Mirrored from the spec; not yet implemented.",
+        "operationId": "sweep_collisions_physics_collision_sweep_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApplyRelativePoseRequest": {
+        "properties": {
+          "relative_pose": {
+            "$ref": "#/components/schemas/WSPose"
+          },
+          "prim_path": {
+            "type": "string",
+            "title": "Prim Path"
+          },
+          "object_first": {
+            "type": "boolean",
+            "title": "Object First",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "relative_pose",
+          "prim_path"
+        ],
+        "title": "ApplyRelativePoseRequest",
+        "description": "Body of POST /prims/poses/relative."
+      },
+      "AssembleRobotRequest": {
+        "properties": {
+          "gripper_articulation_id": {
+            "type": "string",
+            "title": "Gripper Articulation Id"
+          },
+          "arm_mount_link": {
+            "type": "string",
+            "title": "Arm Mount Link"
+          },
+          "gripper_mount_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gripper Mount Link"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Transformation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "gripper_articulation_id",
+          "arm_mount_link"
+        ],
+        "title": "AssembleRobotRequest",
+        "description": "Body of POST /articulations/{articulation_id}/assemble_robot.\n\nThe path ``articulation_id`` is the arm. This names the *gripper* articulation\nto assemble onto it and the links to join them at. ``arm_mount_link`` is the\narm's flange (e.g. UR ``wrist_3_link``) -- a RigidBodyAPI link or a Site, not an\nempty frame like ``tool0``. ``gripper_mount_link`` is the gripper's base link;\nleave it null/omitted to auto-discover the gripper articulation's root link (its\nbase), which is what the fixed joint must attach to. After assembling, arm and\ngripper share one articulation; each device keeps driving only its own joints.\n``offset`` is an optional mount transform baked into the fixed joint\n(null/omitted => flush attach). Assembling the same pair again is a no-op (the\nbridge records that they are already assembled and just returns the merged info)."
+      },
+      "CreateArticulationRequest": {
+        "properties": {
+          "prim_path": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prim Path"
+          },
+          "urdf_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Urdf Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prim_path"
+        ],
+        "title": "CreateArticulationRequest",
+        "description": "Body of PUT /articulations -- register (and bind) one articulation."
+      },
+      "DefaultJointStateRequest": {
+        "properties": {
+          "joint_positions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joint Positions"
+          },
+          "joint_velocities": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joint Velocities"
+          },
+          "joint_efforts": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joint Efforts"
+          }
+        },
+        "type": "object",
+        "title": "DefaultJointStateRequest",
+        "description": "Body of PUT /articulations/{id}/joints_default_state -- the joint-space\n\"home pose\" applied on the next reset (Stop+Play). Any field left ``None``\nis not touched."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "JointEffortsRequest": {
+        "properties": {
+          "joint_efforts": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Joint Efforts"
+          },
+          "indices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "joint_efforts"
+        ],
+        "title": "JointEffortsRequest",
+        "description": "Body of POST /articulations/{id}/joint_efforts -- direct torque/force drive.\n\nBypasses the position/velocity drive; only takes effect if the target\njoint's drive stiffness and damping are zero. ``indices`` defaults to the\ndevice's current driven joints, matching :class:`JointVelocitiesRequest`."
+      },
+      "JointPositionsRequest": {
+        "properties": {
+          "joint_positions": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Joint Positions"
+          },
+          "indices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indices"
+          },
+          "asynchronous": {
+            "type": "boolean",
+            "title": "Asynchronous",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "joint_positions"
+        ],
+        "title": "JointPositionsRequest",
+        "description": "Body of POST /articulations/{id}/move_j -- drive joints (radians).\n\n``joint_positions`` are the target angles for ``indices`` (default: the\ndevice's current driven joints, so a robot sends all of them and a gripper\nnarrowed to its driver sends one). ``asynchronous`` true applies the action and\nreturns immediately (the client decides when the move is done); false blocks\nuntil the joints reach the target or stall."
+      },
+      "JointVelocitiesRequest": {
+        "properties": {
+          "joint_velocities": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Joint Velocities"
+          },
+          "indices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "joint_velocities"
+        ],
+        "title": "JointVelocitiesRequest",
+        "description": "Body of POST /articulations/{id}/joint_velocities -- drive joints (rad/s).\n\nThe velocity counterpart to :class:`JointPositionsRequest`, for driving joints\nat a target rate rather than to a pose (drive wheels, a spinning tool, a\nconveyor, or slewing any joint at a controlled speed). ``joint_velocities`` are\nthe target angular speeds for ``indices`` (default: the device's current\ndriven joints). Fire-and-forget: the commanded speeds hold until the next\ncall, so ``{0, ...}`` stops the joints (there is no ``asynchronous`` flag --\na velocity-driven joint never \"reaches\" a target). Any higher-level kinematics\n(e.g. twist->wheel) live in the client."
+      },
+      "OpenSceneRequest": {
+        "properties": {
+          "uri": {
+            "type": "string",
+            "title": "Uri"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uri"
+        ],
+        "title": "OpenSceneRequest",
+        "description": "Body of PUT /stage/scene (spec: ``UsdStageModel``)."
+      },
+      "PrimMetadata": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category",
+          "type"
+        ],
+        "title": "PrimMetadata",
+        "description": "Spec ``CustomPrimData`` -- user metadata stored on a prim."
+      },
+      "PrimPathRequest": {
+        "properties": {
+          "prim_path": {
+            "type": "string",
+            "title": "Prim Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prim_path"
+        ],
+        "title": "PrimPathRequest",
+        "description": "Body of PUT /prims/poses/default or POST /prims/poses/default/reset.\n\nA named model for consistency with every other body-carrying route (was\npreviously a bare ``Body(..., embed=False)`` string on these two only)."
+      },
+      "SetDrivenJointsRequest": {
+        "properties": {
+          "joint_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Joint Names"
+          }
+        },
+        "type": "object",
+        "required": [
+          "joint_names"
+        ],
+        "title": "SetDrivenJointsRequest",
+        "description": "Body of PUT /articulations/{id}/driven_joints -- narrow the driven joints.\n\n``joint_names`` are the joints the device should drive from now on (e.g. a\ngripper client passes ``[driver_name]`` discovered via GET /driver_joint)."
+      },
+      "SetEnabledRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "SetEnabledRequest",
+        "description": "Body of a boolean on/off toggle (gravity, self-collisions)."
+      },
+      "SetJointPositionsRequest": {
+        "properties": {
+          "joint_positions": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Joint Positions"
+          },
+          "indices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "joint_positions"
+        ],
+        "title": "SetJointPositionsRequest",
+        "description": "Body of POST /articulations/{id}/set_j -- teleport joints (radians).\n\n``joint_positions`` are placed directly onto ``indices`` (default: the\ndevice's current driven joints), so the joints jump to them in a single step\nrather than being driven there over time. There is no ``asynchronous`` flag: a\nteleport is immediate."
+      },
+      "SetJointStateRequest": {
+        "properties": {
+          "enable": {
+            "type": "boolean",
+            "title": "Enable"
+          },
+          "prim_path": {
+            "type": "string",
+            "title": "Prim Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enable",
+          "prim_path"
+        ],
+        "title": "SetJointStateRequest",
+        "description": "Body of PATCH /prims/physics/joints."
+      },
+      "SetPrimMetadataRequest": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/components/schemas/PrimMetadata"
+          },
+          "prim_path": {
+            "type": "string",
+            "title": "Prim Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metadata",
+          "prim_path"
+        ],
+        "title": "SetPrimMetadataRequest",
+        "description": "Body of PUT /prims/metadata."
+      },
+      "SetVelocityRequest": {
+        "properties": {
+          "velocity": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Velocity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "velocity"
+        ],
+        "title": "SetVelocityRequest",
+        "description": "Body of PUT .../linear_velocity or .../angular_velocity -- a 3D vector\n(``[x, y, z]``) for the articulation's root link. Only meaningful for a\nfloating-base articulation (mobile base, humanoid)."
+      },
+      "SetVisibilityRequest": {
+        "properties": {
+          "prim_path": {
+            "type": "string",
+            "title": "Prim Path"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/VisibilityAction",
+            "default": "show"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prim_path"
+        ],
+        "title": "SetVisibilityRequest",
+        "description": "Body of PATCH /prims/visibility."
+      },
+      "SetWorldVelocityRequest": {
+        "properties": {
+          "velocity": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Velocity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "velocity"
+        ],
+        "title": "SetWorldVelocityRequest",
+        "description": "Body of PUT .../world_velocity -- the root link's full 6-DOF velocity\n(``[vx, vy, vz, wx, wy, wz]``, linear then angular)."
+      },
+      "SolverIterationCountRequest": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "title": "SolverIterationCountRequest",
+        "description": "Body of PUT .../solver/position_iterations or .../velocity_iterations."
+      },
+      "SolverThresholdRequest": {
+        "properties": {
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          }
+        },
+        "type": "object",
+        "required": [
+          "threshold"
+        ],
+        "title": "SolverThresholdRequest",
+        "description": "Body of PUT .../solver/stabilization_threshold or .../solver/sleep_threshold."
+      },
+      "StageUnits": {
+        "properties": {
+          "meters_per_unit": {
+            "type": "number",
+            "title": "Meters Per Unit",
+            "default": 1.0
+          }
+        },
+        "type": "object",
+        "title": "StageUnits",
+        "description": "Body/response of the stage-units routes."
+      },
+      "TimelineAction": {
+        "type": "string",
+        "enum": [
+          "play",
+          "pause",
+          "stop"
+        ],
+        "title": "TimelineAction",
+        "description": "Allowed values for PATCH /stage/simulation/timeline/{action}."
+      },
+      "Transformation": {
+        "properties": {
+          "translation": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Translation",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "rotation": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Rotation",
+            "default": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "type": "object",
+        "title": "Transformation",
+        "description": "A rigid transform: translation (meters) + rotation (XYZ Euler degrees).\n\nGeneric on purpose -- used here as the gripper mount offset for assemble_robot,\nbut reusable wherever a request needs a pose delta. An all-zero transform (the\ndefault) is the identity."
+      },
+      "UpdateCollidersRequest": {
+        "properties": {
+          "enable": {
+            "type": "boolean",
+            "title": "Enable"
+          },
+          "prim_path": {
+            "type": "string",
+            "title": "Prim Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enable",
+          "prim_path"
+        ],
+        "title": "UpdateCollidersRequest",
+        "description": "Body of PATCH /prims/physics/colliders/."
+      },
+      "UpdatePoseRequest": {
+        "properties": {
+          "input_pose": {
+            "$ref": "#/components/schemas/WSPose"
+          },
+          "prim_path": {
+            "type": "string",
+            "title": "Prim Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input_pose",
+          "prim_path"
+        ],
+        "title": "UpdatePoseRequest",
+        "description": "Body of PUT /prims/poses."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VisibilityAction": {
+        "type": "string",
+        "enum": [
+          "show",
+          "hide"
+        ],
+        "title": "VisibilityAction",
+        "description": "Allowed values for PATCH /prims/visibility."
+      },
+      "WSPose": {
+        "properties": {
+          "pose": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Pose"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pose"
+        ],
+        "title": "WSPose",
+        "description": "A pose in world/local space. ``cartesian`` form is rotation-vector\n(``[x, y, z, rx, ry, rz]``, axis*angle in rad); ``quaternions`` form is\n``[x, y, z, qw, qx, qy, qz]``. Length is not enforced so both fit one model."
+      }
+    }
+  }
+}

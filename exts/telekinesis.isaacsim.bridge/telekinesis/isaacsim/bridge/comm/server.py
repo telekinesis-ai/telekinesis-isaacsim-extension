@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# pylint: disable=line-too-long
 """
 References(importing routes)
 - https://github.com/fastapi/full-stack-fastapi-template/blob/master/backend/app/api/main.py
@@ -44,6 +45,7 @@ Wire units (shared mental model with the Synapse client)
 Native Isaac units: radians for joints, meters for lengths. Gripper ``fraction``
 is closed-ness: 0.0 = fully open, 1.0 = fully closed.
 """
+# pylint: enable=line-too-long
 
 import asyncio
 

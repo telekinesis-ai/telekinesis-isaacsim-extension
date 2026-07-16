@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.  # pylint: disable=line-too-long
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+Kit extension entry point: registers the toolbar UI panel and hosts the bridge server.
+
+This file serves as a basic template for the standard boilerplate operations that make a
+UI-based extension appear on the toolbar. Most users will be able to make their desired UI
+extension by interacting solely with UIBuilder (see .ui_builder.py).
+"""
 
 import asyncio
 import gc
@@ -20,12 +27,12 @@ import omni
 import omni.kit.commands
 import omni.physx as _physx
 import omni.timeline
-import omni.ui as ui
 import omni.usd
-from isaacsim.gui.components.element_wrappers import ScrollingWindow
-from isaacsim.gui.components.menu import MenuItemDescription
+from omni import ui
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 from omni.usd import StageEventType
+from isaacsim.gui.components.element_wrappers import ScrollingWindow
+from isaacsim.gui.components.menu import MenuItemDescription
 
 import carb
 
@@ -33,26 +40,19 @@ from .comm.server import BridgeServer
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_TITLE
 from .ui_builder import UIBuilder
 
-"""
-This file serves as a basic template for the standard boilerplate operations
-that make a UI-based extension appear on the toolbar.
-
-This implementation is meant to cover most use-cases without modification.
-Various callbacks are hooked up to a seperate class UIBuilder in .ui_builder.py
-Most users will be able to make their desired UI extension by interacting solely with
-UIBuilder.
-
-This class sets up standard useful callback functions in UIBuilder:
-    on_menu_callback: Called when extension is opened
-    on_timeline_event: Called when timeline is stopped, paused, or played
-    on_physics_step: Called on every physics step
-    on_stage_event: Called when stage is opened or closed
-    cleanup: Called when resources such as physics subscriptions should be cleaned up
-    build_ui: User function that creates the UI they want.
-"""
-
 
 class Extension(omni.ext.IExt):
+    """Kit extension lifecycle: builds the toolbar UI, hosts the bridge server, and wires
+    UIBuilder's callbacks to Kit's menu, timeline, physics-step, and stage events.
+
+        on_menu_callback: called when the extension is opened
+        on_timeline_event: called when the timeline is stopped, paused, or played
+        on_physics_step: called on every physics step
+        on_stage_event: called when the stage is opened or closed
+        cleanup: called when resources such as physics subscriptions should be released
+        build_ui: user function that creates the desired UI
+    """
+
     def on_startup(self, ext_id: str):
         """Initialize extension and UI elements"""
 
@@ -90,7 +90,7 @@ class Extension(omni.ext.IExt):
 
         # Events
         self._usd_context = omni.usd.get_context()
-        self._physxIFace = _physx.get_physx_interface()
+        self._physx_iface = _physx.get_physx_interface()
         self._physx_subscription = None
         self._stage_event_sub = None
         self._timeline = omni.timeline.get_timeline_interface()
@@ -148,7 +148,7 @@ class Extension(omni.ext.IExt):
             self.ui_builder.cleanup()
 
     def _build_ui(self):
-        """Rebuild the extension panel inside the ScrollingWindow and dock it left of the Viewport."""
+        """Rebuild the extension panel in the ScrollingWindow and dock it left of the Viewport."""
         with self._window.frame:
             with ui.VStack(spacing=5, height=0):
                 self._build_extension_ui()
@@ -181,7 +181,7 @@ class Extension(omni.ext.IExt):
         """Subscribe physics steps on play; unsubscribe on stop; forward to UIBuilder."""
         if event.type == int(omni.timeline.TimelineEventType.PLAY):
             if not self._physx_subscription:
-                self._physx_subscription = self._physxIFace.subscribe_physics_step_events(
+                self._physx_subscription = self._physx_iface.subscribe_physics_step_events(
                     self._on_physics_step
                 )
         elif event.type == int(omni.timeline.TimelineEventType.STOP):

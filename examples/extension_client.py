@@ -245,6 +245,7 @@ def test_prims(base_url, prim_path):
 
 
 def main():
+    """Parse CLI args and exercise every implemented route end-to-end."""
     parser = argparse.ArgumentParser(description="Call the implemented bridge extension routes.")
     parser.add_argument(
         "--base_url", default=DEFAULT_BASE_URL, help="Base URL of the running bridge"

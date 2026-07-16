@@ -39,7 +39,7 @@ GRIPPER_PRIM_PATH = "/World/robotiq"
 # Path to the gripper's URDF to import. Left blank on purpose -- set it to the URDF
 # you want to load (an absolute path or a path the bridge process can read).
 try:
-    gripper_name = "Robotiq2F85"
+    gripper_name = "Robotiq2F85"  # pylint: disable=invalid-name
     robot_description = telekinesis_urdfs.load(gripper_name)
     if not robot_description.urdf_path.is_file():
         raise ValueError(f"No urdf found, i.e. {robot_description.urdf_path} is not a file")
@@ -66,6 +66,7 @@ def _request(base, method, path, body=None):
 
 
 def run_gripper(base, prim_path, urdf_path):
+    """Register the gripper (importing the URDF if needed), then narrow it and open/close it."""
     # urdf_path tells the bridge to import the gripper if prim_path isn't in the stage.
     info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": urdf_path})
     articulation_id = info["articulation_id"]
@@ -95,11 +96,13 @@ def run_gripper(base, prim_path, urdf_path):
             {"joint_positions": [target_rad]},
         )
         print(
-            f"  done (reached={status['reached']} joint_positions={status['joint_positions'][0]:.3f} rad)"
+            f"  done (reached={status['reached']} "
+            f"joint_positions={status['joint_positions'][0]:.3f} rad)"
         )
 
 
 def main():
+    """Parse CLI args and run the example."""
     parser = argparse.ArgumentParser(
         description="Load a gripper from URDF via the Isaac Sim bridge."
     )

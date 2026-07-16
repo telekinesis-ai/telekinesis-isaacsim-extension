@@ -1,5 +1,6 @@
 """
-GET /articulations/{id}/joints_state -> {joint_positions, joint_velocities, joint_efforts, timestamp}
+GET /articulations/{id}/joints_state
+-> {joint_positions, joint_velocities, joint_efforts, timestamp}
 
 Requires the id to already be registered -- run put_articulation.py first to
 register a prim and get its articulation_id.

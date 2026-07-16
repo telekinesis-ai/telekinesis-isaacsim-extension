@@ -13,7 +13,8 @@ Flow (all over HTTP):
   2. for each target: POST /articulations/{id}/move_j {joint_positions}  (radians)
      -> blocks until the move reaches the target or stalls; returns {done, reached, ...}
   3. POST /articulations/{id}/set_j {joint_positions}  (radians)
-     -> teleports the joints directly to the target; returns {done, teleported, joint_positions, ...}
+     -> teleports the joints directly to the target;
+        returns {done, teleported, joint_positions, ...}
 
 The bridge runs each move to completion server-side (it steps physics on Isaac's
 own loop), so the POST blocks until done -- no client-side polling.
@@ -52,6 +53,7 @@ def _request(base, method, path, body=None):
 
 
 def run_robot(base, prim_path):
+    """Register the robot, drive it through the target sequence, then teleport it."""
     info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": None})
     articulation_id = info["articulation_id"]
     print(f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
@@ -66,7 +68,8 @@ def run_robot(base, prim_path):
             {"joint_positions": np.deg2rad(target_deg).tolist()},
         )
         print(
-            f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)"
+            f"  done={status['done']} reached={status['reached']} "
+            f"(max_error={status['max_error']:.2e} rad)"
         )
         time.sleep(2)
 
@@ -86,6 +89,7 @@ def run_robot(base, prim_path):
 
 
 def main():
+    """Parse CLI args and run the example."""
     parser = argparse.ArgumentParser(
         description="Robot joint-target example for the Isaac Sim bridge."
     )

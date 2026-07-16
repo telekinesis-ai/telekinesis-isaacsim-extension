@@ -66,6 +66,7 @@ async def stream_trajectory(ws_url, positions_rad):
 
 
 def main():
+    """Parse CLI args and run the example."""
     parser = argparse.ArgumentParser(
         description="Stream a joint trajectory over the bridge WebSocket."
     )

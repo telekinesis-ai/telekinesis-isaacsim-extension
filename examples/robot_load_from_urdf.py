@@ -38,7 +38,7 @@ ROBOT_PRIM_PATH = "/World/ur10e"
 # Path to the robot's URDF to import. Left blank on purpose -- set it to the URDF
 # you want to load (an absolute path or a path the bridge process can read).
 try:
-    robot_name = "UniversalRobotsUR10e"
+    robot_name = "UniversalRobotsUR10e"  # pylint: disable=invalid-name
     robot_description = telekinesis_urdfs.load(robot_name)
     if not robot_description.urdf_path.is_file():
         raise ValueError(f"No urdf found, i.e. {robot_description.urdf_path} is not a file")
@@ -68,6 +68,7 @@ def _request(base, method, path, body=None):
 
 
 def run_robot(base, prim_path, urdf_path):
+    """Register the robot (importing the URDF if needed), then drive it to the target."""
     # urdf_path tells the bridge to import the robot if prim_path isn't in the stage.
     info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": urdf_path})
     articulation_id = info["articulation_id"]
@@ -84,11 +85,13 @@ def run_robot(base, prim_path, urdf_path):
         {"joint_positions": np.deg2rad(TARGET_DEG).tolist()},
     )
     print(
-        f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)"
+        f"  done={status['done']} reached={status['reached']} "
+        f"(max_error={status['max_error']:.2e} rad)"
     )
 
 
 def main():
+    """Parse CLI args and run the example."""
     parser = argparse.ArgumentParser(description="Load a robot from URDF via the Isaac Sim bridge.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)

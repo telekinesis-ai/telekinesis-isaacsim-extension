@@ -95,6 +95,7 @@ def _request(base, method, path, body=None):
 def run(
     base, arm_prim, arm_urdf, gripper_prim, gripper_urdf, arm_mount_link, gripper_mount_link, offset
 ):
+    """Create the arm and gripper, assemble them, then drive both on the shared rig."""
     # 1) Create the arm (urdf_path imports it if arm_prim isn't in the stage).
     arm = _request(base, "PUT", "/articulations", {"prim_path": arm_prim, "urdf_path": arm_urdf})
     arm_id = arm["articulation_id"]
@@ -115,7 +116,8 @@ def run(
         "limits"
     ][0]
     print(
-        f"created gripper: articulation_id={gripper_id} prim_path={gripper['prim_path']} driver='{driver['name']}'"
+        f"created gripper: articulation_id={gripper_id} prim_path={gripper['prim_path']} "
+        f"driver='{driver['name']}'"
     )
 
     # 3) Assemble the gripper onto the arm -> one shared articulation. Running this
@@ -136,7 +138,8 @@ def run(
         f"(already_assembled={merged['already_assembled']})"
     )
     print(
-        f"  mounts: arm={merged['arm_mount_link']} gripper={merged['gripper_mount_link']} (resolved)"
+        f"  mounts: arm={merged['arm_mount_link']} "
+        f"gripper={merged['gripper_mount_link']} (resolved)"
     )
     print(f"  arm drives {merged['robot']['num_dof']} dof: {merged['robot']['dof_names']}")
 
@@ -149,7 +152,8 @@ def run(
         {"joint_positions": np.deg2rad(TARGET_DEG).tolist()},
     )
     print(
-        f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)"
+        f"  done={status['done']} reached={status['reached']} "
+        f"(max_error={status['max_error']:.2e} rad)"
     )
 
     # 5) Close then open the gripper on the shared rig.
@@ -160,11 +164,13 @@ def run(
             base, "POST", f"/articulations/{gripper_id}/move_j", {"joint_positions": [target_rad]}
         )
         print(
-            f"  done (reached={status['reached']} joint_positions={status['joint_positions'][0]:.3f} rad)"
+            f"  done (reached={status['reached']} "
+            f"joint_positions={status['joint_positions'][0]:.3f} rad)"
         )
 
 
 def main():
+    """Parse CLI args and run the example."""
     parser = argparse.ArgumentParser(
         description="Assemble a gripper onto an arm via the Isaac Sim bridge."
     )

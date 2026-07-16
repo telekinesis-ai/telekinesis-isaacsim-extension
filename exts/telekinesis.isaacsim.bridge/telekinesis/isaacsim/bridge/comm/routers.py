@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
+# pylint: disable=line-too-long
 """HTTP routers for the bridge, grouped by domain.
 
-Refereces:
+References:
 Prim and articulation:
 - https://isaac-sim.github.io/IsaacLab/main/source/api/lab/isaaclab.assets.html#isaaclab.assets.Articulation
 - https://isaac-sim.github.io/IsaacLab/main/source/api/lab/isaaclab.sim.utils.html#module-isaaclab.sim.utils.prims
@@ -16,6 +17,7 @@ service method, and returns the result. All orchestration / USD logic lives in
 Routes mirrored from the spec but not yet wired up answer 501 via
 ``not_implemented()``.
 """
+# pylint: enable=line-too-long
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 
@@ -70,12 +72,13 @@ articulations = APIRouter(tags=["articulations"])
 async def create_articulation(
     req: CreateArticulationRequest, articulation_service=Depends(get_articulation_service)
 ):
-    # Register (and bind) one articulation; returns its id, prim, dof and state.
+    """Register (and bind) one articulation; returns its id, prim, dof and state."""
     return await articulation_service.create_articulation(req.prim_path, req.urdf_path)
 
 
 @articulations.get("/articulations", summary="List Articulations")
 async def list_articulations(articulation_service=Depends(get_articulation_service)):
+    """Every registered articulation id mapped to its prim path."""
     return articulation_service.list_articulations()
 
 
@@ -83,7 +86,7 @@ async def list_articulations(articulation_service=Depends(get_articulation_servi
 async def get_articulation(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Id + static description (prim, dof, names, current state). 404 if unknown.
+    """Id + static description (prim, dof, names, current state). 404 if unknown."""
     return articulation_service.get_articulation(articulation_id)
 
 
@@ -91,7 +94,7 @@ async def get_articulation(
 async def delete_articulation(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Unregister the articulation (the USD prim is left in the stage).
+    """Unregister the articulation (the USD prim is left in the stage)."""
     return articulation_service.delete_articulation(articulation_id)
 
 
@@ -101,7 +104,7 @@ async def move_j(
     req: JointPositionsRequest,
     articulation_service=Depends(get_articulation_service),
 ):
-    # Drive the joints (radians). Blocks until reached/stalled unless asynchronous.
+    """Drive the joints (radians). Blocks until reached/stalled unless asynchronous."""
     return await articulation_service.move_j(
         articulation_id, req.joint_positions, req.indices, req.asynchronous
     )
@@ -113,16 +116,16 @@ async def set_j(
     req: SetJointPositionsRequest,
     articulation_service=Depends(get_articulation_service),
 ):
-    # Teleport the joints directly to the targets (radians); immediate, no blocking.
+    """Teleport the joints directly to the targets (radians); immediate, no blocking."""
     return await articulation_service.set_j(articulation_id, req.joint_positions, req.indices)
 
 
 @articulations.websocket("/articulations/{articulation_id}/stream_joint_positions")
 async def stream_joint_positions(websocket: WebSocket, articulation_id: str):
-    # High-rate teleport stream: the client opens one connection bound to this
-    # articulation and pushes {"joint_positions": [...], "indices": [...]?} frames
-    # (radians). Fire-and-forget -- the server applies each frame and sends nothing
-    # back, so the client streams at full rate.
+    """High-rate teleport stream: the client opens one connection bound to this articulation
+    and pushes {"joint_positions": [...], "indices": [...]?} frames (radians). Fire-and-forget
+    -- the server applies each frame and sends nothing back, so the client streams at full rate.
+    """
     service = websocket.app.state.articulation_service
     await websocket.accept()
     try:
@@ -162,7 +165,7 @@ async def set_joint_velocities(
     req: JointVelocitiesRequest,
     articulation_service=Depends(get_articulation_service),
 ):
-    # Drive the joints at a velocity (rad/s). Fire-and-forget; holds until the next call.
+    """Drive the joints at a velocity (rad/s). Fire-and-forget; holds until the next call."""
     return articulation_service.set_joint_velocities(
         articulation_id, req.joint_velocities, req.indices
     )
@@ -172,7 +175,7 @@ async def set_joint_velocities(
 async def get_joints_state(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Current positions / velocities / torques of the driven joints.
+    """Current positions / velocities / torques of the driven joints."""
     return articulation_service.get_joints_state(articulation_id)
 
 
@@ -180,7 +183,7 @@ async def get_joints_state(
 async def get_dof_limits(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # [lower, upper] radian limits per driven joint (in joints_state joint_positions order).
+    """[lower, upper] radian limits per driven joint (in joints_state joint_positions order)."""
     return articulation_service.get_dof_limits(articulation_id)
 
 
@@ -188,7 +191,7 @@ async def get_dof_limits(
 async def get_driver_joint(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Discover a gripper's actuated driver joint (name + DOF index) via USD schema.
+    """Discover a gripper's actuated driver joint (name + DOF index) via USD schema."""
     return articulation_service.get_driver_joint(articulation_id)
 
 
@@ -198,7 +201,7 @@ async def set_driven_joints(
     req: SetDrivenJointsRequest,
     articulation_service=Depends(get_articulation_service),
 ):
-    # Narrow which joints this device drives (e.g. a gripper to its driver joint).
+    """Narrow which joints this device drives (e.g. a gripper to its driver joint)."""
     return articulation_service.set_driven_joints(articulation_id, req.joint_names)
 
 
@@ -208,8 +211,9 @@ async def assemble_robot(
     req: AssembleRobotRequest,
     articulation_service=Depends(get_articulation_service),
 ):
-    # Assemble a gripper onto this arm; both devices then share one articulation.
-    # A no-op if this arm and gripper are already assembled.
+    """Assemble a gripper onto this arm; both devices then share one articulation.
+    A no-op if this arm and gripper are already assembled.
+    """
     return await articulation_service.assemble_robot(
         articulation_id,
         req.gripper_articulation_id,
@@ -232,7 +236,7 @@ async def assemble_robot(
 async def get_handles_initialized(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Whether the device's handle is currently valid, without a re-bind.
+    """Whether the device's handle is currently valid, without a re-bind."""
     return articulation_service.get_handles_initialized(articulation_id)
 
 
@@ -240,7 +244,7 @@ async def get_handles_initialized(
 async def get_num_bodies(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Number of rigid-body links in the underlying articulation.
+    """Number of rigid-body links in the underlying articulation."""
     return articulation_service.get_num_bodies(articulation_id)
 
 
@@ -248,7 +252,7 @@ async def get_num_bodies(
 async def get_dof_properties(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Per-driven-joint drive properties (limits, drive mode, stiffness, damping).
+    """Per-driven-joint drive properties (limits, drive mode, stiffness, damping)."""
     return articulation_service.get_dof_properties(articulation_id)
 
 
@@ -258,7 +262,7 @@ async def get_dof_properties(
 async def get_dof_index(
     articulation_id: str, joint_name: str, articulation_service=Depends(get_articulation_service)
 ):
-    # DOF index of joint_name within the device's driven subset.
+    """DOF index of joint_name within the device's driven subset."""
     return articulation_service.get_dof_index(articulation_id, joint_name)
 
 
@@ -268,7 +272,7 @@ async def get_dof_index(
 async def get_applied_joint_efforts(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Efforts last commanded via set_joint_efforts (what was asked for, not measured).
+    """Efforts last commanded via set_joint_efforts (what was asked for, not measured)."""
     return articulation_service.get_applied_joint_efforts(articulation_id)
 
 
@@ -278,7 +282,7 @@ async def get_applied_joint_efforts(
 async def get_measured_joint_forces(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Measured 6-axis joint reaction force/torque per driven joint.
+    """Measured 6-axis joint reaction force/torque per driven joint."""
     return articulation_service.get_measured_joint_forces(articulation_id)
 
 
@@ -288,7 +292,7 @@ async def get_measured_joint_forces(
 async def get_joints_default_state(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Stored joint-space home pose for the driven joints.
+    """Stored joint-space home pose for the driven joints."""
     return articulation_service.get_joints_default_state(articulation_id)
 
 
@@ -300,7 +304,7 @@ async def set_joints_default_state(
     req: DefaultJointStateRequest,
     articulation_service=Depends(get_articulation_service),
 ):
-    # Set the driven joints' stored home pose, applied on the next reset.
+    """Set the driven joints' stored home pose, applied on the next reset."""
     return articulation_service.set_joints_default_state(
         articulation_id, req.joint_positions, req.joint_velocities, req.joint_efforts
     )
@@ -310,7 +314,7 @@ async def set_joints_default_state(
 async def get_applied_action(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Last ArticulationAction PhysX actually received for the whole articulation.
+    """Last ArticulationAction PhysX actually received for the whole articulation."""
     return articulation_service.get_applied_action(articulation_id)
 
 
@@ -320,7 +324,7 @@ async def set_joint_efforts(
     req: JointEffortsRequest,
     articulation_service=Depends(get_articulation_service),
 ):
-    # Command raw torque/force directly on the chosen joints; bypasses the drive.
+    """Command raw torque/force directly on the chosen joints; bypasses the drive."""
     return articulation_service.set_joint_efforts(articulation_id, req.joint_efforts, req.indices)
 
 
@@ -328,7 +332,7 @@ async def set_joint_efforts(
 async def enable_gravity(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Gravity affects the whole articulation (body-level, not per-joint).
+    """Gravity affects the whole articulation (body-level, not per-joint)."""
     return articulation_service.enable_gravity(articulation_id)
 
 
@@ -336,7 +340,7 @@ async def enable_gravity(
 async def disable_gravity(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Gravity no longer affects the whole articulation (body-level, not per-joint).
+    """Gravity no longer affects the whole articulation (body-level, not per-joint)."""
     return articulation_service.disable_gravity(articulation_id)
 
 
@@ -344,7 +348,7 @@ async def disable_gravity(
 async def get_world_velocity(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Root link's full 6-DOF world-space velocity (meaningful only for a floating base).
+    """Root link's full 6-DOF world-space velocity (meaningful only for a floating base)."""
     return articulation_service.get_world_velocity(articulation_id)
 
 
@@ -354,6 +358,7 @@ async def set_world_velocity(
     req: SetWorldVelocityRequest,
     articulation_service=Depends(get_articulation_service),
 ):
+    """Set the root link's full 6-DOF world-space velocity."""
     return articulation_service.set_world_velocity(articulation_id, req.velocity)
 
 
@@ -363,7 +368,7 @@ async def set_world_velocity(
 async def get_linear_velocity(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Root link's linear (translational) velocity.
+    """Root link's linear (translational) velocity."""
     return articulation_service.get_linear_velocity(articulation_id)
 
 
@@ -375,6 +380,7 @@ async def set_linear_velocity(
     req: SetVelocityRequest,
     articulation_service=Depends(get_articulation_service),
 ):
+    """Set the root link's linear velocity only (leaves angular untouched)."""
     return articulation_service.set_linear_velocity(articulation_id, req.velocity)
 
 
@@ -384,7 +390,7 @@ async def set_linear_velocity(
 async def get_angular_velocity(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    # Root link's angular (rotational) velocity.
+    """Root link's angular (rotational) velocity."""
     return articulation_service.get_angular_velocity(articulation_id)
 
 
@@ -396,6 +402,7 @@ async def set_angular_velocity(
     req: SetVelocityRequest,
     articulation_service=Depends(get_articulation_service),
 ):
+    """Set the root link's angular velocity only (leaves linear untouched)."""
     return articulation_service.set_angular_velocity(articulation_id, req.velocity)
 
 
@@ -406,6 +413,7 @@ async def set_angular_velocity(
 async def get_solver_position_iteration_count(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
+    """PhysX position-solver iteration count for this articulation."""
     return articulation_service.get_solver_position_iteration_count(articulation_id)
 
 
@@ -418,6 +426,7 @@ async def set_solver_position_iteration_count(
     req: SolverIterationCountRequest,
     articulation_service=Depends(get_articulation_service),
 ):
+    """Set the PhysX position-solver iteration count (accuracy vs. perf)."""
     return articulation_service.set_solver_position_iteration_count(articulation_id, req.count)
 
 
@@ -428,6 +437,7 @@ async def set_solver_position_iteration_count(
 async def get_solver_velocity_iteration_count(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
+    """PhysX velocity-solver iteration count for this articulation."""
     return articulation_service.get_solver_velocity_iteration_count(articulation_id)
 
 
@@ -440,6 +450,7 @@ async def set_solver_velocity_iteration_count(
     req: SolverIterationCountRequest,
     articulation_service=Depends(get_articulation_service),
 ):
+    """Set the PhysX velocity-solver iteration count (accuracy vs. perf)."""
     return articulation_service.set_solver_velocity_iteration_count(articulation_id, req.count)
 
 
@@ -450,6 +461,7 @@ async def set_solver_velocity_iteration_count(
 async def get_stabilization_threshold(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
+    """Mass-normalized kinetic energy below which PhysX may stabilize this articulation."""
     return articulation_service.get_stabilization_threshold(articulation_id)
 
 
@@ -462,6 +474,7 @@ async def set_stabilization_threshold(
     req: SolverThresholdRequest,
     articulation_service=Depends(get_articulation_service),
 ):
+    """Set the stabilization threshold."""
     return articulation_service.set_stabilization_threshold(articulation_id, req.threshold)
 
 
@@ -472,6 +485,7 @@ async def set_stabilization_threshold(
 async def get_enabled_self_collisions(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
+    """Whether this articulation's own links can collide with each other."""
     return articulation_service.get_enabled_self_collisions(articulation_id)
 
 
@@ -484,6 +498,7 @@ async def set_enabled_self_collisions(
     req: SetEnabledRequest,
     articulation_service=Depends(get_articulation_service),
 ):
+    """Enable/disable self-collision between this articulation's own links."""
     return articulation_service.set_enabled_self_collisions(articulation_id, req.enabled)
 
 
@@ -493,6 +508,7 @@ async def set_enabled_self_collisions(
 async def get_sleep_threshold(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
+    """Velocity threshold below which PhysX lets this articulation sleep."""
     return articulation_service.get_sleep_threshold(articulation_id)
 
 
@@ -504,6 +520,7 @@ async def set_sleep_threshold(
     req: SolverThresholdRequest,
     articulation_service=Depends(get_articulation_service),
 ):
+    """Set the sleep threshold."""
     return articulation_service.set_sleep_threshold(articulation_id, req.threshold)
 
 
@@ -578,11 +595,13 @@ async def simulation_state(stage_service=Depends(get_stage_service)):
 
 @stage.get("/configuration", summary="Export Configuration")
 async def export_configuration():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @stage.post("/configuration", summary="Import Configuration")
 async def import_configuration():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
@@ -682,26 +701,31 @@ async def update_colliders(req: UpdateCollidersRequest, prim_service=Depends(get
 
 @prims.put("/labels", summary="Set Semantic Label")
 async def set_semantic_label():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @prims.get("/labels", summary="List Semantic Labels")
 async def list_semantic_labels():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @prims.delete("/labels", summary="Clear Semantic Labels")
 async def clear_semantic_labels():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @prims.put("/selected", summary="Select Prims")
 async def select_prims():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @prims.get("/selected", summary="List Selected Prims")
 async def list_selected_prims():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
@@ -712,26 +736,31 @@ nucleus = APIRouter(prefix="/nucleus", tags=["nucleus"])
 
 @nucleus.post("/server", summary="Add Nucleus Server")
 async def add_nucleus_server():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @nucleus.get("/servers", summary="List Nucleus Servers")
 async def list_nucleus_servers():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @nucleus.post("/server/token", summary="Add Nucleus API Token")
 async def add_nucleus_api_token():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @nucleus.delete("/server/token", summary="Remove Nucleus API Token")
 async def remove_nucleus_api_token():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @nucleus.delete("/server/tokens", summary="Remove All Nucleus API Tokens")
 async def remove_all_nucleus_api_tokens():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
@@ -742,31 +771,37 @@ manipulators = APIRouter(prefix="/manipulators", tags=["manipulators"])
 
 @manipulators.post("/motion-groups", summary="Create Motion Group")
 async def create_motion_group():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @manipulators.get("/motion-groups", summary="List Motion Groups")
 async def list_motion_groups():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @manipulators.get("/motion-groups/{prim_path:path}", summary="Get Motion Group")
 async def get_motion_group(prim_path: str):
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @manipulators.put("/motion-groups/{prim_path:path}", summary="Update Motion Group Motion Stream")
 async def update_motion_group_motion_stream(prim_path: str):
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @manipulators.delete("/motion-groups/{prim_path:path}", summary="Remove Motion Group")
 async def remove_motion_group(prim_path: str):
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @manipulators.delete("/motion-groups", summary="Clear Motion Groups")
 async def clear_motion_groups():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
@@ -777,56 +812,67 @@ periphery = APIRouter(prefix="/periphery", tags=["periphery"])
 
 @periphery.get("/cameras/prims", summary="List Camera Prims")
 async def list_camera_prims():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @periphery.get("/cameras/active", summary="Get Active Camera")
 async def get_active_camera():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @periphery.put("/cameras/active", summary="Set Active Camera")
 async def set_active_camera():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @periphery.get("/cameras/capture/color", summary="Capture Color Image")
 async def capture_color_image():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @periphery.get("/cameras/capture/normals", summary="Capture Normals Image")
 async def capture_normals_image():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @periphery.get("/cameras/capture/depth", summary="Capture Depth Image")
 async def capture_depth_image():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @periphery.get("/cameras/capture/pointcloud", summary="Capture Point Cloud")
 async def capture_pointcloud():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @periphery.get("/cameras/capture/bounding-box-2d", summary="Capture Bounding Box 2D")
 async def capture_bounding_box_2d():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @periphery.get("/cameras/capture/bounding-box-3d", summary="Capture Bounding Box 3D")
 async def capture_bounding_box_3d():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @periphery.get("/cameras/capture/instance-segmentation", summary="Capture Instance Segmentation")
 async def capture_instance_segmentation():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @periphery.get("/cameras/capture/semantic-segmentation", summary="Capture Semantic Segmentation")
 async def capture_semantic_segmentation():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
@@ -837,31 +883,37 @@ trajectories = APIRouter(prefix="/trajectories", tags=["trajectories"])
 
 @trajectories.post("/", summary="Create Trajectory")
 async def create_trajectory():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @trajectories.get("/", summary="List Trajectories")
 async def list_trajectories():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @trajectories.patch("/{name}", summary="Update Trajectory")
 async def update_trajectory(name: str):
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @trajectories.delete("/{name}", summary="Remove Trajectory")
 async def remove_trajectory(name: str):
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @trajectories.post("/{name}/markers", summary="Create Trajectory Markers")
 async def create_trajectory_markers(name: str):
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @trajectories.delete("/{name}/markers", summary="Remove Trajectory Markers")
 async def remove_trajectory_markers(name: str):
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
@@ -872,31 +924,37 @@ teaching = APIRouter(prefix="/teaching", tags=["teaching"])
 
 @teaching.get("/ghost-objects/sources", summary="List Ghost Object Sources")
 async def list_ghost_object_sources():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @teaching.get("/tcps/sources", summary="List TCP Sources")
 async def list_tcp_sources():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @teaching.post("/ghost-objects", summary="Create Ghost Object")
 async def create_ghost_object():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @teaching.delete("/ghost-objects", summary="Clear Ghost Objects")
 async def clear_ghost_objects():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @teaching.get("/ghost-objects", summary="List Ghost Objects")
 async def list_ghost_objects():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @teaching.get("/ghost-objects/export", summary="Export Ghost Objects")
 async def export_ghost_objects():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
@@ -907,11 +965,13 @@ trajectory_planner = APIRouter(prefix="/trajectory-planner", tags=["trajectory-p
 
 @trajectory_planner.get("/export", summary="Export Trajectory Plans")
 async def export_trajectory_plans():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
 @trajectory_planner.get("/{skill_name}/export", summary="Export Trajectory Plan Skill")
 async def export_trajectory_plan_skill(skill_name: str):
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
@@ -922,6 +982,7 @@ overlays = APIRouter(prefix="/overlays", tags=["overlays"])
 
 @overlays.put("/robot/visibility", summary="Set Robot Overlay Visibility")
 async def set_robot_overlay_visibility():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
@@ -932,6 +993,7 @@ physics = APIRouter(prefix="/physics", tags=["physics"])
 
 @physics.post("/collision/sweep", summary="Sweep Collisions")
 async def sweep_collisions():
+    """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 

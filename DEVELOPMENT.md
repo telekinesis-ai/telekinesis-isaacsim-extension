@@ -35,7 +35,7 @@ Isaac Sim discovers extensions by **search path**, and the path you register is 
 3. Under **Extension Search Paths**, click **+** and add the absolute path to this repo's `exts` folder, e.g.:
 
    ```
-   c:/Users/<you>/Documents/workspace/telekinesis-isaacsim-extension/exts
+   c:/Users/<you>/<path>/telekinesis-isaacsim-extension/exts
    ```
 
 4. Back in the extension list, search for `telekinesis.isaacsim.bridge`. It now appears under the **THIRD PARTY / user** extensions.
@@ -64,23 +64,35 @@ Before opening a PR against `main`, run `ruff` and `pylint` and fix anything the
 pip install ruff pylint
 ruff check --line-length 100 .
 ruff format --line-length 100 .
-pylint --max-line-length 100 exts/telekinesis.isaacsim.bridge/telekinesis examples
+pylint --max-line-length 100 --ignored-modules=omni,carb,isaacsim,pxr --disable=duplicate-code,attribute-defined-outside-init,import-outside-toplevel,unused-argument,broad-exception-caught,protected-access,too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-public-methods,too-many-instance-attributes,too-many-lines exts/telekinesis.isaacsim.bridge/telekinesis examples
 ```
 
-`ruff check` covers style, unused imports, and import ordering; `ruff format` auto-formats to match (run it after `check` so anything `check` flagged is already fixed first); `pylint` catches a broader set of correctness issues. `ruff check` and `pylint` also run in CI (see `.github/workflows/verify.yml`) and block merging into `main`/`develop` if they fail -- `ruff format` is local-only for now, so run it before every PR to keep formatting consistent.
+`--ignored-modules` tells pylint not to try to fully resolve `omni`/`carb`/`isaacsim`/`pxr` -- those are Isaac Sim's own packages, only present when Isaac Sim is installed, so without this flag pylint reports every import from them as unresolved and can't check the members of `pxr` types either. Without Isaac Sim installed, this is expected and not a real code issue.
+
+Every disabled check is a deliberate, documented pattern rather than a real issue:
+- `duplicate-code`: `examples/` is one small, self-contained script per endpoint (see Examples above) -- the shared `_request()` helper and argparse boilerplate are copy-pasted on purpose so each script can be grabbed and run standalone.
+- `attribute-defined-outside-init`: only fires in `extension.py`, where Kit's own convention uses `on_startup` as the real constructor instead of `__init__`.
+- `import-outside-toplevel`: only fires in the service/core modules that lazily import `omni`/`pxr` inside their methods on purpose, so those modules still import outside Isaac Sim.
+- `unused-argument`: only fires on 501 stub routes (the path parameter has to exist for FastAPI's route to match, even though the stub body ignores it) and on Kit event-callback signatures whose shape is mandated by the framework.
+- `broad-exception-caught`: the codebase's own "catch broad, translate to a typed error at the boundary" pattern -- bind-retry loops, the bridge server's must-never-break-startup guard, and a couple of example scripts' top-level fallback.
+- `protected-access`: the handful of `_articulation_view`/`_metadata` reads are already commented in the code as "no public accessor exists yet."
+- `too-many-arguments` / `too-many-positional-arguments`: fire on `assemble_robot`-shaped functions (assembling a gripper onto an arm genuinely needs many parameters -- stage, prims, mounts, offset, namespace); the sibling `telekinesis` repo's own `.pylintrc` relaxes these same two checks.
+- `too-many-locals`: the same assemble/orchestration functions, for the same reason.
+- `too-many-public-methods` / `too-many-instance-attributes`: `ArticulationService`/`SingleArticulation` deliberately mirror Isaac Sim's own large `SingleArticulation` API surface; `Extension` deliberately holds one attribute per Kit subscription/callback per Kit's own convention.
+- `too-many-lines`: `routers.py` holds every route for the whole API in one file by design (see the Merge to main section above); splitting it up would fight that design, not fix a real problem.
+
+`ruff check` covers style, unused imports, and import ordering; `ruff format` auto-formats to match (run it after `check` so anything `check` flagged is already fixed first); `pylint` catches a broader set of correctness issues. There's no CI running these yet -- run all three by hand before every PR.
 
 ---
 
-## Manual Release (dry run before enabling CI/CD)
+## Manual Deployment
 
-`.github/workflows/release.yml` automates everything below and fires for real on every push to `main` -- a public GitHub Release, a public GitHub Pages doc site. Run the sequence by hand once first to verify each step actually works before trusting the automation with a real release.
-
+Follow the below steps to release a new version of the extension. 
 ### 1. Verify
 
 Covered by [Merge to main](#merge-to-main) (ruff, pylint), plus:
 
 ```bash
-pytest tests/ -v
 python scripts/generate_openapi.py   # should exit 0 and write public/openapi.json
 ```
 
@@ -89,6 +101,15 @@ python scripts/generate_openapi.py   # should exit 0 and write public/openapi.js
 ```bash
 VERSION=$(python -c "import tomllib; print(tomllib.load(open('exts/telekinesis.isaacsim.bridge/config/extension.toml','rb'))['package']['version'])")
 echo "$VERSION"
+git tag -l "v$VERSION"        # must print nothing -- if it prints a tag, bump the version first
+```
+
+PowerShell (bare `python` may resolve to a different/older interpreter than your active conda env
+-- use the full path to that env's `python.exe` if `tomllib` isn't found):
+
+```powershell
+$VERSION = python -c "import tomllib; print(tomllib.load(open('exts/telekinesis.isaacsim.bridge/config/extension.toml','rb'))['package']['version'])"
+Write-Host "VERSION=$VERSION"
 git tag -l "v$VERSION"        # must print nothing -- if it prints a tag, bump the version first
 ```
 
@@ -102,6 +123,25 @@ unzip -l "telekinesis.isaacsim.bridge-v$VERSION.zip" | grep "telekinesis.isaacsi
 ```
 
 The `grep` should find a match -- confirms the zip contains a real, valid extension, not an empty or broken folder.
+
+PowerShell (`zip`/`unzip` don't exist on Windows -- use `Compress-Archive` and .NET's `ZipFile`
+instead; `Set-Location (git rev-parse --show-toplevel)` first so this works regardless of your
+current directory):
+
+```powershell
+Set-Location (git rev-parse --show-toplevel)
+$PY = "C:\Users\<you>\miniconda3\envs\<your-env>\python.exe"
+$VERSION = & $PY -c "import tomllib; print(tomllib.load(open('exts/telekinesis.isaacsim.bridge/config/extension.toml','rb'))['package']['version'])"
+Write-Host "VERSION=$VERSION"
+Compress-Archive -Path "exts/telekinesis.isaacsim.bridge" -DestinationPath "telekinesis.isaacsim.bridge-v$VERSION.zip" -Force
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path "telekinesis.isaacsim.bridge-v$VERSION.zip"))
+$zip.Entries.FullName | Where-Object { $_ -like "*extension.toml" }
+$zip.Dispose()
+```
+
+The last line should print `telekinesis.isaacsim.bridge\config\extension.toml` (backslashes --
+`Compress-Archive` stores Windows-style paths, unlike `zip`).
 
 ### 4. Tag and push
 
@@ -127,15 +167,20 @@ git push origin develop
 
 ### 7. Publish the API reference
 
+GitHub Pages is set to **Settings ▸ Pages ▸ Source: Deploy from a branch ▸ Branch: `main`,
+folder: `/public`** (one-time setting) -- no GitHub Actions involved. GitHub serves whatever
+is committed under `public/` on `main` directly, so publishing is just: regenerate, commit,
+push.
+
 ```bash
 python scripts/generate_openapi.py
+git add public/openapi.json
+git commit -m "chore: regenerate API reference for v$VERSION"
+git push origin main
 ```
 
-Actually publishing `public/` to GitHub Pages needs a one-time repo setting (**Settings ▸ Pages ▸ Build and deployment ▸ Source: GitHub Actions**) that only takes effect once the `publish-docs` job in `release.yml` runs for real -- there's no clean manual equivalent for this one step. Verify the *contents* locally instead (open `public/index.html` in a browser next to the freshly generated `public/openapi.json`) and defer the actual publish to CI.
-
-### Once every step above has been verified by hand
-
-Push to `main` (or merge a PR into it) and let `release.yml` run steps 2–7 automatically on every future release.
+GitHub picks up the change and republishes within a minute or two of the push -- check
+`https://telekinesis-ai.github.io/telekinesis-isaacsim-extension/` after pushing to confirm.
 
 ---
 

@@ -19,7 +19,7 @@ class GeneralService:
         """Best-effort map of enabled Kit extensions -> version.
 
         Runs inside Isaac Sim, so ``omni.kit.app`` is importable (imported lazily so
-        this module still loads outside Isaac, e.g. in tests). Defensive: the
+        this module still loads outside Isaac). Defensive: the
         manager's summary dict shape varies across Kit releases, so a missing
         ``version`` is recovered from the id (``"<name>-<version>"``) rather than
         raising.

@@ -135,7 +135,8 @@ class SingleArticulation:
                     self._resolve_driven_joints()
                     self._ensure_default_state_populated()
                     carb.log_info(
-                        f"[bridge] bound articulation {self.prim_path}: {self.num_dof} dof {self.dof_names}"
+                        f"[bridge] bound articulation {self.prim_path}: "
+                        f"{self.num_dof} dof {self.dof_names}"
                     )
                     return
             except Exception as exc:
@@ -181,7 +182,8 @@ class SingleArticulation:
                 # leaving a zero-DOF device that crashes some other call later
                 # (e.g. find_driver_joint's dof_names[0] fallback).
                 raise ValueError(
-                    f"cannot narrow the driven joints of articulation at {self.prim_path} to an empty set"
+                    f"cannot narrow the driven joints of articulation at {self.prim_path} "
+                    "to an empty set"
                 )
             missing = [n for n in self.joint_names if n not in all_names]
             if missing:
@@ -220,7 +222,8 @@ class SingleArticulation:
         self._resolve_driven_joints()
         self._target = None
         carb.log_info(
-            f"[bridge] articulation {self.prim_path} drives {self.dof_names} at {self.joint_indices}"
+            f"[bridge] articulation {self.prim_path} drives "
+            f"{self.dof_names} at {self.joint_indices}"
         )
 
     def adopt_shared_articulation(self, articulation, joint_names):
@@ -490,7 +493,8 @@ class SingleArticulation:
         one of this device's driven joints."""
         if joint_name not in self.dof_names:
             raise ValueError(
-                f"'{joint_name}' is not a driven joint of {self.prim_path}; driven: {self.dof_names}"
+                f"'{joint_name}' is not a driven joint of {self.prim_path}; "
+                f"driven: {self.dof_names}"
             )
         return self.dof_names.index(joint_name)
 

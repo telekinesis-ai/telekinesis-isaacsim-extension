@@ -2,21 +2,19 @@
 
 [![Isaac Sim 6.0](https://img.shields.io/badge/Isaac_Sim-6.0-green)](https://docs.isaacsim.omniverse.nvidia.com/6.0.0/installation/download.html) [![Isaac Sim 5.1](https://img.shields.io/badge/Isaac_Sim-5.1-green)](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/download.html) [![Linux platform](https://img.shields.io/badge/platform-linux--64-blue.svg)](https://releases.ubuntu.com/22.04/) [![Windows platform](https://img.shields.io/badge/platform-windows--64-blue.svg)](https://www.microsoft.com/en-us/) [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](https://github.com/telekinesis-ai/telekinesis-isaacsim-extension/blob/main/LICENSE)
 
-Control Isaac Sim robots over HTTP.
-
-Any robot -- arm, mobile base, gripper, or humanoid -- is just an articulation with joint positions. Control logic stays in your client.
+This extension enables smooth communication with NVIDIA Isaac Sim.
 
 Runs at `http://127.0.0.1:8766`. Localhost-only, no authentication, for trusted local clients.
 
-## Install
+## Enable the Extension
 
-You're reading this because the extension is already installed (this file ships inside the package itself) -- enable it under **Window ▸ Extensions** if you haven't.
+Enable the extension under **Window ▸ Extensions** if you haven't.
 
 ## Usage
 
-1. Add a Universal Robots UR10e to the stage from the Isaac Sim asset store (**Create ▸ Isaac ▸ Robots ▸ Universal Robots ▸ UR10e**, or drag it in from the Assets browser).
+1. Add a Universal Robots UR10e to the stage from the Isaac Sim asset store.
 2. Note its prim path in the Stage panel (e.g. `/World/ur10e`).
-3. Press **Play**, then register it and move its joints:
+3. Run:
 
 ```python
 import requests
@@ -29,8 +27,6 @@ requests.post(
     json={"joint_positions": [0.0, -1.57, 0.0, -1.57, 0.0, 0.0]},
 )
 ```
-
-More complete, runnable examples (URDF import, grippers, streaming, async moves) are in [`examples/`](https://github.com/telekinesis-ai/telekinesis-isaacsim-extension/tree/main/examples) in the GitHub repo -- not bundled in this installed package.
 
 ## API Reference
 
