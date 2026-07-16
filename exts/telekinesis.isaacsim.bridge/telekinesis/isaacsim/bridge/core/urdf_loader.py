@@ -46,7 +46,9 @@ async def import_urdf_at(stage, urdf_path, dest_prim_path):
     import_config.fix_base = True
     import_config.distance_scale = 1.0
     import_config.parse_mimic = True  # let single-input grippers' mimic joints follow
-    import_config.make_default_prim = False  # don't hijack the default prim; MovePrim would dangle it
+    import_config.make_default_prim = (
+        False  # don't hijack the default prim; MovePrim would dangle it
+    )
 
     parent = Sdf.Path(dest_prim_path).GetParentPath()
     if parent.pathString not in ("", "/") and not stage.GetPrimAtPath(parent).IsValid():

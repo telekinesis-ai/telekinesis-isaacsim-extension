@@ -11,6 +11,7 @@ reach the submodules without running that import.
 
 Run:  python scripts/generate_openapi.py
 """
+
 import json
 import sys
 import types

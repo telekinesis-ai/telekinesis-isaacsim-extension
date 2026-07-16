@@ -246,10 +246,15 @@ def test_prims(base_url, prim_path):
 
 def main():
     parser = argparse.ArgumentParser(description="Call the implemented bridge extension routes.")
-    parser.add_argument("--base_url", default=DEFAULT_BASE_URL,
-                        help="Base URL of the running bridge")
-    parser.add_argument("--prim", required=True, metavar="PRIM_PATH",
-                        help="Prim path to use for the Prims test (e.g. /World/Cube)")
+    parser.add_argument(
+        "--base_url", default=DEFAULT_BASE_URL, help="Base URL of the running bridge"
+    )
+    parser.add_argument(
+        "--prim",
+        required=True,
+        metavar="PRIM_PATH",
+        help="Prim path to use for the Prims test (e.g. /World/Cube)",
+    )
     args = parser.parse_args()
 
     print(f"bridge: {args.base_url}\n")

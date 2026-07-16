@@ -152,7 +152,7 @@ class Transformation(BaseModel):
     """
 
     translation: list[float] = [0.0, 0.0, 0.0]  # meters (x, y, z)
-    rotation: list[float] = [0.0, 0.0, 0.0]      # XYZ Euler degrees
+    rotation: list[float] = [0.0, 0.0, 0.0]  # XYZ Euler degrees
 
 
 class AssembleRobotRequest(BaseModel):

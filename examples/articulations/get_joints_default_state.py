@@ -7,6 +7,7 @@ a prim and get its articulation_id.
 
 Run:  python get_joints_default_state.py --id articulation1
 """
+
 import argparse
 
 import requests
@@ -25,12 +26,17 @@ def _request(base, method, path, body=None):
 
 def main():
     """Fetch an articulation's stored default (home) joint state."""
-    parser = argparse.ArgumentParser(description="Read an articulation's default (home) joint state.")
+    parser = argparse.ArgumentParser(
+        description="Read an articulation's default (home) joint state."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--id", required=True, dest="articulation_id",
-        help="articulation_id from a prior PUT /articulations (see put_articulation.py)")
+        "--id",
+        required=True,
+        dest="articulation_id",
+        help="articulation_id from a prior PUT /articulations (see put_articulation.py)",
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

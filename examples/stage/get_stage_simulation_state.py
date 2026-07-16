@@ -8,6 +8,7 @@ Run:  python get_stage_simulation_state.py
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import argparse
 
 import requests

@@ -93,31 +93,37 @@ def _request(base, method, path, body=None):
 
 
 def run(
-        base,
-        arm_prim,
-        arm_urdf,
-        gripper_prim,
-        gripper_urdf,
-        arm_mount_link,
-        gripper_mount_link,
-        offset):
+    base, arm_prim, arm_urdf, gripper_prim, gripper_urdf, arm_mount_link, gripper_mount_link, offset
+):
     # 1) Create the arm (urdf_path imports it if arm_prim isn't in the stage).
     arm = _request(base, "PUT", "/articulations", {"prim_path": arm_prim, "urdf_path": arm_urdf})
     arm_id = arm["articulation_id"]
-    print(f"created arm: articulation_id={arm_id} prim_path={arm['prim_path']} dof={arm['num_dof']}")
+    print(
+        f"created arm: articulation_id={arm_id} prim_path={arm['prim_path']} dof={arm['num_dof']}"
+    )
 
     # 2) Create the gripper, then narrow it to its actuated driver joint.
-    gripper = _request(base, "PUT", "/articulations", {"prim_path": gripper_prim, "urdf_path": gripper_urdf})
+    gripper = _request(
+        base, "PUT", "/articulations", {"prim_path": gripper_prim, "urdf_path": gripper_urdf}
+    )
     gripper_id = gripper["articulation_id"]
     driver = _request(base, "GET", f"/articulations/{gripper_id}/driver_joint")
-    _request(base, "PUT", f"/articulations/{gripper_id}/driven_joints", {"joint_names": [driver["name"]]})
-    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{gripper_id}/dof_limits")["limits"][0]
-    print(f"created gripper: articulation_id={gripper_id} prim_path={gripper['prim_path']} driver='{driver['name']}'")
+    _request(
+        base, "PUT", f"/articulations/{gripper_id}/driven_joints", {"joint_names": [driver["name"]]}
+    )
+    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{gripper_id}/dof_limits")[
+        "limits"
+    ][0]
+    print(
+        f"created gripper: articulation_id={gripper_id} prim_path={gripper['prim_path']} driver='{driver['name']}'"
+    )
 
     # 3) Assemble the gripper onto the arm -> one shared articulation. Running this
     #    again for the same pair is a no-op (merged['already_assembled'] is True).
     merged = _request(
-        base, "POST", f"/articulations/{arm_id}/assemble_robot",
+        base,
+        "POST",
+        f"/articulations/{arm_id}/assemble_robot",
         {
             "gripper_articulation_id": gripper_id,
             "arm_mount_link": arm_mount_link,
@@ -125,48 +131,58 @@ def run(
             "offset": offset,
         },
     )
-    print(f"assembled: shared articulation {merged['articulation']} num_dof={merged['num_dof']} "
-          f"(already_assembled={merged['already_assembled']})")
-    print(f"  mounts: arm={merged['arm_mount_link']} gripper={merged['gripper_mount_link']} (resolved)")
+    print(
+        f"assembled: shared articulation {merged['articulation']} num_dof={merged['num_dof']} "
+        f"(already_assembled={merged['already_assembled']})"
+    )
+    print(
+        f"  mounts: arm={merged['arm_mount_link']} gripper={merged['gripper_mount_link']} (resolved)"
+    )
     print(f"  arm drives {merged['robot']['num_dof']} dof: {merged['robot']['dof_names']}")
 
     # 4) Move the arm with the same 6-value payload as a standalone arm.
     print(f"move arm target (deg): {TARGET_DEG}")
     status = _request(
-        base, "POST", f"/articulations/{arm_id}/move_j",
+        base,
+        "POST",
+        f"/articulations/{arm_id}/move_j",
         {"joint_positions": np.deg2rad(TARGET_DEG).tolist()},
     )
-    print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
+    print(
+        f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)"
+    )
 
     # 5) Close then open the gripper on the shared rig.
     for label, fraction in (("close", 1.0), ("open", 0.0)):
         target_rad = opened_rad + fraction * (closed_rad - opened_rad)
         print(f"gripper {label} (fraction={fraction})")
         status = _request(
-            base, "POST", f"/articulations/{gripper_id}/move_j", {"joint_positions": [target_rad]})
-        print(f"  done (reached={status['reached']} joint_positions={status['joint_positions'][0]:.3f} rad)")
+            base, "POST", f"/articulations/{gripper_id}/move_j", {"joint_positions": [target_rad]}
+        )
+        print(
+            f"  done (reached={status['reached']} joint_positions={status['joint_positions'][0]:.3f} rad)"
+        )
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Assemble a gripper onto an arm via the Isaac Sim bridge.")
+        description="Assemble a gripper onto an arm via the Isaac Sim bridge."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--arm-prim",
-        default=ARM_PRIM_PATH,
-        help="prim path to import/bind the arm at")
-    parser.add_argument("--gripper-prim", default=GRIPPER_PRIM_PATH,
-                        help="prim path of the gripper in the stage")
+        "--arm-prim", default=ARM_PRIM_PATH, help="prim path to import/bind the arm at"
+    )
+    parser.add_argument(
+        "--gripper-prim", default=GRIPPER_PRIM_PATH, help="prim path of the gripper in the stage"
+    )
     parser.add_argument("--arm-urdf", default=ARM_URDF_PATH, help="path to the arm URDF to import")
     parser.add_argument(
-        "--gripper-urdf",
-        default=None,
-        help="optional URDF to import the gripper from")
+        "--gripper-urdf", default=None, help="optional URDF to import the gripper from"
+    )
     parser.add_argument(
-        "--arm-mount-link",
-        default=ARM_MOUNT_LINK,
-        help="flange link (or Site) on the arm")
+        "--arm-mount-link", default=ARM_MOUNT_LINK, help="flange link (or Site) on the arm"
+    )
     parser.add_argument(
         "--gripper-mount-link",
         default=GRIPPER_MOUNT_LINK,
@@ -178,9 +194,12 @@ def main():
     print(f"bridge: {base}  articulations: {_request(base, 'GET', '/articulations')}")
     run(
         base,
-        args.arm_prim, args.arm_urdf,
-        args.gripper_prim, args.gripper_urdf,
-        args.arm_mount_link, args.gripper_mount_link,
+        args.arm_prim,
+        args.arm_urdf,
+        args.gripper_prim,
+        args.gripper_urdf,
+        args.arm_mount_link,
+        args.gripper_mount_link,
         ATTACH_OFFSET,
     )
 

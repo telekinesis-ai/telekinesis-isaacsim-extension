@@ -17,6 +17,7 @@ Run:  cd <repo root> && python -m pytest tests/ -v
 (needs the same env the bridge runs in: fastapi, uvicorn, pydantic, websockets --
 see exts/telekinesis.isaacsim.bridge/config/extension.toml)
 """
+
 import sys
 import types
 from pathlib import Path
@@ -41,11 +42,13 @@ from telekinesis.isaacsim.bridge.comm import models  # noqa: E402
 
 # -- GeneralService (no omni import at all) ----------------------------------
 
+
 def test_general_service_status():
     assert GeneralService().status() == {"status": "OK"}
 
 
 # -- pydantic request models --------------------------------------------------
+
 
 def test_joint_positions_request_requires_joint_positions():
     with pytest.raises(Exception):

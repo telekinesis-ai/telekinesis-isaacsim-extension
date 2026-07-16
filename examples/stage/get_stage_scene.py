@@ -8,6 +8,7 @@ Run:  python get_stage_scene.py
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import argparse
 import requests
 
@@ -26,10 +27,13 @@ def _request(base, method, path, body=None):
     useful part -- surface that, not just the HTTP status).
     """
     try:
-        response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+        response = requests.request(
+            method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+        )
     except requests.exceptions.ConnectionError:
         raise SystemExit(
-            f"Could not connect to {base} -- is Isaac Sim running with the bridge extension loaded?")
+            f"Could not connect to {base} -- is Isaac Sim running with the bridge extension loaded?"
+        )
     except requests.exceptions.Timeout:
         raise SystemExit(f"{method} {path} timed out after {DEFAULT_TIMEOUT}s.")
 

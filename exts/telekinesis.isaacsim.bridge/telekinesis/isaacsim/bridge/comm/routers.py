@@ -67,7 +67,9 @@ articulations = APIRouter(tags=["articulations"])
 
 
 @articulations.put("/articulations", summary="Create Articulation")
-async def create_articulation(req: CreateArticulationRequest, articulation_service=Depends(get_articulation_service)):
+async def create_articulation(
+    req: CreateArticulationRequest, articulation_service=Depends(get_articulation_service)
+):
     # Register (and bind) one articulation; returns its id, prim, dof and state.
     return await articulation_service.create_articulation(req.prim_path, req.urdf_path)
 
@@ -78,29 +80,38 @@ async def list_articulations(articulation_service=Depends(get_articulation_servi
 
 
 @articulations.get("/articulations/{articulation_id}", summary="Get Articulation")
-async def get_articulation(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+async def get_articulation(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Id + static description (prim, dof, names, current state). 404 if unknown.
     return articulation_service.get_articulation(articulation_id)
 
 
 @articulations.delete("/articulations/{articulation_id}", summary="Delete Articulation")
-async def delete_articulation(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+async def delete_articulation(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Unregister the articulation (the USD prim is left in the stage).
     return articulation_service.delete_articulation(articulation_id)
 
 
 @articulations.post("/articulations/{articulation_id}/move_j", summary="Move Joint Positions")
 async def move_j(
-    articulation_id: str, req: JointPositionsRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: JointPositionsRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     # Drive the joints (radians). Blocks until reached/stalled unless asynchronous.
     return await articulation_service.move_j(
-        articulation_id, req.joint_positions, req.indices, req.asynchronous)
+        articulation_id, req.joint_positions, req.indices, req.asynchronous
+    )
 
 
 @articulations.post("/articulations/{articulation_id}/set_j", summary="Set Joint Positions")
 async def set_j(
-    articulation_id: str, req: SetJointPositionsRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: SetJointPositionsRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     # Teleport the joints directly to the targets (radians); immediate, no blocking.
     return await articulation_service.set_j(articulation_id, req.joint_positions, req.indices)
@@ -143,47 +154,68 @@ async def stream_joint_positions(websocket: WebSocket, articulation_id: str):
         pass
 
 
-@articulations.post("/articulations/{articulation_id}/joint_velocities", summary="Set Joint Velocities")
+@articulations.post(
+    "/articulations/{articulation_id}/joint_velocities", summary="Set Joint Velocities"
+)
 async def set_joint_velocities(
-    articulation_id: str, req: JointVelocitiesRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: JointVelocitiesRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     # Drive the joints at a velocity (rad/s). Fire-and-forget; holds until the next call.
     return articulation_service.set_joint_velocities(
-        articulation_id, req.joint_velocities, req.indices)
+        articulation_id, req.joint_velocities, req.indices
+    )
 
 
 @articulations.get("/articulations/{articulation_id}/joints_state", summary="Get Joints State")
-async def get_joints_state(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+async def get_joints_state(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Current positions / velocities / torques of the driven joints.
     return articulation_service.get_joints_state(articulation_id)
 
 
 @articulations.get("/articulations/{articulation_id}/dof_limits", summary="Get Dof Limits")
-async def get_dof_limits(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+async def get_dof_limits(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # [lower, upper] radian limits per driven joint (in joints_state joint_positions order).
     return articulation_service.get_dof_limits(articulation_id)
 
 
 @articulations.get("/articulations/{articulation_id}/driver_joint", summary="Get Driver Joint")
-async def get_driver_joint(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+async def get_driver_joint(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Discover a gripper's actuated driver joint (name + DOF index) via USD schema.
     return articulation_service.get_driver_joint(articulation_id)
 
 
 @articulations.put("/articulations/{articulation_id}/driven_joints", summary="Set Driven Joints")
 async def set_driven_joints(
-    articulation_id: str, req: SetDrivenJointsRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: SetDrivenJointsRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     # Narrow which joints this device drives (e.g. a gripper to its driver joint).
     return articulation_service.set_driven_joints(articulation_id, req.joint_names)
 
 
 @articulations.post("/articulations/{articulation_id}/assemble_robot", summary="Assemble Robot")
-async def assemble_robot(articulation_id: str, req: AssembleRobotRequest, articulation_service=Depends(get_articulation_service)):
+async def assemble_robot(
+    articulation_id: str,
+    req: AssembleRobotRequest,
+    articulation_service=Depends(get_articulation_service),
+):
     # Assemble a gripper onto this arm; both devices then share one articulation.
     # A no-op if this arm and gripper are already assembled.
     return await articulation_service.assemble_robot(
-        articulation_id, req.gripper_articulation_id, req.arm_mount_link, req.gripper_mount_link, req.offset
+        articulation_id,
+        req.gripper_articulation_id,
+        req.arm_mount_link,
+        req.gripper_mount_link,
+        req.offset,
     )
 
 
@@ -194,25 +226,35 @@ async def assemble_robot(articulation_id: str, req: AssembleRobotRequest, articu
 # (gravity, world/linear/angular velocity), and PhysX solver tuning.
 
 
-@articulations.get("/articulations/{articulation_id}/handles_initialized", summary="Get Handles Initialized")
-async def get_handles_initialized(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+@articulations.get(
+    "/articulations/{articulation_id}/handles_initialized", summary="Get Handles Initialized"
+)
+async def get_handles_initialized(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Whether the device's handle is currently valid, without a re-bind.
     return articulation_service.get_handles_initialized(articulation_id)
 
 
 @articulations.get("/articulations/{articulation_id}/num_bodies", summary="Get Num Bodies")
-async def get_num_bodies(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+async def get_num_bodies(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Number of rigid-body links in the underlying articulation.
     return articulation_service.get_num_bodies(articulation_id)
 
 
 @articulations.get("/articulations/{articulation_id}/dof_properties", summary="Get Dof Properties")
-async def get_dof_properties(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+async def get_dof_properties(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Per-driven-joint drive properties (limits, drive mode, stiffness, damping).
     return articulation_service.get_dof_properties(articulation_id)
 
 
-@articulations.get("/articulations/{articulation_id}/dof_index/{joint_name}", summary="Get Dof Index")
+@articulations.get(
+    "/articulations/{articulation_id}/dof_index/{joint_name}", summary="Get Dof Index"
+)
 async def get_dof_index(
     articulation_id: str, joint_name: str, articulation_service=Depends(get_articulation_service)
 ):
@@ -220,154 +262,247 @@ async def get_dof_index(
     return articulation_service.get_dof_index(articulation_id, joint_name)
 
 
-@articulations.get("/articulations/{articulation_id}/applied_joint_efforts", summary="Get Applied Joint Efforts")
-async def get_applied_joint_efforts(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+@articulations.get(
+    "/articulations/{articulation_id}/applied_joint_efforts", summary="Get Applied Joint Efforts"
+)
+async def get_applied_joint_efforts(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Efforts last commanded via set_joint_efforts (what was asked for, not measured).
     return articulation_service.get_applied_joint_efforts(articulation_id)
 
 
-@articulations.get("/articulations/{articulation_id}/measured_joint_forces", summary="Get Measured Joint Forces")
-async def get_measured_joint_forces(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+@articulations.get(
+    "/articulations/{articulation_id}/measured_joint_forces", summary="Get Measured Joint Forces"
+)
+async def get_measured_joint_forces(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Measured 6-axis joint reaction force/torque per driven joint.
     return articulation_service.get_measured_joint_forces(articulation_id)
 
 
-@articulations.get("/articulations/{articulation_id}/joints_default_state", summary="Get Joints Default State")
-async def get_joints_default_state(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+@articulations.get(
+    "/articulations/{articulation_id}/joints_default_state", summary="Get Joints Default State"
+)
+async def get_joints_default_state(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Stored joint-space home pose for the driven joints.
     return articulation_service.get_joints_default_state(articulation_id)
 
 
-@articulations.put("/articulations/{articulation_id}/joints_default_state", summary="Set Joints Default State")
+@articulations.put(
+    "/articulations/{articulation_id}/joints_default_state", summary="Set Joints Default State"
+)
 async def set_joints_default_state(
-    articulation_id: str, req: DefaultJointStateRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: DefaultJointStateRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     # Set the driven joints' stored home pose, applied on the next reset.
     return articulation_service.set_joints_default_state(
-        articulation_id, req.joint_positions, req.joint_velocities, req.joint_efforts)
+        articulation_id, req.joint_positions, req.joint_velocities, req.joint_efforts
+    )
 
 
 @articulations.get("/articulations/{articulation_id}/applied_action", summary="Get Applied Action")
-async def get_applied_action(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+async def get_applied_action(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Last ArticulationAction PhysX actually received for the whole articulation.
     return articulation_service.get_applied_action(articulation_id)
 
 
 @articulations.post("/articulations/{articulation_id}/joint_efforts", summary="Set Joint Efforts")
 async def set_joint_efforts(
-    articulation_id: str, req: JointEffortsRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: JointEffortsRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     # Command raw torque/force directly on the chosen joints; bypasses the drive.
     return articulation_service.set_joint_efforts(articulation_id, req.joint_efforts, req.indices)
 
 
 @articulations.post("/articulations/{articulation_id}/enable_gravity", summary="Enable Gravity")
-async def enable_gravity(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+async def enable_gravity(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Gravity affects the whole articulation (body-level, not per-joint).
     return articulation_service.enable_gravity(articulation_id)
 
 
 @articulations.post("/articulations/{articulation_id}/disable_gravity", summary="Disable Gravity")
-async def disable_gravity(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+async def disable_gravity(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Gravity no longer affects the whole articulation (body-level, not per-joint).
     return articulation_service.disable_gravity(articulation_id)
 
 
 @articulations.get("/articulations/{articulation_id}/world_velocity", summary="Get World Velocity")
-async def get_world_velocity(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+async def get_world_velocity(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Root link's full 6-DOF world-space velocity (meaningful only for a floating base).
     return articulation_service.get_world_velocity(articulation_id)
 
 
 @articulations.put("/articulations/{articulation_id}/world_velocity", summary="Set World Velocity")
 async def set_world_velocity(
-    articulation_id: str, req: SetWorldVelocityRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: SetWorldVelocityRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     return articulation_service.set_world_velocity(articulation_id, req.velocity)
 
 
-@articulations.get("/articulations/{articulation_id}/linear_velocity", summary="Get Linear Velocity")
-async def get_linear_velocity(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+@articulations.get(
+    "/articulations/{articulation_id}/linear_velocity", summary="Get Linear Velocity"
+)
+async def get_linear_velocity(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Root link's linear (translational) velocity.
     return articulation_service.get_linear_velocity(articulation_id)
 
 
-@articulations.put("/articulations/{articulation_id}/linear_velocity", summary="Set Linear Velocity")
+@articulations.put(
+    "/articulations/{articulation_id}/linear_velocity", summary="Set Linear Velocity"
+)
 async def set_linear_velocity(
-    articulation_id: str, req: SetVelocityRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: SetVelocityRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     return articulation_service.set_linear_velocity(articulation_id, req.velocity)
 
 
-@articulations.get("/articulations/{articulation_id}/angular_velocity", summary="Get Angular Velocity")
-async def get_angular_velocity(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+@articulations.get(
+    "/articulations/{articulation_id}/angular_velocity", summary="Get Angular Velocity"
+)
+async def get_angular_velocity(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     # Root link's angular (rotational) velocity.
     return articulation_service.get_angular_velocity(articulation_id)
 
 
-@articulations.put("/articulations/{articulation_id}/angular_velocity", summary="Set Angular Velocity")
+@articulations.put(
+    "/articulations/{articulation_id}/angular_velocity", summary="Set Angular Velocity"
+)
 async def set_angular_velocity(
-    articulation_id: str, req: SetVelocityRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: SetVelocityRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     return articulation_service.set_angular_velocity(articulation_id, req.velocity)
 
 
-@articulations.get("/articulations/{articulation_id}/solver/position_iteration_count", summary="Get Solver Position Iteration Count")
-async def get_solver_position_iteration_count(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+@articulations.get(
+    "/articulations/{articulation_id}/solver/position_iteration_count",
+    summary="Get Solver Position Iteration Count",
+)
+async def get_solver_position_iteration_count(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     return articulation_service.get_solver_position_iteration_count(articulation_id)
 
 
-@articulations.put("/articulations/{articulation_id}/solver/position_iteration_count", summary="Set Solver Position Iteration Count")
+@articulations.put(
+    "/articulations/{articulation_id}/solver/position_iteration_count",
+    summary="Set Solver Position Iteration Count",
+)
 async def set_solver_position_iteration_count(
-    articulation_id: str, req: SolverIterationCountRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: SolverIterationCountRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     return articulation_service.set_solver_position_iteration_count(articulation_id, req.count)
 
 
-@articulations.get("/articulations/{articulation_id}/solver/velocity_iteration_count", summary="Get Solver Velocity Iteration Count")
-async def get_solver_velocity_iteration_count(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+@articulations.get(
+    "/articulations/{articulation_id}/solver/velocity_iteration_count",
+    summary="Get Solver Velocity Iteration Count",
+)
+async def get_solver_velocity_iteration_count(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     return articulation_service.get_solver_velocity_iteration_count(articulation_id)
 
 
-@articulations.put("/articulations/{articulation_id}/solver/velocity_iteration_count", summary="Set Solver Velocity Iteration Count")
+@articulations.put(
+    "/articulations/{articulation_id}/solver/velocity_iteration_count",
+    summary="Set Solver Velocity Iteration Count",
+)
 async def set_solver_velocity_iteration_count(
-    articulation_id: str, req: SolverIterationCountRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: SolverIterationCountRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     return articulation_service.set_solver_velocity_iteration_count(articulation_id, req.count)
 
 
-@articulations.get("/articulations/{articulation_id}/solver/stabilization_threshold", summary="Get Stabilization Threshold")
-async def get_stabilization_threshold(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+@articulations.get(
+    "/articulations/{articulation_id}/solver/stabilization_threshold",
+    summary="Get Stabilization Threshold",
+)
+async def get_stabilization_threshold(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     return articulation_service.get_stabilization_threshold(articulation_id)
 
 
-@articulations.put("/articulations/{articulation_id}/solver/stabilization_threshold", summary="Set Stabilization Threshold")
+@articulations.put(
+    "/articulations/{articulation_id}/solver/stabilization_threshold",
+    summary="Set Stabilization Threshold",
+)
 async def set_stabilization_threshold(
-    articulation_id: str, req: SolverThresholdRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: SolverThresholdRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     return articulation_service.set_stabilization_threshold(articulation_id, req.threshold)
 
 
-@articulations.get("/articulations/{articulation_id}/enabled_self_collisions", summary="Get Enabled Self Collisions")
-async def get_enabled_self_collisions(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+@articulations.get(
+    "/articulations/{articulation_id}/enabled_self_collisions",
+    summary="Get Enabled Self Collisions",
+)
+async def get_enabled_self_collisions(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     return articulation_service.get_enabled_self_collisions(articulation_id)
 
 
-@articulations.put("/articulations/{articulation_id}/enabled_self_collisions", summary="Set Enabled Self Collisions")
+@articulations.put(
+    "/articulations/{articulation_id}/enabled_self_collisions",
+    summary="Set Enabled Self Collisions",
+)
 async def set_enabled_self_collisions(
-    articulation_id: str, req: SetEnabledRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: SetEnabledRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     return articulation_service.set_enabled_self_collisions(articulation_id, req.enabled)
 
 
-@articulations.get("/articulations/{articulation_id}/solver/sleep_threshold", summary="Get Sleep Threshold")
-async def get_sleep_threshold(articulation_id: str, articulation_service=Depends(get_articulation_service)):
+@articulations.get(
+    "/articulations/{articulation_id}/solver/sleep_threshold", summary="Get Sleep Threshold"
+)
+async def get_sleep_threshold(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
     return articulation_service.get_sleep_threshold(articulation_id)
 
 
-@articulations.put("/articulations/{articulation_id}/solver/sleep_threshold", summary="Set Sleep Threshold")
+@articulations.put(
+    "/articulations/{articulation_id}/solver/sleep_threshold", summary="Set Sleep Threshold"
+)
 async def set_sleep_threshold(
-    articulation_id: str, req: SolverThresholdRequest, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    req: SolverThresholdRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     return articulation_service.set_sleep_threshold(articulation_id, req.threshold)
 
@@ -484,7 +619,9 @@ async def get_relative_pose(
 
 
 @prims.post("/poses/relative", summary="Apply Relative Pose")
-async def apply_relative_pose(req: ApplyRelativePoseRequest, prim_service=Depends(get_prim_service)):
+async def apply_relative_pose(
+    req: ApplyRelativePoseRequest, prim_service=Depends(get_prim_service)
+):
     """Pre/post-multiply a prim's world pose by a relative ``WSPose``."""
     prim_service.apply_relative_pose(req.prim_path, req.relative_pose.pose, req.object_first)
 
@@ -800,8 +937,15 @@ async def sweep_collisions():
 
 ALL_ROUTERS = (
     articulations,
-    general, stage, prims,
-    nucleus, manipulators, periphery,
-    trajectories, teaching, trajectory_planner,
-    overlays, physics,
+    general,
+    stage,
+    prims,
+    nucleus,
+    manipulators,
+    periphery,
+    trajectories,
+    teaching,
+    trajectory_planner,
+    overlays,
+    physics,
 )

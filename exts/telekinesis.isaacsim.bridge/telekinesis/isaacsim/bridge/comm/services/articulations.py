@@ -40,10 +40,10 @@ class ArticulationService:
     """
 
     def __init__(self):
-        self._devices = {}      # articulation_id -> SingleArticulation
-        self._id_by_prim = {}   # requested prim_path -> articulation_id (stable on re-create)
-        self._count = 0         # for ids like articulation1, articulation2
-        self._assemblies = {}   # arm_id -> {gripper_id, arm_mount_link, gripper_mount_link}
+        self._devices = {}  # articulation_id -> SingleArticulation
+        self._id_by_prim = {}  # requested prim_path -> articulation_id (stable on re-create)
+        self._count = 0  # for ids like articulation1, articulation2
+        self._assemblies = {}  # arm_id -> {gripper_id, arm_mount_link, gripper_mount_link}
         self._create_locks = {}  # prim_path -> asyncio.Lock, serializes concurrent creates of the same prim
         self._assembly_locks = {}  # arm_id -> asyncio.Lock, serializes concurrent assembles of the same arm
 
@@ -97,8 +97,10 @@ class ArticulationService:
                 # be bound (semantic/runtime failure, not a bad input value).
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
             return {
-                "articulation_id": articulation_id, "prim_path": resolved,
-                "prim_source": prim_source, **device.info(),
+                "articulation_id": articulation_id,
+                "prim_path": resolved,
+                "prim_source": prim_source,
+                **device.info(),
             }
 
     def get_articulation(self, articulation_id):
@@ -136,7 +138,9 @@ class ArticulationService:
 
     def list_articulations(self):
         """Return a ``{articulation_id: prim_path}`` map of every registered articulation."""
-        return {articulation_id: device.prim_path for articulation_id, device in self._devices.items()}
+        return {
+            articulation_id: device.prim_path for articulation_id, device in self._devices.items()
+        }
 
     # -- driving + introspection ------------------------------------------------
 
@@ -238,7 +242,9 @@ class ArticulationService:
         """Stored joint-space home pose for the driven joints."""
         return self.get_device(articulation_id).get_joints_default_state()
 
-    def set_joints_default_state(self, articulation_id, joint_positions, joint_velocities, joint_efforts):
+    def set_joints_default_state(
+        self, articulation_id, joint_positions, joint_velocities, joint_efforts
+    ):
         """Set the driven joints' stored home pose (applied on the next reset)."""
         device = self.get_device(articulation_id)
         try:
@@ -429,9 +435,14 @@ class ArticulationService:
 
             existing = self._assemblies.get(arm_id)
             if existing is not None and existing["gripper_id"] == gripper_id:
-                carb.log_info(f"[bridge] {arm_id} + {gripper_id} already assembled; skipping re-assembly.")
+                carb.log_info(
+                    f"[bridge] {arm_id} + {gripper_id} already assembled; skipping re-assembly."
+                )
                 return self._assembly_info(
-                    arm_id, gripper_id, existing["arm_mount_link"], existing["gripper_mount_link"],
+                    arm_id,
+                    gripper_id,
+                    existing["arm_mount_link"],
+                    existing["gripper_mount_link"],
                     already_assembled=True,
                 )
 
@@ -444,7 +455,9 @@ class ArticulationService:
                 gripper_driven = list(gripper.dof_names)
             else:
                 try:
-                    gripper_driven = [find_driver_joint(stage, gripper.prim_path, gripper.dof_names)]
+                    gripper_driven = [
+                        find_driver_joint(stage, gripper.prim_path, gripper.dof_names)
+                    ]
                 except ValueError as exc:
                     raise HTTPException(status_code=400, detail=str(exc)) from exc
             if gripper_mount_link is None:
@@ -472,9 +485,12 @@ class ArticulationService:
                 "gripper_mount_link": gripper_mount_link,  # resolved (auto-discovered if omitted)
             }
             return self._assembly_info(
-                arm_id, gripper_id, arm_mount_link, gripper_mount_link, already_assembled=False)
+                arm_id, gripper_id, arm_mount_link, gripper_mount_link, already_assembled=False
+            )
 
-    def _assembly_info(self, arm_id, gripper_id, arm_mount_link, gripper_mount_link, already_assembled):
+    def _assembly_info(
+        self, arm_id, gripper_id, arm_mount_link, gripper_mount_link, already_assembled
+    ):
         """Build the merged-rig response from the two devices' shared handle.
 
         Used both right after an assembly and for a repeat (no-op) call, so the wire

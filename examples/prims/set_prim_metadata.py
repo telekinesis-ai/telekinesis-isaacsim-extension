@@ -8,6 +8,7 @@ Run:  python set_prim_metadata.py --prim /World/Cube --category fixture --type t
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import argparse
 
 import requests
@@ -20,7 +21,11 @@ DEFAULT_TIMEOUT = 30.0
 def _request(base, method, path, params=None, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
     response = requests.request(
-        method, base.rstrip("/") + path, params=params, json=body, timeout=DEFAULT_TIMEOUT,
+        method,
+        base.rstrip("/") + path,
+        params=params,
+        json=body,
+        timeout=DEFAULT_TIMEOUT,
     )
     response.raise_for_status()
     return response.json() if response.content else None
@@ -37,9 +42,15 @@ def main():
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    _request(base, "PUT", "/prims/metadata", body={
-        "prim_path": args.prim, "metadata": {"category": args.category, "type": args.type_},
-    })
+    _request(
+        base,
+        "PUT",
+        "/prims/metadata",
+        body={
+            "prim_path": args.prim,
+            "metadata": {"category": args.category, "type": args.type_},
+        },
+    )
     print(f"metadata set on {args.prim}: category={args.category} type={args.type_}")
 
 

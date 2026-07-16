@@ -38,13 +38,14 @@ ROBOT_PRIM_PATH = "/World/ur10e"
 # Path to the robot's URDF to import. Left blank on purpose -- set it to the URDF
 # you want to load (an absolute path or a path the bridge process can read).
 try:
-    robot_description = telekinesis_urdfs.load("UniversalRobotsUR10e")
+    robot_name = "UniversalRobotsUR10e"
+    robot_description = telekinesis_urdfs.load(robot_name)
     if not robot_description.urdf_path.is_file():
         raise ValueError(f"No urdf found, i.e. {robot_description.urdf_path} is not a file")
 
 except Exception as e:
     raise RuntimeError(
-        f"Failed to load robot description for '{__class__.__name__}'. "
+        f"Failed to load robot description for '{robot_name}'. "
         "Ensure telekinesis-urdfs is installed: "
         "https://github.com/telekinesis-ai/telekinesis-urdfs"
     ) from e
@@ -70,7 +71,9 @@ def run_robot(base, prim_path, urdf_path):
     # urdf_path tells the bridge to import the robot if prim_path isn't in the stage.
     info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": urdf_path})
     articulation_id = info["articulation_id"]
-    print(f"loaded + created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
+    print(
+        f"loaded + created robot: articulation_id={articulation_id} prim_path={info['prim_path']}"
+    )
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
 
     print(f"move target (deg): {TARGET_DEG}")
@@ -80,7 +83,9 @@ def run_robot(base, prim_path, urdf_path):
         f"/articulations/{articulation_id}/move_j",
         {"joint_positions": np.deg2rad(TARGET_DEG).tolist()},
     )
-    print(f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
+    print(
+        f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)"
+    )
 
 
 def main():

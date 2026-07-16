@@ -44,9 +44,9 @@ from .robot_assembler import get_articulation_base_link_name
 # either settled at a steady-state offset, or blocked by a grasped object). The
 # consecutive-frame requirement keeps the stall test from firing before the drive
 # has accelerated the joints. The frame cap is a ~30 s backstop at 60 fps.
-_REACH_TOLERANCE_RAD = 5e-3       # ~0.3 deg: target reached cleanly
-_SETTLED_VELOCITY_RAD_S = 5e-3    # joints no longer moving
-_SETTLED_FRAMES = 5               # consecutive low-velocity frames => stalled
+_REACH_TOLERANCE_RAD = 5e-3  # ~0.3 deg: target reached cleanly
+_SETTLED_VELOCITY_RAD_S = 5e-3  # joints no longer moving
+_SETTLED_FRAMES = 5  # consecutive low-velocity frames => stalled
 _BIND_RETRIES = 60
 _MOTION_MAX_FRAMES = 1800
 
@@ -125,13 +125,18 @@ class SingleArticulation:
             try:
                 if self._articulation is None:
                     self._articulation = prims.SingleArticulation(
-                        prim_path=self.prim_path, name=self._name)
+                        prim_path=self.prim_path, name=self._name
+                    )
                 self._articulation.initialize()
-                if self._articulation.num_dof and self._articulation.get_joint_positions() is not None:
+                if (
+                    self._articulation.num_dof
+                    and self._articulation.get_joint_positions() is not None
+                ):
                     self._resolve_driven_joints()
                     self._ensure_default_state_populated()
                     carb.log_info(
-                        f"[bridge] bound articulation {self.prim_path}: {self.num_dof} dof {self.dof_names}")
+                        f"[bridge] bound articulation {self.prim_path}: {self.num_dof} dof {self.dof_names}"
+                    )
                     return
             except Exception as exc:
                 last_exc = exc
@@ -199,7 +204,9 @@ class SingleArticulation:
         total = len(self._articulation.dof_names)
         bad = [i for i in idx if i < 0 or i >= total]
         if bad:
-            raise ValueError(f"index/indices {bad} out of range for articulation with {total} DOF(s)")
+            raise ValueError(
+                f"index/indices {bad} out of range for articulation with {total} DOF(s)"
+            )
 
     def set_driven_joints(self, joint_names):
         """Narrow (or widen) the set of joints this device drives, by name.
@@ -213,7 +220,8 @@ class SingleArticulation:
         self._resolve_driven_joints()
         self._target = None
         carb.log_info(
-            f"[bridge] articulation {self.prim_path} drives {self.dof_names} at {self.joint_indices}")
+            f"[bridge] articulation {self.prim_path} drives {self.dof_names} at {self.joint_indices}"
+        )
 
     def adopt_shared_articulation(self, articulation, joint_names):
         """Re-point this device at a shared (assembled) articulation.
@@ -247,7 +255,10 @@ class SingleArticulation:
         subset. Used to describe the merged articulation after ``assemble_robot``,
         again so the caller never reaches into ``self._articulation`` directly.
         """
-        return {"num_dof": self._articulation.num_dof, "dof_names": list(self._articulation.dof_names)}
+        return {
+            "num_dof": self._articulation.num_dof,
+            "dof_names": list(self._articulation.dof_names),
+        }
 
     async def move_j(self, positions, indices=None, asynchronous=False):
         """Move ``positions`` (radians) onto the chosen joint ``indices`` via the drive.
@@ -293,10 +304,9 @@ class SingleArticulation:
                     reached = True
                     break
                 velocities = self._articulation.get_joint_velocities()
-                max_speed = float(
-                    np.max(
-                        np.abs(
-                            velocities[idx]))) if velocities is not None else 0.0
+                max_speed = (
+                    float(np.max(np.abs(velocities[idx]))) if velocities is not None else 0.0
+                )
                 stalled_frames = stalled_frames + 1 if max_speed < _SETTLED_VELOCITY_RAD_S else 0
                 if stalled_frames >= _SETTLED_FRAMES:
                     break
@@ -332,7 +342,8 @@ class SingleArticulation:
         async with self._move_lock:
             self._articulation.set_joint_positions(target, joint_indices=idx)
             self._articulation.set_joint_velocities(
-                np.zeros(len(idx), dtype=float), joint_indices=idx)
+                np.zeros(len(idx), dtype=float), joint_indices=idx
+            )
             self._articulation.apply_action(
                 ArticulationAction(joint_positions=target, joint_indices=idx)
             )
@@ -340,8 +351,10 @@ class SingleArticulation:
             q = self._articulation.get_joint_positions()[idx]
 
         return {
-            "done": True, "teleported": True,
-            "joint_positions": q.tolist(), "target": target.tolist(),
+            "done": True,
+            "teleported": True,
+            "joint_positions": q.tolist(),
+            "target": target.tolist(),
         }
 
     def stream_joint_positions(self, positions, indices=None):
@@ -405,10 +418,14 @@ class SingleArticulation:
         return {
             "joint_positions": positions[self.joint_indices].tolist(),
             "joint_velocities": (
-                velocities[self.joint_indices].tolist() if velocities is not None else [0.0] * self.num_dof
+                velocities[self.joint_indices].tolist()
+                if velocities is not None
+                else [0.0] * self.num_dof
             ),
             "joint_efforts": (
-                efforts[self.joint_indices].tolist() if efforts is not None else [0.0] * self.num_dof
+                efforts[self.joint_indices].tolist()
+                if efforts is not None
+                else [0.0] * self.num_dof
             ),
             "timestamp": time.monotonic() - self._start_time,
         }
@@ -462,8 +479,8 @@ class SingleArticulation:
 
     def num_bodies(self):
         """Number of rigid-body links in the underlying articulation (the whole
-        rig, not just this device's driven subset -- gravity/velocity are body-
-       -level properties with no notion of a driven subset)."""
+         rig, not just this device's driven subset -- gravity/velocity are body-
+        -level properties with no notion of a driven subset)."""
         return self._articulation.num_bodies
 
     def dof_index(self, joint_name):
@@ -537,7 +554,9 @@ class SingleArticulation:
             "joint_velocities": np.asarray(state.velocities)[self.joint_indices].tolist(),
         }
 
-    def set_joints_default_state(self, joint_positions=None, joint_velocities=None, joint_efforts=None):
+    def set_joints_default_state(
+        self, joint_positions=None, joint_velocities=None, joint_efforts=None
+    ):
         """Set the driven joints' stored home pose, applied on the next
         ``post_reset()`` / Stop+Play. Any field left ``None`` is not touched.
 
@@ -554,15 +573,23 @@ class SingleArticulation:
                 return None
             target = np.asarray(values, dtype=float)
             if target.shape != (len(self.joint_indices),):
-                raise ValueError(f"expected {len(self.joint_indices)} values, got {target.shape[0]}")
-            full = np.array(current_values, dtype=float) if current_values is not None else np.zeros(num_all)
+                raise ValueError(
+                    f"expected {len(self.joint_indices)} values, got {target.shape[0]}"
+                )
+            full = (
+                np.array(current_values, dtype=float)
+                if current_values is not None
+                else np.zeros(num_all)
+            )
             full[self.joint_indices] = target
             return full
 
         positions = _merged(joint_positions, current.positions if current is not None else None)
         velocities = _merged(joint_velocities, current.velocities if current is not None else None)
         efforts = _merged(joint_efforts, None)  # Isaac never reports a stored default effort back
-        self._articulation.set_joints_default_state(positions=positions, velocities=velocities, efforts=efforts)
+        self._articulation.set_joints_default_state(
+            positions=positions, velocities=velocities, efforts=efforts
+        )
 
     def get_applied_action(self):
         """Last ``ArticulationAction`` PhysX actually received for the WHOLE
@@ -574,9 +601,15 @@ class SingleArticulation:
         if action is None:
             return {"joint_positions": None, "joint_velocities": None, "joint_efforts": None}
         return {
-            "joint_positions": list(action.joint_positions) if action.joint_positions is not None else None,
-            "joint_velocities": list(action.joint_velocities) if action.joint_velocities is not None else None,
-            "joint_efforts": list(action.joint_efforts) if action.joint_efforts is not None else None,
+            "joint_positions": list(action.joint_positions)
+            if action.joint_positions is not None
+            else None,
+            "joint_velocities": list(action.joint_velocities)
+            if action.joint_velocities is not None
+            else None,
+            "joint_efforts": list(action.joint_efforts)
+            if action.joint_efforts is not None
+            else None,
         }
 
     def set_joint_efforts(self, efforts, indices=None):

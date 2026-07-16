@@ -11,6 +11,7 @@ Run:  python set_joint_efforts.py --id articulation1
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import argparse
 import time
 
@@ -31,12 +32,17 @@ def _request(base, method, path, body=None):
 
 def main():
     """Command a small effort on every driven joint, then zero it, by id."""
-    parser = argparse.ArgumentParser(description="Drive an articulation's joints with a target effort.")
+    parser = argparse.ArgumentParser(
+        description="Drive an articulation's joints with a target effort."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--id", required=True, dest="articulation_id",
-        help="articulation_id from a prior PUT /articulations (see put_articulation.py)")
+        "--id",
+        required=True,
+        dest="articulation_id",
+        help="articulation_id from a prior PUT /articulations (see put_articulation.py)",
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
@@ -47,7 +53,9 @@ def main():
     efforts = [TARGET_EFFORT] * num_dof
     print(f"joint efforts: {efforts}")
     response = _request(
-        base, "POST", f"/articulations/{args.articulation_id}/joint_efforts",
+        base,
+        "POST",
+        f"/articulations/{args.articulation_id}/joint_efforts",
         {"joint_efforts": efforts},
     )
     print(f"response: {response}")
@@ -57,7 +65,9 @@ def main():
 
     print("zeroing effort")
     response = _request(
-        base, "POST", f"/articulations/{args.articulation_id}/joint_efforts",
+        base,
+        "POST",
+        f"/articulations/{args.articulation_id}/joint_efforts",
         {"joint_efforts": [0.0] * num_dof},
     )
     print(f"response: {response}")

@@ -39,13 +39,14 @@ GRIPPER_PRIM_PATH = "/World/robotiq"
 # Path to the gripper's URDF to import. Left blank on purpose -- set it to the URDF
 # you want to load (an absolute path or a path the bridge process can read).
 try:
-    robot_description = telekinesis_urdfs.load("Robotiq2F85")
+    gripper_name = "Robotiq2F85"
+    robot_description = telekinesis_urdfs.load(gripper_name)
     if not robot_description.urdf_path.is_file():
         raise ValueError(f"No urdf found, i.e. {robot_description.urdf_path} is not a file")
 
 except Exception as e:
     raise RuntimeError(
-        f"Failed to load robot description for '{__class__.__name__}'. "
+        f"Failed to load robot description for '{gripper_name}'. "
         "Ensure telekinesis-urdfs is installed: "
         "https://github.com/telekinesis-ai/telekinesis-urdfs"
     ) from e
@@ -68,31 +69,45 @@ def run_gripper(base, prim_path, urdf_path):
     # urdf_path tells the bridge to import the gripper if prim_path isn't in the stage.
     info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": urdf_path})
     articulation_id = info["articulation_id"]
-    print(f"loaded + created gripper: articulation_id={articulation_id} prim_path={info['prim_path']}")
+    print(
+        f"loaded + created gripper: articulation_id={articulation_id} prim_path={info['prim_path']}"
+    )
 
     driver = _request(base, "GET", f"/articulations/{articulation_id}/driver_joint")
-    _request(base, "PUT", f"/articulations/{articulation_id}/driven_joints", {"joint_names": [driver["name"]]})
-    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{articulation_id}/dof_limits")["limits"][0]
+    _request(
+        base,
+        "PUT",
+        f"/articulations/{articulation_id}/driven_joints",
+        {"joint_names": [driver["name"]]},
+    )
+    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{articulation_id}/dof_limits")[
+        "limits"
+    ][0]
     print(f"  driver joint='{driver['name']}' open={opened_rad:.3f} closed={closed_rad:.3f} rad")
 
     for label, fraction in (("close", 1.0), ("open", 0.0)):
         target_rad = opened_rad + fraction * (closed_rad - opened_rad)
         print(f"gripper {label} (fraction={fraction})")
         status = _request(
-            base, "POST", f"/articulations/{articulation_id}/move_j", {"joint_positions": [target_rad]}
+            base,
+            "POST",
+            f"/articulations/{articulation_id}/move_j",
+            {"joint_positions": [target_rad]},
         )
-        print(f"  done (reached={status['reached']} joint_positions={status['joint_positions'][0]:.3f} rad)")
+        print(
+            f"  done (reached={status['reached']} joint_positions={status['joint_positions'][0]:.3f} rad)"
+        )
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Load a gripper from URDF via the Isaac Sim bridge.")
+        description="Load a gripper from URDF via the Isaac Sim bridge."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--prim",
-        default=GRIPPER_PRIM_PATH,
-        help="prim path to import the gripper at")
+        "--prim", default=GRIPPER_PRIM_PATH, help="prim path to import the gripper at"
+    )
     parser.add_argument("--urdf", default=URDF_PATH, help="path to the gripper URDF to import")
     args = parser.parse_args()
 

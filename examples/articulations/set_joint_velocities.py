@@ -9,6 +9,7 @@ Run:  python set_joint_velocities.py --id articulation1
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import argparse
 import time
 
@@ -30,12 +31,16 @@ def _request(base, method, path, body=None):
 def main():
     """Drive one articulation's joints at a fixed velocity, then stop, by id."""
     parser = argparse.ArgumentParser(
-        description="Drive an articulation's joints at a target velocity.")
+        description="Drive an articulation's joints at a target velocity."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--id", required=True, dest="articulation_id",
-        help="articulation_id from a prior PUT /articulations (see put_articulation.py)")
+        "--id",
+        required=True,
+        dest="articulation_id",
+        help="articulation_id from a prior PUT /articulations (see put_articulation.py)",
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
@@ -48,7 +53,9 @@ def main():
     velocities = [TARGET_VELOCITY_RAD_S] * num_dof
     print(f"joint velocities (rad/s): {velocities}")
     response = _request(
-        base, "POST", f"/articulations/{args.articulation_id}/joint_velocities",
+        base,
+        "POST",
+        f"/articulations/{args.articulation_id}/joint_velocities",
         {"joint_velocities": velocities},
     )
     print(f"response: {response}")
@@ -59,7 +66,9 @@ def main():
     # Zero velocity stops the joints (they hold the last command otherwise).
     print("stopping (velocities=0)")
     response = _request(
-        base, "POST", f"/articulations/{args.articulation_id}/joint_velocities",
+        base,
+        "POST",
+        f"/articulations/{args.articulation_id}/joint_velocities",
         {"joint_velocities": [0.0] * num_dof},
     )
     print(f"response: {response}")

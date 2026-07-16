@@ -35,6 +35,6 @@ class GeneralService:
             version = ext.get("version")
             if version is None:
                 ext_id = ext.get("id", "")
-                version = ext_id[len(name) + 1:] or None  # strip the "<name>-" prefix
+                version = ext_id[len(name) + 1 :] or None  # strip the "<name>-" prefix
             versions[name] = version
         return versions

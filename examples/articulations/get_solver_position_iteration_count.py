@@ -8,6 +8,7 @@ and get its articulation_id.
 
 Run:  python get_solver_position_iteration_count.py --id articulation1
 """
+
 import argparse
 
 import requests
@@ -26,16 +27,23 @@ def _request(base, method, path, body=None):
 
 def main():
     """Fetch an articulation's solver position-iteration count."""
-    parser = argparse.ArgumentParser(description="Read an articulation's solver position-iteration count.")
+    parser = argparse.ArgumentParser(
+        description="Read an articulation's solver position-iteration count."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--id", required=True, dest="articulation_id",
-        help="articulation_id from a prior PUT /articulations (see put_articulation.py)")
+        "--id",
+        required=True,
+        dest="articulation_id",
+        help="articulation_id from a prior PUT /articulations (see put_articulation.py)",
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    response = _request(base, "GET", f"/articulations/{args.articulation_id}/solver/position_iteration_count")
+    response = _request(
+        base, "GET", f"/articulations/{args.articulation_id}/solver/position_iteration_count"
+    )
     print(f"response: {response}")
 
 

@@ -9,6 +9,7 @@ Run:  python remove_prim_metadata.py --prim /World/Cube
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import argparse
 
 import requests
@@ -21,7 +22,11 @@ DEFAULT_TIMEOUT = 30.0
 def _request(base, method, path, params=None, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
     response = requests.request(
-        method, base.rstrip("/") + path, params=params, json=body, timeout=DEFAULT_TIMEOUT,
+        method,
+        base.rstrip("/") + path,
+        params=params,
+        json=body,
+        timeout=DEFAULT_TIMEOUT,
     )
     response.raise_for_status()
     return response.json() if response.content else None
@@ -38,9 +43,15 @@ def main():
     base = f"http://{args.host}:{args.port}"
 
     # Store something first, so there's metadata to remove.
-    _request(base, "PUT", "/prims/metadata", body={
-        "prim_path": args.prim, "metadata": {"category": "test_category", "type": "test_type"},
-    })
+    _request(
+        base,
+        "PUT",
+        "/prims/metadata",
+        body={
+            "prim_path": args.prim,
+            "metadata": {"category": "test_category", "type": "test_type"},
+        },
+    )
     print(f"metadata set on {args.prim}")
 
     _request(base, "DELETE", "/prims/metadata", params={"prim_path": args.prim})

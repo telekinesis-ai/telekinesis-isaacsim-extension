@@ -62,12 +62,8 @@ def move_j(base, articulation_id, joint_positions, asynchronous):
 
 
 def wait_until_reached(
-        base,
-        articulation_id,
-        target,
-        tolerance_rad=5e-3,
-        timeout_s=30.0,
-        poll_s=0.05):
+    base, articulation_id, target, tolerance_rad=5e-3, timeout_s=30.0, poll_s=0.05
+):
     """Poll joints_state until every joint is within ``tolerance_rad`` of target.
 
     The client-side "done" check for an asynchronous move: the bridge applied the
@@ -76,7 +72,9 @@ def wait_until_reached(
     """
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
-        q = _request(base, "GET", f"/articulations/{articulation_id}/joints_state")["joint_positions"]
+        q = _request(base, "GET", f"/articulations/{articulation_id}/joints_state")[
+            "joint_positions"
+        ]
         max_error = max(abs(a - b) for a, b in zip(q, target))
         if max_error < tolerance_rad:
             return {"reached": True, "max_error": max_error}
@@ -111,19 +109,21 @@ def run(base, prim_path):
     print(f"\n[3] blocking -> {TARGET_C_DEG}")
     target_c = np.deg2rad(TARGET_C_DEG).tolist()
     status = move_j(base, articulation_id, target_c, asynchronous=False)
-    print(f"  server returned done={status['done']} reached={status['reached']} "
-          f"(max_error={status['max_error']:.2e} rad)")
+    print(
+        f"  server returned done={status['done']} reached={status['reached']} "
+        f"(max_error={status['max_error']:.2e} rad)"
+    )
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Async vs blocking robot moves for the Isaac Sim bridge.")
+        description="Async vs blocking robot moves for the Isaac Sim bridge."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--prim",
-        default=ROBOT_PRIM_PATH,
-        help="prim path of the robot in the stage")
+        "--prim", default=ROBOT_PRIM_PATH, help="prim path of the robot in the stage"
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

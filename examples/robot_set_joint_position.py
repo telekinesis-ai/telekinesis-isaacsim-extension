@@ -23,6 +23,7 @@ Run:  python robot_set_joint_position.py
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import time
 import argparse
 import numpy as np
@@ -65,7 +66,8 @@ def run_robot(base, prim_path):
             {"joint_positions": np.deg2rad(target_deg).tolist()},
         )
         print(
-            f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
+            f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)"
+        )
         time.sleep(2)
 
     # Teleport: place the joints directly at the target instead of driving there.
@@ -77,19 +79,21 @@ def run_robot(base, prim_path):
         f"/articulations/{articulation_id}/set_j",
         {"joint_positions": np.deg2rad(TARGET_DEG).tolist()},
     )
-    print(f"  done={status['done']} teleported={status['teleported']} "
-          f"joint_positions={[round(v, 3) for v in status['joint_positions']]}")
+    print(
+        f"  done={status['done']} teleported={status['teleported']} "
+        f"joint_positions={[round(v, 3) for v in status['joint_positions']]}"
+    )
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Robot joint-target example for the Isaac Sim bridge.")
+        description="Robot joint-target example for the Isaac Sim bridge."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--prim",
-        default=ROBOT_PRIM_PATH,
-        help="prim path of the robot in the stage")
+        "--prim", default=ROBOT_PRIM_PATH, help="prim path of the robot in the stage"
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

@@ -30,7 +30,7 @@ from omni.usd import StageEventType
 import carb
 
 from .comm.server import BridgeServer
-from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_DESCRIPTION, EXTENSION_TITLE
+from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_TITLE
 from .ui_builder import UIBuilder
 
 """
@@ -65,7 +65,8 @@ class Extension(omni.ext.IExt):
             width=600,
             height=500,
             visible=False,
-            dockPreference=ui.DockPreference.LEFT_BOTTOM)
+            dockPreference=ui.DockPreference.LEFT_BOTTOM,
+        )
         self._window.set_visibility_changed_fn(self._on_window)
 
         action_registry = omni.kit.actions.core.get_action_registry()
@@ -78,9 +79,9 @@ class Extension(omni.ext.IExt):
         self._menu_items = [
             MenuItemDescription(
                 name=EXTENSION_TITLE,
-                onclick_action=(
-                    ext_id,
-                    f"CreateUIExtension:{EXTENSION_TITLE}"))]
+                onclick_action=(ext_id, f"CreateUIExtension:{EXTENSION_TITLE}"),
+            )
+        ]
 
         add_menu_items(self._menu_items, EXTENSION_TITLE)
 
@@ -107,8 +108,11 @@ class Extension(omni.ext.IExt):
         # subscription is tied to the server (always active while the extension is
         # loaded), not to the UI panel -- the _on_window stage subscription only
         # exists while the window is visible, but the bridge runs regardless.
-        self._bridge_stage_event_sub = self._usd_context.get_stage_event_stream().create_subscription_to_pop(
-            self._on_bridge_stage_event, name="telekinesis bridge device-registry reset")
+        self._bridge_stage_event_sub = (
+            self._usd_context.get_stage_event_stream().create_subscription_to_pop(
+                self._on_bridge_stage_event, name="telekinesis bridge device-registry reset"
+            )
+        )
 
     def on_shutdown(self):
         """Stop the bridge server and release all subscriptions, menu items, and UI resources."""
@@ -178,7 +182,8 @@ class Extension(omni.ext.IExt):
         if event.type == int(omni.timeline.TimelineEventType.PLAY):
             if not self._physx_subscription:
                 self._physx_subscription = self._physxIFace.subscribe_physics_step_events(
-                    self._on_physics_step)
+                    self._on_physics_step
+                )
         elif event.type == int(omni.timeline.TimelineEventType.STOP):
             self._physx_subscription = None
 
