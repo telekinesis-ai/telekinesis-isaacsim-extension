@@ -20,18 +20,23 @@ The bridge is **device-agnostic**: a robot (arm, mobile base, humanoid, ...) and
 
 ### Step 1 - Load the extension in Isaac Sim
 
-This extension isn't published to a registry yet, so it's loaded from source.
-Follow [DEVELOPMENT.md](DEVELOPMENT.md) to point Isaac Sim at this repo's `exts/`
-folder and enable `telekinesis.isaacsim.bridge`.
+You're reading this because the extension is already installed (this file ships inside the
+package itself) -- enable it under **Window ▸ Extensions** if you haven't. Isaac Sim will
+install `fastapi`, `uvicorn`, `pydantic`, and `websockets` automatically on first load via
+`pipapi`.
 
-Isaac Sim will install `fastapi`, `uvicorn`, `pydantic`, and `websockets` automatically on first load via `pipapi`.
+Building from source instead (contributing, or testing an unreleased change)? See
+[DEVELOPMENT.md](https://github.com/telekinesis-ai/telekinesis-isaacsim-extension/blob/main/DEVELOPMENT.md)
+in the GitHub repo -- it isn't bundled in this installed package.
 
 ### Step 2 - Open a stage and start the simulation
 
 In the Isaac Sim GUI:
 
 1. Open a USD stage that contains your robot (e.g. `File > Open`).
-2. Add a robot to the scene from usd or by running python examples/robot_load_from_urdf.py
+2. Add a robot to the scene from USD, or by running the
+   [`robot_load_from_urdf.py`](https://github.com/telekinesis-ai/telekinesis-isaacsim-extension/blob/main/examples/robot_load_from_urdf.py)
+   example (see Examples below -- examples live in the GitHub repo, not in this installed package).
 
 The bridge is ready as soon as the simulation is running. You can verify it:
 
@@ -42,7 +47,10 @@ curl http://127.0.0.1:8766/status
 
 ### Step 3 - Run the robot joint position example
 
-With Isaac Sim playing and a 6-DOF arm in the stage (e.g. a Kuka KR210 at `/World/kuka_kr210`):
+With Isaac Sim playing and a 6-DOF arm in the stage (e.g. a Kuka KR210 at `/World/kuka_kr210`),
+clone the repo (or just download
+[`robot_set_joint_position.py`](https://github.com/telekinesis-ai/telekinesis-isaacsim-extension/blob/main/examples/robot_set_joint_position.py))
+to get the example script -- it isn't bundled in this installed package:
 
 ```bash
 cd examples
@@ -81,7 +89,10 @@ move target (deg): [-90.0, -90.0, 0.0, 0.0, 90.0, 0.0]
 
 ## Examples
 
-All examples are in the [`examples/`](examples/) directory and only require the `requests` package (plus `numpy` for unit conversion).
+All examples live in the
+[`examples/`](https://github.com/telekinesis-ai/telekinesis-isaacsim-extension/tree/main/examples)
+directory of the GitHub repo (not bundled in this installed package) and only require the
+`requests` package (plus `numpy` for unit conversion).
 
 | File | What it demonstrates |
 |------|----------------------|
@@ -96,88 +107,15 @@ All examples are in the [`examples/`](examples/) directory and only require the 
 
 ---
 
-## API Overview
+## API Reference
 
-All endpoints accept and return JSON. Successful responses use `2xx`; errors use `4xx`/`5xx` with a detail message.
+The full, always-current endpoint list is generated straight from the code:
 
-### Articulations
+- **Bridge running:** open `http://127.0.0.1:8766/docs` (Swagger UI) or `/redoc`.
+- **Browsing without Isaac Sim running:** [API reference](https://telekinesis-ai.github.io/telekinesis-isaacsim-extension/).
 
-The core resource. One articulation maps to a USD prim path and drives a subset of its joints.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `PUT` | `/articulations` | Register (or re-bind) an articulation; optionally imports a URDF |
-| `GET` | `/articulations` | List all registered articulation IDs and their prim paths |
-| `GET` | `/articulations/{id}` | Get info and current state for one articulation |
-| `DELETE` | `/articulations/{id}` | Unregister (USD prim stays in the stage) |
-| `POST` | `/articulations/{id}/move_j` | Move to joint targets (radians); blocks until reached or stalled |
-| `POST` | `/articulations/{id}/set_j` | Teleport directly to joint targets (radians); immediate, no blocking |
-| `WS` | `/articulations/{id}/stream_joint_positions` | Stream teleport targets (radians) over a WebSocket; fire-and-forget, no reply |
-| `POST` | `/articulations/{id}/joint_velocities` | Drive the joints at a velocity (rad/s); fire-and-forget, holds until the next call |
-| `GET` | `/articulations/{id}/joints_state` | Current positions, velocities, and efforts |
-| `GET` | `/articulations/{id}/dof_limits` | Per-joint position limits (radians) |
-| `GET` | `/articulations/{id}/driver_joint` | Discover a gripper's single actuated joint |
-| `PUT` | `/articulations/{id}/driven_joints` | Narrow which joints this articulation drives |
-| `POST` | `/articulations/{id}/assemble_robot` | Attach a gripper articulation to this arm's flange |
-
-#### Joint positions request
-
-```json
-{
-  "joint_positions": [-1.57, -1.57, 0.0, 0.0, 1.57, 0.0],
-  "indices": null,
-  "asynchronous": false
-}
-```
-
-`joint_positions` is in **radians**. `indices` restricts which joints to move (null = all driven joints). When `asynchronous` is false (default), the call blocks until the move completes.
-
-#### Joint positions response (blocking)
-
-```json
-{
-  "done": true,
-  "reached": true,
-  "max_error": 0.002,
-  "joint_positions": [-1.57, -1.57, 0.0, 0.0, 1.57, 0.0],
-  "target": [-1.57, -1.57, 0.0, 0.0, 1.57, 0.0]
-}
-```
-
-`reached=true` means the arm hit the target within 5 mrad. `reached=false` means it stalled (e.g. joint limit or contact). The server times out after ~30 s (1800 physics frames).
-
-### Stage
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/stage/scene` | URI of the open USD stage |
-| `PUT` | `/stage/scene` | Open a USD stage |
-| `GET` | `/stage/motion-groups` | Articulation root prims in the stage |
-| `GET/PUT` | `/stage/units` | Stage meters-per-unit scale |
-| `PATCH` | `/stage/simulation/timeline/{action}` | `play`, `pause`, or `stop` the timeline |
-| `GET` | `/stage/simulation` | Current timeline state |
-
-### Prims
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET/PUT` | `/prims/poses` | Get or set a prim's world pose |
-| `GET/POST` | `/prims/poses/relative` | Get or apply a relative pose between two prims |
-| `GET/PUT/DELETE` | `/prims/poses/default` | List, save, and clear default poses |
-| `POST` | `/prims/poses/default/reset` | Restore a prim to its stored default pose |
-| `PUT/DELETE` | `/prims/metadata` | Store or remove `{category, type}` metadata on a prim |
-| `PATCH` | `/prims/visibility` | Show or hide a prim |
-| `PATCH` | `/prims/physics/joints` | Enable or disable a physics joint |
-| `PATCH` | `/prims/physics/colliders/` | Enable or disable collision on a prim |
-
-**Pose format:** `[x, y, z, rx, ry, rz]` - position in meters, rotation as axis×angle in radians (rotation-vector). Pass `rotation_type=quaternion` to use `[x, y, z, qw, qx, qy, qz]` instead.
-
-### General
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/status` | Liveness check - returns `{"status": "OK"}` |
-| `GET` | `/version` | Installed Kit extension names and versions |
+Wire units throughout: **radians** for joints, **meters** for lengths. Every endpoint accepts
+and returns JSON; successful responses use `2xx`, errors use `4xx`/`5xx` with a `detail` message.
 
 ---
 
@@ -194,4 +132,5 @@ The core resource. One articulation maps to a USD prim path and drives a subset 
 
 Proprietary. Copyright (c) 2024-2026 Telekinesis. All rights reserved.
 Unauthorized copying, distribution, modification, or use is prohibited without
-prior written permission. See [LICENSE](LICENSE).
+prior written permission. See
+[LICENSE](https://github.com/telekinesis-ai/telekinesis-isaacsim-extension/blob/main/LICENSE).

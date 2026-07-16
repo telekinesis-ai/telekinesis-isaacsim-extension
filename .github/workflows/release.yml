@@ -1,0 +1,146 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create tags + releases, push the version bump back to develop
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      released: ${{ steps.tag_check.outputs.exists == 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from extension.toml
+        id: version
+        run: |
+          VERSION=$(python3 -c "
+          import tomllib
+          with open('exts/telekinesis.isaacsim.bridge/config/extension.toml', 'rb') as f:
+              print(tomllib.load(f)['package']['version'])
+          ")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check if this version was already released
+        id: tag_check
+        run: |
+          if git ls-remote --tags origin "refs/tags/v${{ steps.version.outputs.version }}" | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "v${{ steps.version.outputs.version }} already released; nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release zip
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          cd exts
+          zip -r "../telekinesis.isaacsim.bridge-v${{ steps.version.outputs.version }}.zip" telekinesis.isaacsim.bridge
+
+      - name: Sanity-check the zip
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          unzip -l "telekinesis.isaacsim.bridge-v${{ steps.version.outputs.version }}.zip" \
+            | grep -q "telekinesis.isaacsim.bridge/config/extension.toml" \
+            || { echo "::error::zip is missing config/extension.toml"; exit 1; }
+
+      - name: Tag the release commit
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.tag_check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body: See exts/telekinesis.isaacsim.bridge/docs/CHANGELOG.md
+          files: telekinesis.isaacsim.bridge-v${{ steps.version.outputs.version }}.zip
+
+  bump-develop-version:
+    needs: build-and-release
+    if: needs.build-and-release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Bump patch version on develop
+        run: |
+          python3 - <<'EOF'
+          import re
+
+          path = "exts/telekinesis.isaacsim.bridge/config/extension.toml"
+          with open(path) as f:
+              content = f.read()
+
+          match = re.search(r'version = "(\d+)\.(\d+)\.(\d+)"', content)
+          major, minor, patch = match.groups()
+          new_version = f"{major}.{minor}.{int(patch) + 1}"
+          content = content.replace(match.group(0), f'version = "{new_version}"', 1)
+
+          with open(path, "w") as f:
+              f.write(content)
+
+          print(f"Bumped version to {new_version}")
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add exts/telekinesis.isaacsim.bridge/config/extension.toml
+          git commit -m "chore: bump version after release v${{ needs.build-and-release.outputs.version }} [skip ci]"
+          git push origin develop
+
+  publish-docs:
+    # Regenerates the API reference from the real route/model code (see
+    # scripts/generate_openapi.py) and publishes it to GitHub Pages, so the API
+    # reference can never drift the way the old hand-written markdown tables did.
+    needs: build-and-release
+    if: needs.build-and-release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install fastapi pydantic
+
+      - name: Generate OpenAPI schema
+        run: python scripts/generate_openapi.py
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

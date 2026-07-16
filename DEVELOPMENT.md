@@ -199,6 +199,11 @@ correctness issues. Neither is wired into CI yet — run them locally until they
 
 All endpoints accept and return JSON. Successful responses use `2xx`; errors use `4xx`/`5xx` with a detail message.
 
+The full endpoint list is generated from the code, not hand-maintained here -- see
+[README.md#api-reference](README.md#api-reference) for the live (`/docs`, `/redoc`) and static
+(GitHub Pages) references. What follows is this project's own convention for *which* status
+code a given failure gets; it's not derivable from the schema itself.
+
 ### Error Handling
 
 Errors always come back as `{"detail": "..."}` with one of the status codes below. Every failure the bridge anticipates raises `fastapi.HTTPException` with one of these codes (at the point in `comm/services/*.py` where the failure is detected); anything unanticipated falls through to a global handler in `comm/server.py` that still returns this same JSON shape at `500`, instead of a bare-text crash.
@@ -213,83 +218,3 @@ This follows FastAPI's own conventions rather than a separate error-code standar
 | `422` | The request was well-formed but semantically failed -- either FastAPI/pydantic's own automatic validation (missing/wrong-typed field), or an operation that couldn't complete for a deeper reason (a prim that won't bind, a URDF that fails to import) |
 | `500` | The global exception-handler backstop for anything not explicitly translated |
 | `501` | Routes mirrored from the spec but not wired up yet (`not_implemented()`) |
-
-
-### Articulations
-
-The core resource. One articulation maps to a USD prim path and drives a subset of its joints.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `PUT` | `/articulations` | Register (or re-bind) an articulation; optionally imports a URDF |
-| `GET` | `/articulations` | List all registered articulation IDs and their prim paths |
-| `GET` | `/articulations/{id}` | Get info and current state for one articulation |
-| `DELETE` | `/articulations/{id}` | Unregister (USD prim stays in the stage) |
-| `POST` | `/articulations/{id}/move_j` | Move to joint targets (radians); blocks until reached or stalled |
-| `POST` | `/articulations/{id}/set_j` | Teleport directly to joint targets (radians); immediate, no blocking |
-| `WS` | `/articulations/{id}/stream_joint_positions` | Stream teleport targets (radians) over a WebSocket; fire-and-forget, no reply |
-| `POST` | `/articulations/{id}/joint_velocities` | Drive the joints at a velocity (rad/s); fire-and-forget, holds until the next call |
-| `GET` | `/articulations/{id}/joints_state` | Current positions, velocities, and efforts |
-| `GET` | `/articulations/{id}/dof_limits` | Per-joint position limits (radians) |
-| `GET` | `/articulations/{id}/driver_joint` | Discover a gripper's single actuated joint |
-| `PUT` | `/articulations/{id}/driven_joints` | Narrow which joints this articulation drives |
-| `POST` | `/articulations/{id}/assemble_robot` | Attach a gripper articulation to this arm's flange |
-
-#### Joint positions request
-
-```json
-{
-  "joint_positions": [-1.57, -1.57, 0.0, 0.0, 1.57, 0.0],
-  "indices": null,
-  "asynchronous": false
-}
-```
-
-`joint_positions` is in **radians**. `indices` restricts which joints to move (null = all driven joints). When `asynchronous` is false (default), the call blocks until the move completes.
-
-#### Joint positions response (blocking)
-
-```json
-{
-  "done": true,
-  "reached": true,
-  "max_error": 0.002,
-  "joint_positions": [-1.57, -1.57, 0.0, 0.0, 1.57, 0.0],
-  "target": [-1.57, -1.57, 0.0, 0.0, 1.57, 0.0]
-}
-```
-
-`reached=true` means the arm hit the target within 5 mrad. `reached=false` means it stalled (e.g. joint limit or contact). The server times out after ~30 s (1800 physics frames).
-
-### Stage
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/stage/scene` | URI of the open USD stage |
-| `PUT` | `/stage/scene` | Open a USD stage |
-| `GET` | `/stage/motion-groups` | Articulation root prims in the stage |
-| `GET/PUT` | `/stage/units` | Stage meters-per-unit scale |
-| `PATCH` | `/stage/simulation/timeline/{action}` | `play`, `pause`, or `stop` the timeline |
-| `GET` | `/stage/simulation` | Current timeline state |
-
-### Prims
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET/PUT` | `/prims/poses` | Get or set a prim's world pose |
-| `GET/POST` | `/prims/poses/relative` | Get or apply a relative pose between two prims |
-| `GET/PUT/DELETE` | `/prims/poses/default` | List, save, and clear default poses |
-| `POST` | `/prims/poses/default/reset` | Restore a prim to its stored default pose |
-| `PUT/DELETE` | `/prims/metadata` | Store or remove `{category, type}` metadata on a prim |
-| `PATCH` | `/prims/visibility` | Show or hide a prim |
-| `PATCH` | `/prims/physics/joints` | Enable or disable a physics joint |
-| `PATCH` | `/prims/physics/colliders/` | Enable or disable collision on a prim |
-
-**Pose format:** `[x, y, z, rx, ry, rz]` - position in meters, rotation as axis×angle in radians (rotation-vector). Pass `rotation_type=quaternion` to use `[x, y, z, qw, qx, qy, qz]` instead.
-
-### General
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/status` | Liveness check - returns `{"status": "OK"}` |
-| `GET` | `/version` | Installed Kit extension names and versions |
