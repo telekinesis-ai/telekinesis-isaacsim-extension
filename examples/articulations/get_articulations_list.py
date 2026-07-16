@@ -2,12 +2,13 @@
 GET /articulations -> {articulation_id: prim_path, ...}
 
 This only lists articulations the bridge has *registered* (via a prior
-PUT /articulations call) -- it does not scan the stage. 
+PUT /articulations call) -- it does not scan the stage.
 
 Run `python put_articulations.py` to register a prim path as an articulation.
 
 Run:  python get_articulations_list.py
 """
+
 import argparse
 import requests
 

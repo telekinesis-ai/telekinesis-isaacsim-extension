@@ -43,7 +43,9 @@ def _wspose_to_matrix(pose):
     from pxr import Gf
 
     if len(pose) != 6:
-        raise HTTPException(status_code=400, detail=f"expected 6 pose values (x,y,z,rx,ry,rz), got {len(pose)}")
+        raise HTTPException(
+            status_code=400, detail=f"expected 6 pose values (x,y,z,rx,ry,rz), got {len(pose)}"
+        )
     x, y, z, rx, ry, rz = pose
     angle = math.sqrt(rx * rx + ry * ry + rz * rz)
     if angle:
@@ -82,7 +84,9 @@ def _set_world_matrix(prim, world_matrix):
 
     parent = prim.GetParent()
     if parent and parent.IsValid() and parent.IsA(UsdGeom.Xformable):
-        parent_world = UsdGeom.Xformable(parent).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+        parent_world = UsdGeom.Xformable(parent).ComputeLocalToWorldTransform(
+            Usd.TimeCode.Default()
+        )
         local_matrix = world_matrix * parent_world.GetInverse()
     else:
         local_matrix = world_matrix
@@ -155,7 +159,9 @@ class PrimService:
     def assign_default_pose(self, prim_path):
         """Record the prim's current local pose as its default (for later reset)."""
         prim = self._prim_or_404(prim_path)
-        prim.SetCustomDataByKey(_DEFAULT_POSE_KEY, _matrix_to_pose(_local_matrix(prim), "cartesian")["pose"])
+        prim.SetCustomDataByKey(
+            _DEFAULT_POSE_KEY, _matrix_to_pose(_local_matrix(prim), "cartesian")["pose"]
+        )
 
     def clear_default_poses(self):
         """Forget every stored default pose."""
@@ -199,7 +205,9 @@ class PrimService:
 
         prim = self._prim_or_404(prim_path)
         if not prim.IsA(UsdPhysics.Joint):
-            raise HTTPException(status_code=400, detail=f"prim '{prim_path}' is not a physics joint")
+            raise HTTPException(
+                status_code=400, detail=f"prim '{prim_path}' is not a physics joint"
+            )
         UsdPhysics.Joint(prim).CreateJointEnabledAttr(enable)
 
     def update_colliders(self, prim_path, enable):

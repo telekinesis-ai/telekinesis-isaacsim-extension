@@ -208,6 +208,11 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# public/openapi.json is intentionally NOT ignored: GitHub Pages is set to serve
+# from main's public/ folder directly, so this file has to be committed for the
+# published API reference to update. Regenerate it with scripts/generate_openapi.py
+# before committing -- never hand-edit it.
+
 # PyPI configuration file
 .pypirc
 

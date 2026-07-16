@@ -9,6 +9,7 @@ Run:  python open_stage_scene.py --uri omniverse://localhost/Users/test/scene.us
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import argparse
 
 import requests

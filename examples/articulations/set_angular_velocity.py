@@ -8,6 +8,7 @@ put_articulation.py first to register a prim and get its articulation_id.
 
 Run:  python set_angular_velocity.py --id articulation1
 """
+
 import argparse
 
 import requests
@@ -26,18 +27,27 @@ def _request(base, method, path, body=None):
 
 def main():
     """Set an articulation's root-link angular velocity."""
-    parser = argparse.ArgumentParser(description="Set an articulation's root-link angular velocity.")
+    parser = argparse.ArgumentParser(
+        description="Set an articulation's root-link angular velocity."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--id", required=True, dest="articulation_id",
+        "--id",
+        required=True,
+        dest="articulation_id",
         help="articulation_id from a prior PUT /articulations (see put_articulation.py); "
-             "meaningful only on a floating-base articulation")
+        "meaningful only on a floating-base articulation",
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
     response = _request(
-        base, "PUT", f"/articulations/{args.articulation_id}/angular_velocity", {"velocity": [0.0, 0.0, 0.1]})
+        base,
+        "PUT",
+        f"/articulations/{args.articulation_id}/angular_velocity",
+        {"velocity": [0.0, 0.0, 0.1]},
+    )
     print(f"response: {response}")
 
 

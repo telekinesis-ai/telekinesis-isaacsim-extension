@@ -66,12 +66,15 @@ async def stream_trajectory(ws_url, positions_rad):
 
 
 def main():
+    """Parse CLI args and run the example."""
     parser = argparse.ArgumentParser(
-        description="Stream a joint trajectory over the bridge WebSocket.")
+        description="Stream a joint trajectory over the bridge WebSocket."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--prim", default=ROBOT_PRIM_PATH,
-                        help="prim path of the robot in the stage")
+    parser.add_argument(
+        "--prim", default=ROBOT_PRIM_PATH, help="prim path of the robot in the stage"
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

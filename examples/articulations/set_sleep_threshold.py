@@ -7,6 +7,7 @@ register a prim and get its articulation_id.
 
 Run:  python set_sleep_threshold.py --id articulation1
 """
+
 import argparse
 
 import requests
@@ -29,13 +30,20 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--id", required=True, dest="articulation_id",
-        help="articulation_id from a prior PUT /articulations (see put_articulation.py)")
+        "--id",
+        required=True,
+        dest="articulation_id",
+        help="articulation_id from a prior PUT /articulations (see put_articulation.py)",
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
     response = _request(
-        base, "PUT", f"/articulations/{args.articulation_id}/solver/sleep_threshold", {"threshold": 0.01})
+        base,
+        "PUT",
+        f"/articulations/{args.articulation_id}/solver/sleep_threshold",
+        {"threshold": 0.01},
+    )
     print(f"response: {response}")
 
 

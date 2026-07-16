@@ -8,6 +8,7 @@ Run:  python get_stage_scene.py
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import argparse
 import requests
 
@@ -26,21 +27,24 @@ def _request(base, method, path, body=None):
     useful part -- surface that, not just the HTTP status).
     """
     try:
-        response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
-    except requests.exceptions.ConnectionError:
+        response = requests.request(
+            method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+        )
+    except requests.exceptions.ConnectionError as exc:
         raise SystemExit(
-            f"Could not connect to {base} -- is Isaac Sim running with the bridge extension loaded?")
-    except requests.exceptions.Timeout:
-        raise SystemExit(f"{method} {path} timed out after {DEFAULT_TIMEOUT}s.")
+            f"Could not connect to {base} -- is Isaac Sim running with the bridge extension loaded?"
+        ) from exc
+    except requests.exceptions.Timeout as exc:
+        raise SystemExit(f"{method} {path} timed out after {DEFAULT_TIMEOUT}s.") from exc
 
     try:
         response.raise_for_status()
-    except requests.exceptions.HTTPError:
+    except requests.exceptions.HTTPError as exc:
         try:
             detail = response.json().get("detail", response.text)
         except ValueError:
             detail = response.text
-        raise SystemExit(f"{method} {path} failed ({response.status_code}): {detail}")
+        raise SystemExit(f"{method} {path} failed ({response.status_code}): {detail}") from exc
 
     return response.json() if response.content else None
 

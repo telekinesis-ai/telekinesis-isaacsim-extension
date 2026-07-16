@@ -13,7 +13,8 @@ Flow (all over HTTP):
   2. for each target: POST /articulations/{id}/move_j {joint_positions}  (radians)
      -> blocks until the move reaches the target or stalls; returns {done, reached, ...}
   3. POST /articulations/{id}/set_j {joint_positions}  (radians)
-     -> teleports the joints directly to the target; returns {done, teleported, joint_positions, ...}
+     -> teleports the joints directly to the target;
+        returns {done, teleported, joint_positions, ...}
 
 The bridge runs each move to completion server-side (it steps physics on Isaac's
 own loop), so the POST blocks until done -- no client-side polling.
@@ -23,6 +24,7 @@ Run:  python robot_set_joint_position.py
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import time
 import argparse
 import numpy as np
@@ -51,6 +53,7 @@ def _request(base, method, path, body=None):
 
 
 def run_robot(base, prim_path):
+    """Register the robot, drive it through the target sequence, then teleport it."""
     info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": None})
     articulation_id = info["articulation_id"]
     print(f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
@@ -65,7 +68,9 @@ def run_robot(base, prim_path):
             {"joint_positions": np.deg2rad(target_deg).tolist()},
         )
         print(
-            f"  done={status['done']} reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
+            f"  done={status['done']} reached={status['reached']} "
+            f"(max_error={status['max_error']:.2e} rad)"
+        )
         time.sleep(2)
 
     # Teleport: place the joints directly at the target instead of driving there.
@@ -77,19 +82,22 @@ def run_robot(base, prim_path):
         f"/articulations/{articulation_id}/set_j",
         {"joint_positions": np.deg2rad(TARGET_DEG).tolist()},
     )
-    print(f"  done={status['done']} teleported={status['teleported']} "
-          f"joint_positions={[round(v, 3) for v in status['joint_positions']]}")
+    print(
+        f"  done={status['done']} teleported={status['teleported']} "
+        f"joint_positions={[round(v, 3) for v in status['joint_positions']]}"
+    )
 
 
 def main():
+    """Parse CLI args and run the example."""
     parser = argparse.ArgumentParser(
-        description="Robot joint-target example for the Isaac Sim bridge.")
+        description="Robot joint-target example for the Isaac Sim bridge."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--prim",
-        default=ROBOT_PRIM_PATH,
-        help="prim path of the robot in the stage")
+        "--prim", default=ROBOT_PRIM_PATH, help="prim path of the robot in the stage"
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

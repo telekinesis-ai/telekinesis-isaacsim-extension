@@ -7,6 +7,7 @@ Run `python put_articulations.py` to register a prim path as an articulation.
 
 Run:  python get_articulation.py --id articulation1
 """
+
 import argparse
 import requests
 
@@ -37,8 +38,11 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--id", required=True, dest="articulation_id",
-        help="articulation_id from a prior PUT /articulations (see put_articulation.py)")
+        "--id",
+        required=True,
+        dest="articulation_id",
+        help="articulation_id from a prior PUT /articulations (see put_articulation.py)",
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

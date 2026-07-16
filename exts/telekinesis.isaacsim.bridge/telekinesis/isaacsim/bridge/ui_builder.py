@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.  # pylint: disable=line-too-long
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,9 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""The extension's toolbar panel: a minimal status display, built and torn down by
+Extension (see .extension.py) as the panel is shown/hidden."""
 
 import omni.timeline
-import omni.ui as ui
+from omni import ui
 from isaacsim.gui.components.element_wrappers import CollapsableFrame
 from isaacsim.gui.components.ui_utils import get_style
 
@@ -40,19 +42,15 @@ class UIBuilder:
 
     def on_menu_callback(self):
         """Callback for when the UI is opened from the toolbar."""
-        pass
 
     def on_timeline_event(self, event):
         """Callback for Timeline events (Play, Pause, Stop)."""
-        pass
 
     def on_physics_step(self, step: float):
         """Callback for Physics Step. Physics steps only occur when the timeline is playing."""
-        pass
 
     def on_stage_event(self, event):
         """Callback for Stage Events (Open, Close)."""
-        pass
 
     def cleanup(self):
         """Called when the stage is closed or the extension is hot reloaded."""

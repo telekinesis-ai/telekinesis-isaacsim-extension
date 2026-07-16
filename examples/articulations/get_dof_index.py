@@ -8,6 +8,7 @@ articulation_id, then pick one of its dof_names (see get_articulation.py).
 
 Run:  python get_dof_index.py --id articulation1 --joint-name shoulder_pan_joint
 """
+
 import argparse
 
 import requests
@@ -30,13 +31,18 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--id", required=True, dest="articulation_id",
-        help="articulation_id from a prior PUT /articulations (see put_articulation.py)")
+        "--id",
+        required=True,
+        dest="articulation_id",
+        help="articulation_id from a prior PUT /articulations (see put_articulation.py)",
+    )
     parser.add_argument("--joint-name", required=True, help="one of the articulation's dof_names")
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    response = _request(base, "GET", f"/articulations/{args.articulation_id}/dof_index/{args.joint_name}")
+    response = _request(
+        base, "GET", f"/articulations/{args.articulation_id}/dof_index/{args.joint_name}"
+    )
     print(f"response: {response}")
 
 

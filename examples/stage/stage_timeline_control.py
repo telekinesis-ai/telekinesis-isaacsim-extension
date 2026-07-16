@@ -9,6 +9,7 @@ Run:  python stage_timeline_control.py
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import argparse
 
 import requests
@@ -28,7 +29,8 @@ def _request(base, method, path, body=None):
 def main():
     """Drive the simulation timeline through play, pause, and stop."""
     parser = argparse.ArgumentParser(
-        description="Drive the simulation timeline: play / pause / stop.")
+        description="Drive the simulation timeline: play / pause / stop."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     args = parser.parse_args()

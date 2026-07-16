@@ -8,6 +8,7 @@ Run:  python list_stage_motion_groups.py
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import argparse
 
 import requests

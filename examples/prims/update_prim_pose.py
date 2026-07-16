@@ -10,6 +10,7 @@ Run:  python update_prim_pose.py --prim /World/Cube
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import argparse
 
 import requests
@@ -22,7 +23,11 @@ DEFAULT_TIMEOUT = 30.0
 def _request(base, method, path, params=None, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
     response = requests.request(
-        method, base.rstrip("/") + path, params=params, json=body, timeout=DEFAULT_TIMEOUT,
+        method,
+        base.rstrip("/") + path,
+        params=params,
+        json=body,
+        timeout=DEFAULT_TIMEOUT,
     )
     response.raise_for_status()
     return response.json() if response.content else None
@@ -46,7 +51,9 @@ def main():
     nudged_pose = list(original_pose)
     nudged_pose[0] += 0.01
     _request(
-        base, "PUT", "/prims/poses",
+        base,
+        "PUT",
+        "/prims/poses",
         body={"prim_path": args.prim, "input_pose": {"pose": nudged_pose}},
     )
     print(f"pose (after +1cm X): {_request(base, 'GET', '/prims/poses', params=params)}")

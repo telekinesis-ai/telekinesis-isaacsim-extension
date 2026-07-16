@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# pylint: disable=line-too-long
 """
 References(importing routes)
 - https://github.com/fastapi/full-stack-fastapi-template/blob/master/backend/app/api/main.py
@@ -44,6 +45,7 @@ Wire units (shared mental model with the Synapse client)
 Native Isaac units: radians for joints, meters for lengths. Gripper ``fraction``
 is closed-ness: 0.0 = fully open, 1.0 = fully closed.
 """
+# pylint: enable=line-too-long
 
 import asyncio
 
@@ -77,7 +79,9 @@ class BridgeServer:
 
     def start(self):
         """Schedule uvicorn's serve loop on Isaac Sim's asyncio loop (main thread)."""
-        config = uvicorn.Config(self._app, host=self._host, port=self._port, lifespan="off", log_level="warning")
+        config = uvicorn.Config(
+            self._app, host=self._host, port=self._port, lifespan="off", log_level="warning"
+        )
         self._server = uvicorn.Server(config)
         # We run inside Isaac's loop on the main thread; let Isaac keep its signal
         # handling, and don't let uvicorn hijack Ctrl+C.
@@ -120,7 +124,9 @@ class BridgeServer:
             # Backstop for anything a service didn't translate into an HTTPException:
             # guarantees the client always gets JSON with a "detail", never Starlette's
             # bare-text 500, which the client's own error-detail printing can't parse.
-            carb.log_error(f"[bridge] unhandled error on {request.method} {request.url.path}: {exc!r}")
+            carb.log_error(
+                f"[bridge] unhandled error on {request.method} {request.url.path}: {exc!r}"
+            )
             return responses.JSONResponse(status_code=500, content={"detail": str(exc)})
 
         # One shared instance of each service for the app's lifetime. The routers

@@ -8,6 +8,7 @@ Run:  python get_version.py
 
 Requires the ``requests`` package (``pip install requests``).
 """
+
 import argparse
 
 import requests

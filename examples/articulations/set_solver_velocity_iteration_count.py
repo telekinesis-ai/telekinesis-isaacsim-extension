@@ -7,6 +7,7 @@ register a prim and get its articulation_id.
 
 Run:  python set_solver_velocity_iteration_count.py --id articulation1
 """
+
 import argparse
 
 import requests
@@ -25,17 +26,26 @@ def _request(base, method, path, body=None):
 
 def main():
     """Set an articulation's solver velocity-iteration count."""
-    parser = argparse.ArgumentParser(description="Set an articulation's solver velocity-iteration count.")
+    parser = argparse.ArgumentParser(
+        description="Set an articulation's solver velocity-iteration count."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--id", required=True, dest="articulation_id",
-        help="articulation_id from a prior PUT /articulations (see put_articulation.py)")
+        "--id",
+        required=True,
+        dest="articulation_id",
+        help="articulation_id from a prior PUT /articulations (see put_articulation.py)",
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
     response = _request(
-        base, "PUT", f"/articulations/{args.articulation_id}/solver/velocity_iteration_count", {"count": 64})
+        base,
+        "PUT",
+        f"/articulations/{args.articulation_id}/solver/velocity_iteration_count",
+        {"count": 64},
+    )
     print(f"response: {response}")
 
 

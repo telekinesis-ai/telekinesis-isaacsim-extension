@@ -162,7 +162,10 @@ async def bind_shared_articulation(prim_path, name):
             articulation = SingleArticulation(prim_path=prim_path, name=name)
             articulation.initialize()
             if articulation.num_dof and articulation.get_joint_positions() is not None:
-                carb.log_info(f"[bridge] bound shared articulation {prim_path}: {articulation.num_dof} dof {list(articulation.dof_names)}")
+                carb.log_info(
+                    f"[bridge] bound shared articulation {prim_path}: "
+                    f"{articulation.num_dof} dof {list(articulation.dof_names)}"
+                )
                 return articulation
         except Exception:
             pass
