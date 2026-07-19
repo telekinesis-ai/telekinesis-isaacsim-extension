@@ -33,3 +33,8 @@ def get_prim_service(request: Request):
 def get_general_service(request: Request):
     """The shared :class:`..services.general.GeneralService`."""
     return request.app.state.general_service
+
+
+def get_camera_service(request: Request):
+    """The shared :class:`..services.cameras.CameraService`."""
+    return request.app.state.camera_service

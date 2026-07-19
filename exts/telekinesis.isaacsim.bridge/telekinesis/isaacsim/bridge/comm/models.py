@@ -270,3 +270,96 @@ class UpdateCollidersRequest(BaseModel):
 
     enable: bool
     prim_path: str
+
+
+# -- Cameras (device registry, analogous to articulations) ------------------
+
+
+class CreateCameraRequest(BaseModel):
+    """Body of PUT /cameras -- register (and bind) one camera.
+
+    ``resolution`` is ``[width, height]`` in pixels. ``data_types`` is the set of
+    render outputs to produce (default ``["rgb"]``); each must be a supported
+    camera data type. ``frequency`` (Hz) is optional; ``None`` follows the render
+    loop.
+    """
+
+    prim_path: str = Field(min_length=1)
+    resolution: list[int] = [1280, 720]
+    data_types: list[str] | None = None
+    frequency: float | None = None
+
+
+class CaptureRequest(BaseModel):
+    """Body of POST /cameras/{id}/capture -- pump one frame and read outputs.
+
+    ``data_types`` selects which of the camera's bound outputs to return; ``None``
+    returns them all.
+    """
+
+    data_types: list[str] | None = None
+
+
+class CameraWorldPoseRequest(BaseModel):
+    """Body of PUT /cameras/{id}/world_pose.
+
+    ``position`` is ``[x, y, z]`` (stage units), ``orientation`` a scalar-first
+    ``[w, x, y, z]`` quaternion; either may be null to leave it untouched.
+    ``camera_axes`` is one of ``world``/``ros``/``usd``.
+    """
+
+    position: list[float] | None = None
+    orientation: list[float] | None = None
+    camera_axes: str = "world"
+
+
+class CameraLocalPoseRequest(BaseModel):
+    """Body of PUT /cameras/{id}/local_pose -- parent-relative pose.
+
+    Like :class:`CameraWorldPoseRequest` but with ``translation`` in place of
+    ``position``.
+    """
+
+    translation: list[float] | None = None
+    orientation: list[float] | None = None
+    camera_axes: str = "world"
+
+
+class CameraResolutionRequest(BaseModel):
+    """Body of PUT /cameras/{id}/resolution -- ``[width, height]`` in pixels."""
+
+    width: int
+    height: int
+
+
+class CameraFloatValueRequest(BaseModel):
+    """Body of the single-float camera setters (focal length, focus distance,
+    lens aperture/fStop, frequency)."""
+
+    value: float
+
+
+class CameraApertureRequest(BaseModel):
+    """Body of PUT .../horizontal_aperture or .../vertical_aperture (stage units).
+
+    ``maintain_square_pixels`` keeps the paired aperture in sync so pixels stay
+    square.
+    """
+
+    value: float
+    maintain_square_pixels: bool = True
+
+
+class CameraClippingRangeRequest(BaseModel):
+    """Body of PUT /cameras/{id}/clipping_range (stage units). Either field null
+    leaves that bound unchanged."""
+
+    near_distance: float | None = None
+    far_distance: float | None = None
+
+
+class CameraStringValueRequest(BaseModel):
+    """Body of the string-valued camera setters (projection mode, stereo role,
+    lens distortion model)."""
+
+    value: str

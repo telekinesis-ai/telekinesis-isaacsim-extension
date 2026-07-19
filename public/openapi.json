@@ -1760,6 +1760,1846 @@
         }
       }
     },
+    "/cameras": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "List Cameras",
+        "description": "Every registered camera id mapped to its prim path.",
+        "operationId": "list_cameras_cameras_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Create Camera",
+        "description": "Register (and bind) one camera; returns its id, prim, resolution and optics.",
+        "operationId": "create_camera_cameras_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCameraRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Camera",
+        "description": "Id + static description (prim, resolution, optics). 404 if unknown.",
+        "operationId": "get_camera_cameras__camera_id__get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Delete Camera",
+        "description": "Unregister the camera (the USD prim is left in the stage).",
+        "operationId": "delete_camera_cameras__camera_id__delete",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/capture": {
+      "post": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Capture Frame",
+        "description": "Pump one frame and return the requested outputs (all bound types if omitted).",
+        "operationId": "capture_cameras__camera_id__capture_post",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaptureRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/rgb": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Rgb",
+        "description": "Latest RGB image (H, W, 3), or null if not ready.",
+        "operationId": "get_rgb_cameras__camera_id__rgb_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/rgba": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Rgba",
+        "description": "Latest RGBA image (H, W, 4), or null.",
+        "operationId": "get_rgba_cameras__camera_id__rgba_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/depth": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Depth",
+        "description": "Latest depth image (H, W), or null.",
+        "operationId": "get_depth_cameras__camera_id__depth_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/pointcloud": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Pointcloud",
+        "description": "Latest pointcloud (N, 3) in world (default) or camera frame.",
+        "operationId": "get_pointcloud_cameras__camera_id__pointcloud_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          },
+          {
+            "name": "world_frame",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "World Frame"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/world_pose": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get World Pose",
+        "description": "World-frame pose {position, orientation}. camera_axes: world/ros/usd.",
+        "operationId": "get_camera_world_pose_cameras__camera_id__world_pose_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          },
+          {
+            "name": "camera_axes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "world",
+              "title": "Camera Axes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set World Pose",
+        "description": "Set the world-frame pose; returns the resulting pose.",
+        "operationId": "set_camera_world_pose_cameras__camera_id__world_pose_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraWorldPoseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/local_pose": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Local Pose",
+        "description": "Local-frame (parent-relative) pose {translation, orientation}.",
+        "operationId": "get_camera_local_pose_cameras__camera_id__local_pose_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          },
+          {
+            "name": "camera_axes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "world",
+              "title": "Camera Axes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set Local Pose",
+        "description": "Set the local-frame pose; returns the resulting pose.",
+        "operationId": "set_camera_local_pose_cameras__camera_id__local_pose_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraLocalPoseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/resolution": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Resolution",
+        "description": "Current [width, height] in pixels.",
+        "operationId": "get_camera_resolution_cameras__camera_id__resolution_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set Resolution",
+        "description": "Set [width, height] in pixels; returns the resulting resolution.",
+        "operationId": "set_camera_resolution_cameras__camera_id__resolution_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraResolutionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/focal_length": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Focal Length",
+        "description": "Focal length (stage units).",
+        "operationId": "get_focal_length_cameras__camera_id__focal_length_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set Focal Length",
+        "description": "Set the focal length (stage units).",
+        "operationId": "set_focal_length_cameras__camera_id__focal_length_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraFloatValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/focus_distance": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Focus Distance",
+        "description": "Distance from camera to focus plane (stage units).",
+        "operationId": "get_focus_distance_cameras__camera_id__focus_distance_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set Focus Distance",
+        "description": "Set the focus distance (stage units).",
+        "operationId": "set_focus_distance_cameras__camera_id__focus_distance_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraFloatValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/lens_aperture": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Lens Aperture",
+        "description": "fStop value (0 disables depth-of-field).",
+        "operationId": "get_lens_aperture_cameras__camera_id__lens_aperture_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set Lens Aperture",
+        "description": "Set the fStop value.",
+        "operationId": "set_lens_aperture_cameras__camera_id__lens_aperture_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraFloatValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/horizontal_aperture": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Horizontal Aperture",
+        "description": "Horizontal aperture / sensor width (stage units).",
+        "operationId": "get_horizontal_aperture_cameras__camera_id__horizontal_aperture_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set Horizontal Aperture",
+        "description": "Set the horizontal aperture (stage units).",
+        "operationId": "set_horizontal_aperture_cameras__camera_id__horizontal_aperture_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraApertureRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/vertical_aperture": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Vertical Aperture",
+        "description": "Vertical aperture / sensor height (stage units).",
+        "operationId": "get_vertical_aperture_cameras__camera_id__vertical_aperture_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set Vertical Aperture",
+        "description": "Set the vertical aperture (stage units).",
+        "operationId": "set_vertical_aperture_cameras__camera_id__vertical_aperture_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraApertureRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/clipping_range": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Clipping Range",
+        "description": "[near, far] clipping distances (stage units).",
+        "operationId": "get_clipping_range_cameras__camera_id__clipping_range_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set Clipping Range",
+        "description": "Set near/far clipping distances; either may be null to leave unchanged.",
+        "operationId": "set_clipping_range_cameras__camera_id__clipping_range_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraClippingRangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/frequency": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Frequency",
+        "description": "Current acquisition frequency (Hz).",
+        "operationId": "get_camera_frequency_cameras__camera_id__frequency_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set Frequency",
+        "description": "Set the acquisition frequency (Hz). Must divide the rendering frequency.",
+        "operationId": "set_camera_frequency_cameras__camera_id__frequency_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraFloatValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/projection_mode": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Projection Mode",
+        "description": "perspective or orthographic.",
+        "operationId": "get_projection_mode_cameras__camera_id__projection_mode_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set Projection Mode",
+        "description": "Set the projection mode (perspective/orthographic).",
+        "operationId": "set_projection_mode_cameras__camera_id__projection_mode_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraStringValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/stereo_role": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Stereo Role",
+        "description": "mono, left or right.",
+        "operationId": "get_stereo_role_cameras__camera_id__stereo_role_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set Stereo Role",
+        "description": "Set the stereo role (mono/left/right).",
+        "operationId": "set_stereo_role_cameras__camera_id__stereo_role_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraStringValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/lens_distortion_model": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Lens Distortion Model",
+        "description": "Lens distortion model name (pinhole if unset).",
+        "operationId": "get_lens_distortion_model_cameras__camera_id__lens_distortion_model_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Set Lens Distortion Model",
+        "description": "Set the lens distortion model (applies the matching schema).",
+        "operationId": "set_lens_distortion_model_cameras__camera_id__lens_distortion_model_put",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraStringValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/intrinsics_matrix": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Intrinsics Matrix",
+        "description": "3x3 intrinsics matrix (pinhole models only).",
+        "operationId": "get_intrinsics_matrix_cameras__camera_id__intrinsics_matrix_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/fov": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Fov",
+        "description": "Horizontal and vertical field of view.",
+        "operationId": "get_fov_cameras__camera_id__fov_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/render_product_path": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Render Product Path",
+        "description": "Path to the render product attached to this camera.",
+        "operationId": "get_render_product_path_cameras__camera_id__render_product_path_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/supported_annotators": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Supported Annotators",
+        "description": "Annotator names that can be attached to this camera.",
+        "operationId": "get_supported_annotators_cameras__camera_id__supported_annotators_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/pause": {
+      "post": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Pause Camera",
+        "description": "Pause data collection / frame updates.",
+        "operationId": "pause_camera_cameras__camera_id__pause_post",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/resume": {
+      "post": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Resume Camera",
+        "description": "Resume data collection / frame updates.",
+        "operationId": "resume_camera_cameras__camera_id__resume_post",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/{camera_id}/is_paused": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Get Is Paused",
+        "description": "Whether data collection is currently paused.",
+        "operationId": "is_paused_cameras__camera_id__is_paused_get",
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/status": {
       "get": {
         "tags": [
@@ -2927,224 +4767,6 @@
         }
       }
     },
-    "/periphery/cameras/prims": {
-      "get": {
-        "tags": [
-          "periphery"
-        ],
-        "summary": "List Camera Prims",
-        "description": "Mirrored from the spec; not yet implemented.",
-        "operationId": "list_camera_prims_periphery_cameras_prims_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/periphery/cameras/active": {
-      "get": {
-        "tags": [
-          "periphery"
-        ],
-        "summary": "Get Active Camera",
-        "description": "Mirrored from the spec; not yet implemented.",
-        "operationId": "get_active_camera_periphery_cameras_active_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "periphery"
-        ],
-        "summary": "Set Active Camera",
-        "description": "Mirrored from the spec; not yet implemented.",
-        "operationId": "set_active_camera_periphery_cameras_active_put",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/periphery/cameras/capture/color": {
-      "get": {
-        "tags": [
-          "periphery"
-        ],
-        "summary": "Capture Color Image",
-        "description": "Mirrored from the spec; not yet implemented.",
-        "operationId": "capture_color_image_periphery_cameras_capture_color_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/periphery/cameras/capture/normals": {
-      "get": {
-        "tags": [
-          "periphery"
-        ],
-        "summary": "Capture Normals Image",
-        "description": "Mirrored from the spec; not yet implemented.",
-        "operationId": "capture_normals_image_periphery_cameras_capture_normals_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/periphery/cameras/capture/depth": {
-      "get": {
-        "tags": [
-          "periphery"
-        ],
-        "summary": "Capture Depth Image",
-        "description": "Mirrored from the spec; not yet implemented.",
-        "operationId": "capture_depth_image_periphery_cameras_capture_depth_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/periphery/cameras/capture/pointcloud": {
-      "get": {
-        "tags": [
-          "periphery"
-        ],
-        "summary": "Capture Point Cloud",
-        "description": "Mirrored from the spec; not yet implemented.",
-        "operationId": "capture_pointcloud_periphery_cameras_capture_pointcloud_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/periphery/cameras/capture/bounding-box-2d": {
-      "get": {
-        "tags": [
-          "periphery"
-        ],
-        "summary": "Capture Bounding Box 2D",
-        "description": "Mirrored from the spec; not yet implemented.",
-        "operationId": "capture_bounding_box_2d_periphery_cameras_capture_bounding_box_2d_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/periphery/cameras/capture/bounding-box-3d": {
-      "get": {
-        "tags": [
-          "periphery"
-        ],
-        "summary": "Capture Bounding Box 3D",
-        "description": "Mirrored from the spec; not yet implemented.",
-        "operationId": "capture_bounding_box_3d_periphery_cameras_capture_bounding_box_3d_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/periphery/cameras/capture/instance-segmentation": {
-      "get": {
-        "tags": [
-          "periphery"
-        ],
-        "summary": "Capture Instance Segmentation",
-        "description": "Mirrored from the spec; not yet implemented.",
-        "operationId": "capture_instance_segmentation_periphery_cameras_capture_instance_segmentation_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/periphery/cameras/capture/semantic-segmentation": {
-      "get": {
-        "tags": [
-          "periphery"
-        ],
-        "summary": "Capture Semantic Segmentation",
-        "description": "Mirrored from the spec; not yet implemented.",
-        "operationId": "capture_semantic_segmentation_periphery_cameras_capture_semantic_segmentation_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
     "/trajectories/": {
       "get": {
         "tags": [
@@ -3626,6 +5248,202 @@
         "title": "AssembleRobotRequest",
         "description": "Body of POST /articulations/{articulation_id}/assemble_robot.\n\nThe path ``articulation_id`` is the arm. This names the *gripper* articulation\nto assemble onto it and the links to join them at. ``arm_mount_link`` is the\narm's flange (e.g. UR ``wrist_3_link``) -- a RigidBodyAPI link or a Site, not an\nempty frame like ``tool0``. ``gripper_mount_link`` is the gripper's base link;\nleave it null/omitted to auto-discover the gripper articulation's root link (its\nbase), which is what the fixed joint must attach to. After assembling, arm and\ngripper share one articulation; each device keeps driving only its own joints.\n``offset`` is an optional mount transform baked into the fixed joint\n(null/omitted => flush attach). Assembling the same pair again is a no-op (the\nbridge records that they are already assembled and just returns the merged info)."
       },
+      "CameraApertureRequest": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "maintain_square_pixels": {
+            "type": "boolean",
+            "title": "Maintain Square Pixels",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "CameraApertureRequest",
+        "description": "Body of PUT .../horizontal_aperture or .../vertical_aperture (stage units).\n\n``maintain_square_pixels`` keeps the paired aperture in sync so pixels stay\nsquare."
+      },
+      "CameraClippingRangeRequest": {
+        "properties": {
+          "near_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Distance"
+          },
+          "far_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Far Distance"
+          }
+        },
+        "type": "object",
+        "title": "CameraClippingRangeRequest",
+        "description": "Body of PUT /cameras/{id}/clipping_range (stage units). Either field null\nleaves that bound unchanged."
+      },
+      "CameraFloatValueRequest": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "CameraFloatValueRequest",
+        "description": "Body of the single-float camera setters (focal length, focus distance,\nlens aperture/fStop, frequency)."
+      },
+      "CameraLocalPoseRequest": {
+        "properties": {
+          "translation": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation"
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation"
+          },
+          "camera_axes": {
+            "type": "string",
+            "title": "Camera Axes",
+            "default": "world"
+          }
+        },
+        "type": "object",
+        "title": "CameraLocalPoseRequest",
+        "description": "Body of PUT /cameras/{id}/local_pose -- parent-relative pose.\n\nLike :class:`CameraWorldPoseRequest` but with ``translation`` in place of\n``position``."
+      },
+      "CameraResolutionRequest": {
+        "properties": {
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          }
+        },
+        "type": "object",
+        "required": [
+          "width",
+          "height"
+        ],
+        "title": "CameraResolutionRequest",
+        "description": "Body of PUT /cameras/{id}/resolution -- ``[width, height]`` in pixels."
+      },
+      "CameraStringValueRequest": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "CameraStringValueRequest",
+        "description": "Body of the string-valued camera setters (projection mode, stereo role,\nlens distortion model)."
+      },
+      "CameraWorldPoseRequest": {
+        "properties": {
+          "position": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation"
+          },
+          "camera_axes": {
+            "type": "string",
+            "title": "Camera Axes",
+            "default": "world"
+          }
+        },
+        "type": "object",
+        "title": "CameraWorldPoseRequest",
+        "description": "Body of PUT /cameras/{id}/world_pose.\n\n``position`` is ``[x, y, z]`` (stage units), ``orientation`` a scalar-first\n``[w, x, y, z]`` quaternion; either may be null to leave it untouched.\n``camera_axes`` is one of ``world``/``ros``/``usd``."
+      },
+      "CaptureRequest": {
+        "properties": {
+          "data_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Types"
+          }
+        },
+        "type": "object",
+        "title": "CaptureRequest",
+        "description": "Body of POST /cameras/{id}/capture -- pump one frame and read outputs.\n\n``data_types`` selects which of the camera's bound outputs to return; ``None``\nreturns them all."
+      },
       "CreateArticulationRequest": {
         "properties": {
           "prim_path": {
@@ -3651,6 +5469,57 @@
         ],
         "title": "CreateArticulationRequest",
         "description": "Body of PUT /articulations -- register (and bind) one articulation."
+      },
+      "CreateCameraRequest": {
+        "properties": {
+          "prim_path": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prim Path"
+          },
+          "resolution": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Resolution",
+            "default": [
+              1280,
+              720
+            ]
+          },
+          "data_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Types"
+          },
+          "frequency": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prim_path"
+        ],
+        "title": "CreateCameraRequest",
+        "description": "Body of PUT /cameras -- register (and bind) one camera.\n\n``resolution`` is ``[width, height]`` in pixels. ``data_types`` is the set of\nrender outputs to produce (default ``[\"rgb\"]``); each must be a supported\ncamera data type. ``frequency`` (Hz) is optional; ``None`` follows the render\nloop."
       },
       "DefaultJointStateRequest": {
         "properties": {
@@ -4151,6 +6020,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",

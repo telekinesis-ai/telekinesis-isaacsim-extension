@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSock
 
 from .dependencies import (
     get_articulation_service,
+    get_camera_service,
     get_general_service,
     get_prim_service,
     get_stage_service,
@@ -30,7 +31,16 @@ from .dependencies import (
 from .models import (
     ApplyRelativePoseRequest,
     AssembleRobotRequest,
+    CameraApertureRequest,
+    CameraClippingRangeRequest,
+    CameraFloatValueRequest,
+    CameraLocalPoseRequest,
+    CameraResolutionRequest,
+    CameraStringValueRequest,
+    CameraWorldPoseRequest,
+    CaptureRequest,
     CreateArticulationRequest,
+    CreateCameraRequest,
     DefaultJointStateRequest,
     JointEffortsRequest,
     JointPositionsRequest,
@@ -805,75 +815,304 @@ async def clear_motion_groups():
     not_implemented()
 
 
-# -- periphery (cameras) ----------------------------------------------------
+# -- cameras (device registry, analogous to articulations) ------------------
+#
+# A camera is a registered device with an id, exactly like an articulation:
+# PUT /cameras hands back a camera_id, then every other route addresses that id.
+# (This replaces the old Wandelbots-mirrored /periphery stubs, which modelled a
+# single "active camera" with no ids and did not fit the registry design.)
 
-periphery = APIRouter(prefix="/periphery", tags=["periphery"])
-
-
-@periphery.get("/cameras/prims", summary="List Camera Prims")
-async def list_camera_prims():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
-
-
-@periphery.get("/cameras/active", summary="Get Active Camera")
-async def get_active_camera():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
+cameras = APIRouter(tags=["cameras"])
 
 
-@periphery.put("/cameras/active", summary="Set Active Camera")
-async def set_active_camera():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
+@cameras.put("/cameras", summary="Create Camera")
+async def create_camera(req: CreateCameraRequest, camera_service=Depends(get_camera_service)):
+    """Register (and bind) one camera; returns its id, prim, resolution and optics."""
+    return await camera_service.create_camera(
+        req.prim_path, req.resolution, req.data_types, req.frequency
+    )
 
 
-@periphery.get("/cameras/capture/color", summary="Capture Color Image")
-async def capture_color_image():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
+@cameras.get("/cameras", summary="List Cameras")
+async def list_cameras(camera_service=Depends(get_camera_service)):
+    """Every registered camera id mapped to its prim path."""
+    return camera_service.list_cameras()
 
 
-@periphery.get("/cameras/capture/normals", summary="Capture Normals Image")
-async def capture_normals_image():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
+@cameras.get("/cameras/{camera_id}", summary="Get Camera")
+async def get_camera(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Id + static description (prim, resolution, optics). 404 if unknown."""
+    return camera_service.get_camera(camera_id)
 
 
-@periphery.get("/cameras/capture/depth", summary="Capture Depth Image")
-async def capture_depth_image():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
+@cameras.delete("/cameras/{camera_id}", summary="Delete Camera")
+async def delete_camera(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Unregister the camera (the USD prim is left in the stage)."""
+    return camera_service.delete_camera(camera_id)
 
 
-@periphery.get("/cameras/capture/pointcloud", summary="Capture Point Cloud")
-async def capture_pointcloud():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
+@cameras.post("/cameras/{camera_id}/capture", summary="Capture Frame")
+async def capture(
+    camera_id: str, req: CaptureRequest, camera_service=Depends(get_camera_service)
+):
+    """Pump one frame and return the requested outputs (all bound types if omitted)."""
+    return await camera_service.capture(camera_id, req.data_types)
 
 
-@periphery.get("/cameras/capture/bounding-box-2d", summary="Capture Bounding Box 2D")
-async def capture_bounding_box_2d():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
+@cameras.get("/cameras/{camera_id}/rgb", summary="Get Rgb")
+async def get_rgb(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Latest RGB image (H, W, 3), or null if not ready."""
+    return camera_service.get_rgb(camera_id)
 
 
-@periphery.get("/cameras/capture/bounding-box-3d", summary="Capture Bounding Box 3D")
-async def capture_bounding_box_3d():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
+@cameras.get("/cameras/{camera_id}/rgba", summary="Get Rgba")
+async def get_rgba(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Latest RGBA image (H, W, 4), or null."""
+    return camera_service.get_rgba(camera_id)
 
 
-@periphery.get("/cameras/capture/instance-segmentation", summary="Capture Instance Segmentation")
-async def capture_instance_segmentation():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
+@cameras.get("/cameras/{camera_id}/depth", summary="Get Depth")
+async def get_depth(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Latest depth image (H, W), or null."""
+    return camera_service.get_depth(camera_id)
 
 
-@periphery.get("/cameras/capture/semantic-segmentation", summary="Capture Semantic Segmentation")
-async def capture_semantic_segmentation():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
+@cameras.get("/cameras/{camera_id}/pointcloud", summary="Get Pointcloud")
+async def get_pointcloud(
+    camera_id: str, world_frame: bool = Query(True), camera_service=Depends(get_camera_service)
+):
+    """Latest pointcloud (N, 3) in world (default) or camera frame."""
+    return camera_service.get_pointcloud(camera_id, world_frame)
+
+
+@cameras.get("/cameras/{camera_id}/world_pose", summary="Get World Pose")
+async def get_camera_world_pose(
+    camera_id: str, camera_axes: str = Query("world"), camera_service=Depends(get_camera_service)
+):
+    """World-frame pose {position, orientation}. camera_axes: world/ros/usd."""
+    return camera_service.get_world_pose(camera_id, camera_axes)
+
+
+@cameras.put("/cameras/{camera_id}/world_pose", summary="Set World Pose")
+async def set_camera_world_pose(
+    camera_id: str, req: CameraWorldPoseRequest, camera_service=Depends(get_camera_service)
+):
+    """Set the world-frame pose; returns the resulting pose."""
+    return camera_service.set_world_pose(camera_id, req.position, req.orientation, req.camera_axes)
+
+
+@cameras.get("/cameras/{camera_id}/local_pose", summary="Get Local Pose")
+async def get_camera_local_pose(
+    camera_id: str, camera_axes: str = Query("world"), camera_service=Depends(get_camera_service)
+):
+    """Local-frame (parent-relative) pose {translation, orientation}."""
+    return camera_service.get_local_pose(camera_id, camera_axes)
+
+
+@cameras.put("/cameras/{camera_id}/local_pose", summary="Set Local Pose")
+async def set_camera_local_pose(
+    camera_id: str, req: CameraLocalPoseRequest, camera_service=Depends(get_camera_service)
+):
+    """Set the local-frame pose; returns the resulting pose."""
+    return camera_service.set_local_pose(
+        camera_id, req.translation, req.orientation, req.camera_axes
+    )
+
+
+@cameras.get("/cameras/{camera_id}/resolution", summary="Get Resolution")
+async def get_camera_resolution(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Current [width, height] in pixels."""
+    return camera_service.get_resolution(camera_id)
+
+
+@cameras.put("/cameras/{camera_id}/resolution", summary="Set Resolution")
+async def set_camera_resolution(
+    camera_id: str, req: CameraResolutionRequest, camera_service=Depends(get_camera_service)
+):
+    """Set [width, height] in pixels; returns the resulting resolution."""
+    return camera_service.set_resolution(camera_id, req.width, req.height)
+
+
+@cameras.get("/cameras/{camera_id}/focal_length", summary="Get Focal Length")
+async def get_focal_length(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Focal length (stage units)."""
+    return camera_service.get_focal_length(camera_id)
+
+
+@cameras.put("/cameras/{camera_id}/focal_length", summary="Set Focal Length")
+async def set_focal_length(
+    camera_id: str, req: CameraFloatValueRequest, camera_service=Depends(get_camera_service)
+):
+    """Set the focal length (stage units)."""
+    return camera_service.set_focal_length(camera_id, req.value)
+
+
+@cameras.get("/cameras/{camera_id}/focus_distance", summary="Get Focus Distance")
+async def get_focus_distance(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Distance from camera to focus plane (stage units)."""
+    return camera_service.get_focus_distance(camera_id)
+
+
+@cameras.put("/cameras/{camera_id}/focus_distance", summary="Set Focus Distance")
+async def set_focus_distance(
+    camera_id: str, req: CameraFloatValueRequest, camera_service=Depends(get_camera_service)
+):
+    """Set the focus distance (stage units)."""
+    return camera_service.set_focus_distance(camera_id, req.value)
+
+
+@cameras.get("/cameras/{camera_id}/lens_aperture", summary="Get Lens Aperture")
+async def get_lens_aperture(camera_id: str, camera_service=Depends(get_camera_service)):
+    """fStop value (0 disables depth-of-field)."""
+    return camera_service.get_lens_aperture(camera_id)
+
+
+@cameras.put("/cameras/{camera_id}/lens_aperture", summary="Set Lens Aperture")
+async def set_lens_aperture(
+    camera_id: str, req: CameraFloatValueRequest, camera_service=Depends(get_camera_service)
+):
+    """Set the fStop value."""
+    return camera_service.set_lens_aperture(camera_id, req.value)
+
+
+@cameras.get("/cameras/{camera_id}/horizontal_aperture", summary="Get Horizontal Aperture")
+async def get_horizontal_aperture(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Horizontal aperture / sensor width (stage units)."""
+    return camera_service.get_horizontal_aperture(camera_id)
+
+
+@cameras.put("/cameras/{camera_id}/horizontal_aperture", summary="Set Horizontal Aperture")
+async def set_horizontal_aperture(
+    camera_id: str, req: CameraApertureRequest, camera_service=Depends(get_camera_service)
+):
+    """Set the horizontal aperture (stage units)."""
+    return camera_service.set_horizontal_aperture(camera_id, req.value, req.maintain_square_pixels)
+
+
+@cameras.get("/cameras/{camera_id}/vertical_aperture", summary="Get Vertical Aperture")
+async def get_vertical_aperture(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Vertical aperture / sensor height (stage units)."""
+    return camera_service.get_vertical_aperture(camera_id)
+
+
+@cameras.put("/cameras/{camera_id}/vertical_aperture", summary="Set Vertical Aperture")
+async def set_vertical_aperture(
+    camera_id: str, req: CameraApertureRequest, camera_service=Depends(get_camera_service)
+):
+    """Set the vertical aperture (stage units)."""
+    return camera_service.set_vertical_aperture(camera_id, req.value, req.maintain_square_pixels)
+
+
+@cameras.get("/cameras/{camera_id}/clipping_range", summary="Get Clipping Range")
+async def get_clipping_range(camera_id: str, camera_service=Depends(get_camera_service)):
+    """[near, far] clipping distances (stage units)."""
+    return camera_service.get_clipping_range(camera_id)
+
+
+@cameras.put("/cameras/{camera_id}/clipping_range", summary="Set Clipping Range")
+async def set_clipping_range(
+    camera_id: str, req: CameraClippingRangeRequest, camera_service=Depends(get_camera_service)
+):
+    """Set near/far clipping distances; either may be null to leave unchanged."""
+    return camera_service.set_clipping_range(camera_id, req.near_distance, req.far_distance)
+
+
+@cameras.get("/cameras/{camera_id}/frequency", summary="Get Frequency")
+async def get_camera_frequency(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Current acquisition frequency (Hz)."""
+    return camera_service.get_frequency(camera_id)
+
+
+@cameras.put("/cameras/{camera_id}/frequency", summary="Set Frequency")
+async def set_camera_frequency(
+    camera_id: str, req: CameraFloatValueRequest, camera_service=Depends(get_camera_service)
+):
+    """Set the acquisition frequency (Hz). Must divide the rendering frequency."""
+    return camera_service.set_frequency(camera_id, req.value)
+
+
+@cameras.get("/cameras/{camera_id}/projection_mode", summary="Get Projection Mode")
+async def get_projection_mode(camera_id: str, camera_service=Depends(get_camera_service)):
+    """perspective or orthographic."""
+    return camera_service.get_projection_mode(camera_id)
+
+
+@cameras.put("/cameras/{camera_id}/projection_mode", summary="Set Projection Mode")
+async def set_projection_mode(
+    camera_id: str, req: CameraStringValueRequest, camera_service=Depends(get_camera_service)
+):
+    """Set the projection mode (perspective/orthographic)."""
+    return camera_service.set_projection_mode(camera_id, req.value)
+
+
+@cameras.get("/cameras/{camera_id}/stereo_role", summary="Get Stereo Role")
+async def get_stereo_role(camera_id: str, camera_service=Depends(get_camera_service)):
+    """mono, left or right."""
+    return camera_service.get_stereo_role(camera_id)
+
+
+@cameras.put("/cameras/{camera_id}/stereo_role", summary="Set Stereo Role")
+async def set_stereo_role(
+    camera_id: str, req: CameraStringValueRequest, camera_service=Depends(get_camera_service)
+):
+    """Set the stereo role (mono/left/right)."""
+    return camera_service.set_stereo_role(camera_id, req.value)
+
+
+@cameras.get("/cameras/{camera_id}/lens_distortion_model", summary="Get Lens Distortion Model")
+async def get_lens_distortion_model(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Lens distortion model name (pinhole if unset)."""
+    return camera_service.get_lens_distortion_model(camera_id)
+
+
+@cameras.put("/cameras/{camera_id}/lens_distortion_model", summary="Set Lens Distortion Model")
+async def set_lens_distortion_model(
+    camera_id: str, req: CameraStringValueRequest, camera_service=Depends(get_camera_service)
+):
+    """Set the lens distortion model (applies the matching schema)."""
+    return camera_service.set_lens_distortion_model(camera_id, req.value)
+
+
+@cameras.get("/cameras/{camera_id}/intrinsics_matrix", summary="Get Intrinsics Matrix")
+async def get_intrinsics_matrix(camera_id: str, camera_service=Depends(get_camera_service)):
+    """3x3 intrinsics matrix (pinhole models only)."""
+    return camera_service.get_intrinsics_matrix(camera_id)
+
+
+@cameras.get("/cameras/{camera_id}/fov", summary="Get Fov")
+async def get_fov(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Horizontal and vertical field of view."""
+    return camera_service.get_fov(camera_id)
+
+
+@cameras.get("/cameras/{camera_id}/render_product_path", summary="Get Render Product Path")
+async def get_render_product_path(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Path to the render product attached to this camera."""
+    return camera_service.get_render_product_path(camera_id)
+
+
+@cameras.get("/cameras/{camera_id}/supported_annotators", summary="Get Supported Annotators")
+async def get_supported_annotators(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Annotator names that can be attached to this camera."""
+    return camera_service.get_supported_annotators(camera_id)
+
+
+@cameras.post("/cameras/{camera_id}/pause", summary="Pause Camera")
+async def pause_camera(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Pause data collection / frame updates."""
+    return camera_service.pause(camera_id)
+
+
+@cameras.post("/cameras/{camera_id}/resume", summary="Resume Camera")
+async def resume_camera(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Resume data collection / frame updates."""
+    return camera_service.resume(camera_id)
+
+
+@cameras.get("/cameras/{camera_id}/is_paused", summary="Get Is Paused")
+async def is_paused(camera_id: str, camera_service=Depends(get_camera_service)):
+    """Whether data collection is currently paused."""
+    return camera_service.is_paused(camera_id)
 
 
 # -- trajectories -----------------------------------------------------------
@@ -999,12 +1238,12 @@ async def sweep_collisions():
 
 ALL_ROUTERS = (
     articulations,
+    cameras,
     general,
     stage,
     prims,
     nucleus,
     manipulators,
-    periphery,
     trajectories,
     teaching,
     trajectory_planner,
