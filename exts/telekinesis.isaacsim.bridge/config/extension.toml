@@ -1,12 +1,13 @@
 [package]
+name = "telekinesis.isaacsim.bridge"
 version = "0.1.0"
 category = "Simulation"
 title = "Telekinesis Isaac Sim Bridge"
-description = "HTTP/JSON (FastAPI) bridge between the Synapse interface and Isaac Sim articulations."
-authors = ["Telekinesis"]
+description = "HTTP/JSON (FastAPI) and Websocket bridge to enable smooth communication with NVIDIA Isaac Sim."
+authors = ["telekinesis.ai"]
 license = "LicenseRef-Proprietary"
 repository = "https://github.com/telekinesis-ai/telekinesis-isaacsim-extension"
-keywords = ["Telekinesis", "Manipulators", "Simulation"]
+keywords = ["Telekinesis", "Bridge", "Simulation"]
 changelog = "docs/CHANGELOG.md"
 readme = "docs/README.md"
 preview_image = "data/preview.png"

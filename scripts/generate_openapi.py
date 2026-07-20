@@ -1,14 +1,22 @@
 """
-Generate the bridge's OpenAPI schema (public/openapi.json) straight from the real
-route/model definitions -- no hand-maintained API table to keep in sync.
+Generate ``public/openapi.json`` from the bridge's FastAPI routers.
 
-Runnable OUTSIDE Isaac Sim: only ``comm.routers``, ``comm.dependencies``, and
-``comm.models`` are imported, none of which touch ``omni``/``carb``. The package's
-real ``__init__.py`` does `from .extension import *`, which DOES import omni, so
-a stand-in package object is registered first, exactly as the smoke test does, to
-reach the submodules without running that import.
+FastAPI references:
+- Include routers in an application:
+  https://fastapi.tiangolo.com/tutorial/bigger-applications/
+- Generate the OpenAPI schema with ``app.openapi()``:
+  https://fastapi.tiangolo.com/how-to/extending-openapi/
 
-Run:  python scripts/generate_openapi.py
+Python import reference for the temporary package workaround:
+- ``sys.modules`` and package ``__path__``:
+  https://docs.python.org/3/reference/import.html
+
+The temporary package lets this script import the API routers without executing
+``bridge/__init__.py``, which imports Isaac Sim modules such as ``omni``.
+
+Run:
+
+    python scripts/generate_openapi.py
 """
 
 import json
@@ -16,32 +24,35 @@ import sys
 import types
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-_EXT_ROOT = _REPO_ROOT / "exts" / "telekinesis.isaacsim.bridge"
-sys.path.insert(0, str(_EXT_ROOT))
-
-_bridge_pkg = types.ModuleType("telekinesis.isaacsim.bridge")
-_bridge_pkg.__path__ = [str(_EXT_ROOT / "telekinesis" / "isaacsim" / "bridge")]
-sys.modules["telekinesis.isaacsim.bridge"] = _bridge_pkg
-
-from fastapi import FastAPI  # noqa: E402
-from telekinesis.isaacsim.bridge.comm.routers import ALL_ROUTERS  # noqa: E402
+from fastapi import FastAPI
 
 
-def build_schema():
-    """Assemble just the route/model surface (no services) and return its OpenAPI schema."""
-    app = FastAPI(title="Telekinesis Isaac Sim Bridge")
-    for router in ALL_ROUTERS:
-        app.include_router(router)
-    return app.openapi()
+repo_root = Path(__file__).resolve().parent.parent
+ext_root = repo_root / "exts" / "telekinesis.isaacsim.bridge"
+package_root = ext_root / "telekinesis" / "isaacsim" / "bridge"
 
+sys.path.insert(0, str(ext_root))
 
-def main():
-    out_path = _REPO_ROOT / "public" / "openapi.json"
-    out_path.parent.mkdir(exist_ok=True)
-    out_path.write_text(json.dumps(build_schema(), indent=2))
-    print(f"wrote {out_path}")
+# Skip bridge/__init__.py because it imports Isaac Sim modules.
+bridge_package = types.ModuleType("telekinesis.isaacsim.bridge")
+bridge_package.__path__ = [str(package_root)]
+sys.modules["telekinesis.isaacsim.bridge"] = bridge_package
 
+from telekinesis.isaacsim.bridge.comm import routers  # noqa: E402
 
-if __name__ == "__main__":
-    main()
+# Generate OpenAPI schema from FastAPI routers and write to public/openapi.json
+app = FastAPI(title="Telekinesis Isaac Sim Bridge")
+
+# Include all routers
+for router in routers.ALL_ROUTERS:
+    app.include_router(router)
+
+# Generate OpenAPI schema and write to public/openapi.json
+output = repo_root / "public" / "openapi.json"
+output.parent.mkdir(parents=True, exist_ok=True)
+output.write_text(
+    json.dumps(app.openapi(), indent=2),
+    encoding="utf-8",
+)
+
+print(f"Wrote {output}")
