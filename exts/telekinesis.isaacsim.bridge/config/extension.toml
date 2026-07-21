@@ -1,6 +1,6 @@
 [package]
 name = "telekinesis.isaacsim.bridge"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 category = "Simulation"
 title = "Telekinesis Isaac Sim Bridge"
 description = "HTTP/JSON (FastAPI) and Websocket bridge to enable smooth communication with NVIDIA Isaac Sim."
