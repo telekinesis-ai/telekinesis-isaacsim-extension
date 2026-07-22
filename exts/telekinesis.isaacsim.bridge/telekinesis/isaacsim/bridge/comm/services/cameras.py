@@ -382,8 +382,7 @@ class CameraService:
             raise HTTPException(
                 status_code=404,
                 detail=(
-                    f"no camera registered with id '{camera_id}', "
-                    "call PUT /cameras to create one"
+                    f"no camera registered with id '{camera_id}', call PUT /cameras to create one"
                 ),
             )
         return device

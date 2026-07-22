@@ -48,7 +48,9 @@ def main():
     parser = argparse.ArgumentParser(description="Capture a frame from a camera.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--id", required=True, dest="camera_id", help="camera_id from put_camera.py")
+    parser.add_argument(
+        "--id", required=True, dest="camera_id", help="camera_id from put_camera.py"
+    )
     parser.add_argument("--data-types", nargs="+", default=None, help="subset to capture")
     args = parser.parse_args()
 
@@ -83,7 +85,10 @@ def _show(response):
         if arr.dtype.kind == "f":
             arr = arr * 255.0
         frame = np.clip(arr, 0, 255).astype(np.uint8)
-        cv2.imshow("rgb", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+        # pylint: disable=no-member
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        # pylint: disable=no-member
+        cv2.imshow("rgb", frame)
         shown = True
 
     depth = response.get("depth")
@@ -96,12 +101,15 @@ def _show(response):
             scaled = (depth - lo) / (hi - lo + 1e-9)
             vis = np.clip(scaled * 255.0, 0, 255).astype(np.uint8)
             vis[~finite] = 0
+        # pylint: disable=no-member
         cv2.imshow("depth", vis)
         shown = True
 
     if shown:
         print("press any key in the image window to close")
+        # pylint: disable=no-member
         cv2.waitKey(0)
+        # pylint: disable=no-member
         cv2.destroyAllWindows()
 
 

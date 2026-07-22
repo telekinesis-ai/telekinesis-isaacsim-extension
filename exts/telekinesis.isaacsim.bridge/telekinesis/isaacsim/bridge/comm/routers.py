@@ -852,9 +852,7 @@ async def delete_camera(camera_id: str, camera_service=Depends(get_camera_servic
 
 
 @cameras.post("/cameras/{camera_id}/capture", summary="Capture Frame")
-async def capture(
-    camera_id: str, req: CaptureRequest, camera_service=Depends(get_camera_service)
-):
+async def capture(camera_id: str, req: CaptureRequest, camera_service=Depends(get_camera_service)):
     """Pump one frame and return the requested outputs (all bound types if omitted)."""
     return await camera_service.capture(camera_id, req.data_types)
 

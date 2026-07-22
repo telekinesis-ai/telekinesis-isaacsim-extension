@@ -1,20 +1,35 @@
 # Telekinesis Isaac Sim Bridge
 
-[![Isaac Sim 6.0](https://img.shields.io/badge/Isaac_Sim-6.0-green)](https://docs.isaacsim.omniverse.nvidia.com/6.0.0/installation/download.html) [![Isaac Sim 5.1](https://img.shields.io/badge/Isaac_Sim-5.1-green)](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/installation/download.html) [![Linux platform](https://img.shields.io/badge/platform-linux--64-blue.svg)](https://releases.ubuntu.com/22.04/) [![Windows platform](https://img.shields.io/badge/platform-windows--64-blue.svg)](https://www.microsoft.com/en-us/) [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](https://github.com/telekinesis-ai/telekinesis-isaacsim-extension/blob/main/LICENSE)
+Telekinesis Isaac Sim Bridge lets you connect NVIDIA Isaac Sim to local applications over HTTP and WebSocket. It is designed for developers who want to inspect articulation state, send commands, and stream real-time data without writing custom simulation-side integrations.
 
-This extension enables smooth communication with NVIDIA Isaac Sim.
+## What this extension provides
 
-Runs at `http://127.0.0.1:8766`. Localhost-only, no authentication, for trusted local clients.
+- Register and interact with any Isaac Sim articulation
+- Send motion commands and read articulation state
+- Stream updates in real time over WebSocket
+- Explore the API interactively through Swagger UI
 
-## Enable the Extension
+## Run the bridge
 
-Enable the extension under **Window ▸ Extensions** if you haven't.
+The bridge runs at `http://127.0.0.1:8766`.
 
-## Usage
+It is localhost-only, uses no authentication, and is intended for trusted local clients.
 
-1. Add a Universal Robots UR10e to the stage from the Isaac Sim asset store.
-2. Note its prim path in the Stage panel (e.g. `/World/ur10e`).
-3. Run:
+## Enable the extension
+
+Enable the extension under **Window ▸ Extensions** if it is not already enabled.
+
+## Quick start
+
+1. Add a Universal Robots UR10e to the stage from the Isaac Sim asset store or import urdf.
+2. Note its prim path in the Stage panel (for example, `/World/ur10e`).
+3. Install the Python dependencies you need before running examples:
+
+```bash
+pip install -r requirements.txt
+```
+
+4. Run the following example from a local Python client:
 
 ```python
 import requests
@@ -28,14 +43,14 @@ requests.post(
 )
 ```
 
-## API Reference
+## API reference
 
-The endpoint list is generated straight from the code, not hand-maintained:
+The endpoint list is generated from the implementation and is kept up to date automatically:
 
-- **Bridge running:** open `http://127.0.0.1:8766/docs` (Swagger UI) or `/redoc`.
-- **Browsing without Isaac Sim running:** [API reference](https://telekinesis-ai.github.io/telekinesis-isaacsim-extension/).
+- **Bridge running:** open `http://127.0.0.1:8766/docs` (Swagger UI) or `/redoc`
+- **Without Isaac Sim running:** visit the [API reference](https://telekinesis-ai.github.io/telekinesis-isaacsim-extension/)
 
-Wire units throughout: **radians** for joints, **meters** for lengths.
+Use **radians** for joint values and **meters** for length-related values.
 
 ## License
 

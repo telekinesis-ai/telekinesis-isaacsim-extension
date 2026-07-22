@@ -41,9 +41,13 @@ def main():
     parser = argparse.ArgumentParser(description="Read a camera's latest pointcloud.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--id", required=True, dest="camera_id", help="camera_id from put_camera.py")
     parser.add_argument(
-        "--camera-frame", action="store_false", dest="world_frame",
+        "--id", required=True, dest="camera_id", help="camera_id from put_camera.py"
+    )
+    parser.add_argument(
+        "--camera-frame",
+        action="store_false",
+        dest="world_frame",
         help="return camera-relative points instead of world-frame",
     )
     args = parser.parse_args()
@@ -51,7 +55,9 @@ def main():
     base = f"http://{args.host}:{args.port}"
     path = f"/cameras/{args.camera_id}/pointcloud?world_frame={str(args.world_frame).lower()}"
     pointcloud = _request(base, "GET", path)["pointcloud"]
-    print("pointcloud:", "null (not ready)" if pointcloud is None else f"shape {_shape(pointcloud)}")
+    print(
+        "pointcloud:", "null (not ready)" if pointcloud is None else f"shape {_shape(pointcloud)}"
+    )
 
 
 if __name__ == "__main__":

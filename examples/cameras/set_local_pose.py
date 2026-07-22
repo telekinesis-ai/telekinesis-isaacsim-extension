@@ -30,11 +30,11 @@ def main():
     parser = argparse.ArgumentParser(description="Set a camera's local pose.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--id", required=True, dest="camera_id", help="camera_id from put_camera.py")
-    parser.add_argument("--trans", type=float, nargs=3, default=None, metavar=("X", "Y", "Z"))
     parser.add_argument(
-        "--quat", type=float, nargs=4, default=None, metavar=("W", "X", "Y", "Z")
+        "--id", required=True, dest="camera_id", help="camera_id from put_camera.py"
     )
+    parser.add_argument("--trans", type=float, nargs=3, default=None, metavar=("X", "Y", "Z"))
+    parser.add_argument("--quat", type=float, nargs=4, default=None, metavar=("W", "X", "Y", "Z"))
     parser.add_argument("--axes", default="world", choices=["world", "ros", "usd"])
     args = parser.parse_args()
 

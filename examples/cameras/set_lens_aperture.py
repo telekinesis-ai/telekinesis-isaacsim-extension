@@ -28,7 +28,9 @@ def main():
     parser = argparse.ArgumentParser(description="Set a camera's lens aperture (fStop).")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--id", required=True, dest="camera_id", help="camera_id from put_camera.py")
+    parser.add_argument(
+        "--id", required=True, dest="camera_id", help="camera_id from put_camera.py"
+    )
     parser.add_argument("--value", type=float, required=True, help="fStop (0 disables DoF)")
     args = parser.parse_args()
 

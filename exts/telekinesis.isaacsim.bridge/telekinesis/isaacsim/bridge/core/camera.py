@@ -438,7 +438,9 @@ class Camera:
             return None
         arr = np.asarray(value, dtype=float)
         if arr.shape != (length,):
-            raise ValueError(f"{name} must have {length} values, got {list(arr.shape) or 'a scalar'}")
+            raise ValueError(
+                f"{name} must have {length} values, got {list(arr.shape) or 'a scalar'}"
+            )
         return arr
 
     @staticmethod
@@ -675,14 +677,18 @@ class Camera:
 
     def get_image_coords_from_world_points(self, points_3d):
         """Project world points ``(N, 3)`` to pixel coords ``(N, 2)`` (pinhole)."""
-        return _to_json(self._camera.get_image_coords_from_world_points(np.asarray(points_3d, dtype=float)))
+        return _to_json(
+            self._camera.get_image_coords_from_world_points(np.asarray(points_3d, dtype=float))
+        )
 
     def get_camera_points_from_image_coords(self, points_2d, depth):
         """Back-project pixel coords ``(N, 2)`` + ``depth`` ``(N,)`` to camera-frame
         points ``(N, 3)`` (pinhole)."""
         return _to_json(
             self._camera.get_camera_points_from_image_coords(
-                np.asarray(points_2d, dtype=float), np.asarray(depth, dtype=float), device=_HOST_DEVICE
+                np.asarray(points_2d, dtype=float),
+                np.asarray(depth, dtype=float),
+                device=_HOST_DEVICE,
             )
         )
 
@@ -691,7 +697,9 @@ class Camera:
         points ``(N, 3)`` (pinhole)."""
         return _to_json(
             self._camera.get_world_points_from_image_coords(
-                np.asarray(points_2d, dtype=float), np.asarray(depth, dtype=float), device=_HOST_DEVICE
+                np.asarray(points_2d, dtype=float),
+                np.asarray(depth, dtype=float),
+                device=_HOST_DEVICE,
             )
         )
 
@@ -716,12 +724,25 @@ class Camera:
         )
 
     def set_matching_fisheye_polynomial_properties(
-        self, nominal_width, nominal_height, optical_centre_x, optical_centre_y, max_fov, distortion_model, distortion_fn
+        self,
+        nominal_width,
+        nominal_height,
+        optical_centre_x,
+        optical_centre_y,
+        max_fov,
+        distortion_model,
+        distortion_fn,
     ):
         """[Deprecated in isaacsim] Approximate an OpenCV fisheye model with ftheta
         polynomial coefficients."""
         self._camera.set_matching_fisheye_polynomial_properties(
-            nominal_width, nominal_height, optical_centre_x, optical_centre_y, max_fov, distortion_model, distortion_fn
+            nominal_width,
+            nominal_height,
+            optical_centre_x,
+            optical_centre_y,
+            max_fov,
+            distortion_model,
+            distortion_fn,
         )
 
     def get_fisheye_polynomial_properties(self):
@@ -729,25 +750,52 @@ class Camera:
         return _to_json(self._camera.get_fisheye_polynomial_properties())
 
     def set_rational_polynomial_properties(
-        self, nominal_width, nominal_height, optical_centre_x, optical_centre_y, max_fov, distortion_model
+        self,
+        nominal_width,
+        nominal_height,
+        optical_centre_x,
+        optical_centre_y,
+        max_fov,
+        distortion_model,
     ):
         """[Deprecated in isaacsim] Set rational-polynomial distortion (routes to
         OpenCV pinhole)."""
         self._camera.set_rational_polynomial_properties(
-            nominal_width, nominal_height, optical_centre_x, optical_centre_y, max_fov, distortion_model
+            nominal_width,
+            nominal_height,
+            optical_centre_x,
+            optical_centre_y,
+            max_fov,
+            distortion_model,
         )
 
     def set_kannala_brandt_properties(
-        self, nominal_width, nominal_height, optical_centre_x, optical_centre_y, max_fov, distortion_model
+        self,
+        nominal_width,
+        nominal_height,
+        optical_centre_x,
+        optical_centre_y,
+        max_fov,
+        distortion_model,
     ):
         """[Deprecated in isaacsim] Set Kannala-Brandt distortion (routes to OpenCV
         fisheye)."""
         self._camera.set_kannala_brandt_properties(
-            nominal_width, nominal_height, optical_centre_x, optical_centre_y, max_fov, distortion_model
+            nominal_width,
+            nominal_height,
+            optical_centre_x,
+            optical_centre_y,
+            max_fov,
+            distortion_model,
         )
 
     def set_ftheta_properties(
-        self, nominal_height=None, nominal_width=None, optical_center=None, max_fov=None, distortion_coefficients=None
+        self,
+        nominal_height=None,
+        nominal_width=None,
+        optical_center=None,
+        max_fov=None,
+        distortion_coefficients=None,
     ):
         """Apply the F-theta lens distortion model and set its parameters."""
         self._camera.set_ftheta_properties(
@@ -759,7 +807,12 @@ class Camera:
         return _to_json(self._camera.get_ftheta_properties())
 
     def set_kannala_brandt_k3_properties(
-        self, nominal_height=None, nominal_width=None, optical_center=None, max_fov=None, distortion_coefficients=None
+        self,
+        nominal_height=None,
+        nominal_width=None,
+        optical_center=None,
+        max_fov=None,
+        distortion_coefficients=None,
     ):
         """Apply the Kannala-Brandt K3 lens distortion model and set its parameters."""
         self._camera.set_kannala_brandt_k3_properties(
@@ -771,7 +824,12 @@ class Camera:
         return _to_json(self._camera.get_kannala_brandt_k3_properties())
 
     def set_rad_tan_thin_prism_properties(
-        self, nominal_height=None, nominal_width=None, optical_center=None, max_fov=None, distortion_coefficients=None
+        self,
+        nominal_height=None,
+        nominal_width=None,
+        optical_center=None,
+        max_fov=None,
+        distortion_coefficients=None,
     ):
         """Apply the Radial-Tangential Thin-Prism lens distortion model and set its
         parameters."""
@@ -793,7 +851,11 @@ class Camera:
     ):
         """Apply the LUT lens distortion model and set its texture parameters."""
         self._camera.set_lut_properties(
-            nominal_height, nominal_width, optical_center, ray_enter_direction_texture, ray_exit_position_texture
+            nominal_height,
+            nominal_width,
+            optical_center,
+            ray_enter_direction_texture,
+            ray_exit_position_texture,
         )
 
     def get_lut_properties(self):

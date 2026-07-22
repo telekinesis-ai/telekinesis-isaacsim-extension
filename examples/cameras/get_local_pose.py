@@ -29,7 +29,9 @@ def main():
     parser = argparse.ArgumentParser(description="Read a camera's local pose.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--id", required=True, dest="camera_id", help="camera_id from put_camera.py")
+    parser.add_argument(
+        "--id", required=True, dest="camera_id", help="camera_id from put_camera.py"
+    )
     parser.add_argument("--axes", default="world", choices=["world", "ros", "usd"])
     args = parser.parse_args()
 

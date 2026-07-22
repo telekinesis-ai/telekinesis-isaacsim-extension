@@ -27,7 +27,9 @@ def main():
     parser = argparse.ArgumentParser(description="Set a camera's projection mode.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--id", required=True, dest="camera_id", help="camera_id from put_camera.py")
+    parser.add_argument(
+        "--id", required=True, dest="camera_id", help="camera_id from put_camera.py"
+    )
     parser.add_argument("--value", required=True, choices=["perspective", "orthographic"])
     args = parser.parse_args()
 

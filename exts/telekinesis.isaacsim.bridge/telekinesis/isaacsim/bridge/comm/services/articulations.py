@@ -554,7 +554,6 @@ class ArticulationService:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"'{requested_prim_path}' is not in the stage and "
-                "no urdf_path was given to load it"
+                f"'{requested_prim_path}' is not in the stage and no urdf_path was given to load it"
             ),
         )

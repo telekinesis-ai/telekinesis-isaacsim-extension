@@ -37,7 +37,9 @@ def main():
     parser = argparse.ArgumentParser(description="Read a camera's latest RGB image.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--id", required=True, dest="camera_id", help="camera_id from put_camera.py")
+    parser.add_argument(
+        "--id", required=True, dest="camera_id", help="camera_id from put_camera.py"
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

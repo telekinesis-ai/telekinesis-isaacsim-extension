@@ -30,7 +30,9 @@ def main():
     parser = argparse.ArgumentParser(description="Set a camera's clipping range.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--id", required=True, dest="camera_id", help="camera_id from put_camera.py")
+    parser.add_argument(
+        "--id", required=True, dest="camera_id", help="camera_id from put_camera.py"
+    )
     parser.add_argument("--near", type=float, default=None, help="near distance (stage units)")
     parser.add_argument("--far", type=float, default=None, help="far distance (stage units)")
     args = parser.parse_args()

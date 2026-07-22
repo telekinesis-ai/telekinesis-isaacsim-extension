@@ -34,6 +34,14 @@ exts/telekinesis.isaacsim.bridge
 
 ## Verify
 
+Install the client-side dependencies used by the examples before running them:
+
+```bash
+pip install -r requirements.txt
+```
+
+The extension itself declares the server-side runtime dependencies in `exts/telekinesis.isaacsim.bridge/config/extension.toml`, including `fastapi`, `uvicorn`, `pydantic`, and `websockets`.
+
 ```bash
 curl http://127.0.0.1:8766/status
 # {"status":"OK"}
@@ -92,36 +100,36 @@ There is currently no CI for these checks, so run them manually before each PR.
 
 ## Manual Deployment
 
-Follow the below steps to release a new version of the extension. 
+Follow the steps below to release a new version of the extension.
+
 ### 1. Verify
 
-Verify all steos in [Merge to main](#merge-to-main) (ruff, pylint) is completed.
+Verify that the steps in [Merge to main](#merge-to-main) (including linting and static checks) are complete.
 
-### 2. Publish to the NVIDIA Community Registry
+### 2. Prepare the release
 
 #### 2.1. One-time repository setup
 
 1. The GitHub repository must be public.
-2. Add the GitHub topic in the repo
-  ```text
-  omniverse-kit-extension
-  ```
-3. Check `exts/telekinesis.isaacsim.bridge/config/extension.toml`:
-  - package name and version are correct;
-  - repository URL is correct;
-  - supported Kit, Python and platform targets are declared.
+2. Add the GitHub topic in the repository:
+   ```text
+   omniverse-kit-extension
+   ```
+3. Check the metadata in `exts/telekinesis.isaacsim.bridge/config/extension.toml`:
+   - package name and version are correct;
+   - repository URL is correct;
+   - supported Kit, Python, and platform targets are declared.
 
-#### 2.2. Create a Release
+#### 2.2. Create the release version
 
-1. Read the version
+1. Read the version:
 
 ```powershell
 $VERSION = python -c "import tomllib; print(tomllib.load(open('exts/telekinesis.isaacsim.bridge/config/extension.toml','rb'))['package']['version'])"
 Write-Host "VERSION=$VERSION"
 ```
-2. Package 
 
-Package using NVIDIA's repository tooling. If this repository does not contain `repo.sh` and `repo.bat`, add the NVIDIA Kit extension-template tooling first:
+2. Package the extension using NVIDIA's repository tooling. If this repository does not contain `repo.sh` and `repo.bat`, add the NVIDIA Kit extension-template tooling first:
 
 ```bash
 ./repo.sh package        # Linux
@@ -131,31 +139,40 @@ Package using NVIDIA's repository tooling. If this repository does not contain `
 .\repo.bat package      # Windows
 ```
 
-3. Rename
-Rename the generated archive exactly as required:
-Linux: ```{github-namespace}-{github-repository}-linux-x86_64-{github-release-tag}.zip```
-Windows: ```{github-namespace}-{github-repository}-windows-x86_64-{github-release-tag}.zip```
+3. Rename the generated archive to the expected release naming convention:
 
 ```text
 telekinesis-ai-telekinesis-isaacsim-extension-linux-x86_64-v<VERSION>.zip
 telekinesis-ai-telekinesis-isaacsim-extension-windows-x86_64-v<VERSION>.zip
 ```
 
-4. Push
-Create and push the version tag
+4. Create and push the version tag:
 
 ```bash
 git tag -a "v$VERSION" -m "Release v$VERSION"
 git push origin "v$VERSION"
 ```
 
-#### 2.3. Release on GitHub:
+#### 2.3. Release on GitHub
 
-1. Go to your repository’s Releases page.
-2. Click Draft a new release. 
+1. Open the repository's Releases page.
+2. Click **Draft a new release**.
 3. Create a release for `v<VERSION>`.
-2. Upload the correctly named packaged archive (zip).
-3. Publish the release.
+4. Upload the correctly named packaged archive (`.zip`).
+5. Publish the release.
+
+The repository now includes a GitHub Actions workflow in `.github/workflows/release.yml` that automates the release packaging process.
+
+Here is what happens when that workflow runs:
+
+1. `checkout` downloads the repository contents into the runner.
+2. `setup-python` prepares Python so the packaging tools can run.
+3. `Install packaging tooling` installs the required Python packages and makes the NVIDIA packaging script executable if present.
+4. `Build extension package` runs the packaging step with `./repo.sh package` (or the equivalent packaging command provided by the NVIDIA tooling).
+5. `Locate generated archive` searches the build output for the generated `.zip` file and records its path.
+6. `Upload release asset` attaches that `.zip` file to the GitHub Release so it appears in the release page as a downloadable asset.
+
+If the workflow runs successfully, the packaged ZIP is uploaded automatically as part of the release process.
 
 Do not remove GitHub's automatically generated **Source code** archives.
 
@@ -164,7 +181,8 @@ NVIDIA's publishing pipeline runs nightly. Check the Community Registry the foll
 ```text
 telekinesis.isaacsim.bridge
 ```
-## 2.4. Official NVIDIA references
+
+### 2.4. Official NVIDIA references
 
 - Publishing: https://docs.omniverse.nvidia.com/kit/docs/kit-extension-template-cpp/latest/index.html#publishing
 - Community Registry: https://docs.omniverse.nvidia.com/kit/docs/kit-registry-reference/latest/community/extensions.html
