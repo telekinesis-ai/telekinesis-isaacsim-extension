@@ -122,27 +122,22 @@ Verify that the steps in [Merge to main](#merge-to-main) (including linting and 
 
 #### 2.2. Create the release version
 
-1. Read the version:
+1. Bump the version. Verify:
 
 ```powershell
 $VERSION = python -c "import tomllib; print(tomllib.load(open('exts/telekinesis.isaacsim.bridge/config/extension.toml','rb'))['package']['version'])"
 Write-Host "VERSION=$VERSION"
 ```
 
-2. Package the extension using NVIDIA's repository tooling. If this repository does not contain `repo.sh` and `repo.bat`, add the NVIDIA Kit extension-template tooling first:
+2. Package the extension from the repository root using the helper script: (Use git bash within the conda environment if powershell fails)
 
 ```bash
-./repo.sh package        # Linux
+bash -x scripts/package-extension.sh
 ```
 
-```powershell
-.\repo.bat package      # Windows
-```
-
-3. Rename the generated archive to the expected release naming convention:
+The script creates a ZIP archive under `packages/` using the release naming convention:
 
 ```text
-telekinesis-ai-telekinesis-isaacsim-extension-linux-x86_64-v<VERSION>.zip
 telekinesis-ai-telekinesis-isaacsim-extension-windows-x86_64-v<VERSION>.zip
 ```
 
