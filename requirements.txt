@@ -1,0 +1,7 @@
+requests
+numpy
+websockets
+fastapi
+uvicorn
+pydantic
+opencv-python
