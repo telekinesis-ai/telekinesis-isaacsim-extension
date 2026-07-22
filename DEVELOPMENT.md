@@ -47,7 +47,11 @@ curl http://127.0.0.1:8766/status
 # {"status":"OK"}
 ```
 
-## Merge to main
+## Manual Deployment
+
+Follow the steps below to release a new version of the extension.
+
+### 1. Linting, Static Checks and API Docs Generation
 
 Run the following before merging to main.
 ```bash
@@ -97,15 +101,6 @@ There is currently no CI for these checks, so run them manually before each PR.
 </details>
 
 
-
-## Manual Deployment
-
-Follow the steps below to release a new version of the extension.
-
-### 1. Verify
-
-Verify that the steps in [Merge to main](#merge-to-main) (including linting and static checks) are complete.
-
 ### 2. Prepare the release
 
 #### 2.1. One-time repository setup
@@ -146,6 +141,13 @@ telekinesis-ai-telekinesis-isaacsim-extension-windows-x86_64-v<VERSION>.zip
 ```bash
 git tag -a "v$VERSION" -m "Release v$VERSION"
 git push origin "v$VERSION"
+```
+
+5. Merge from develop to main
+```
+git merge origin/main
+git checkout main
+git merge origin/develop
 ```
 
 #### 2.3. Release on GitHub
