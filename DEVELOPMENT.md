@@ -156,21 +156,6 @@ git push origin "v$VERSION"
 4. Upload the correctly named packaged archive (`.zip`).
 5. Publish the release.
 
-The repository now includes a GitHub Actions workflow in `.github/workflows/release.yml` that automates the release packaging process.
-
-Here is what happens when that workflow runs:
-
-1. `checkout` downloads the repository contents into the runner.
-2. `setup-python` prepares Python so the packaging tools can run.
-3. `Install packaging tooling` installs the required Python packages and makes the NVIDIA packaging script executable if present.
-4. `Build extension package` runs the packaging step with `./repo.sh package` (or the equivalent packaging command provided by the NVIDIA tooling).
-5. `Locate generated archive` searches the build output for the generated `.zip` file and records its path.
-6. `Upload release asset` attaches that `.zip` file to the GitHub Release so it appears in the release page as a downloadable asset.
-
-If the workflow runs successfully, the packaged ZIP is uploaded automatically as part of the release process.
-
-Do not remove GitHub's automatically generated **Source code** archives.
-
 NVIDIA's publishing pipeline runs nightly. Check the Community Registry the following day and search for:
 
 ```text
