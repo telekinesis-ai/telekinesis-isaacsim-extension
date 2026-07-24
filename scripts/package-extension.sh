@@ -30,20 +30,21 @@ PY
 zip_name="telekinesis-ai-telekinesis-isaacsim-extension-${platform}-x86_64-v${version}.zip"
 zip_path="$output_dir/$zip_name"
 
-python - "$extension_dir" "$zip_path" <<'PY'
+python - "$extension_dir" "$zip_path" "telekinesis.isaacsim.bridge-${version}" <<'PY'
 import sys
 import zipfile
 from pathlib import Path
 
 source_dir = Path(sys.argv[1]).resolve()
 archive_path = Path(sys.argv[2]).resolve()
+version_folder = sys.argv[3]
 archive_path.parent.mkdir(parents=True, exist_ok=True)
 
 with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
     for path in sorted(source_dir.rglob("*")):
         if path.is_dir():
             continue
-        archive.write(path, arcname=str(path.relative_to(source_dir)))
+        archive.write(path, arcname=f"{version_folder}/{path.relative_to(source_dir)}")
 
 print(archive_path)
 PY
