@@ -52,6 +52,19 @@ The endpoint list is generated from the implementation and is kept up to date au
 
 Use **radians** for joint values and **meters** for length-related values.
 
+### WebSocket routes
+
+WebSocket routes cannot be described in OpenAPI, so Swagger UI does not list them. There are two,
+both bound to a single articulation:
+
+- `ws /articulations/{articulation_id}/stream_joint_positions` — the client pushes
+  `{"joint_positions": [...], "indices": [...]?}` frames and the articulation teleports to them.
+  Only the newest frame is applied per simulator update, so a client streaming faster than the
+  simulator updates gets coarser motion rather than motion that lags behind.
+- `ws /articulations/{articulation_id}/stream_articulation_state` — the server pushes one frame per
+  simulator update, identical in shape to the `articulation_state` getter's response. Nothing is
+  sent while the timeline is stopped.
+
 ## License
 
 Proprietary. Copyright (c) 2024-2026 Telekinesis. All rights reserved.

@@ -196,6 +196,13 @@ class ArticulationService:
         """Current joint positions / velocities / efforts of the driven subset."""
         return self.get_device(articulation_id).get_joints_state()
 
+    def get_articulation_state(self, articulation_id):
+        """Every per-frame quantity of one articulation in a single snapshot, or
+        ``None`` when its handle is not currently readable. See
+        :meth:`..core.articulation.SingleArticulation.get_articulation_state`.
+        """
+        return self.get_device(articulation_id).get_articulation_state()
+
     def get_dof_limits(self, articulation_id):
         """``[lower, upper]`` radian limits per driven joint (``get_joints_state`` order)."""
         return {"limits": self.get_device(articulation_id).get_dof_limits()}

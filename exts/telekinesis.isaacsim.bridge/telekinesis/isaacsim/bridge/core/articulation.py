@@ -433,6 +433,37 @@ class SingleArticulation:
             "timestamp": time.monotonic() - self._start_time,
         }
 
+    def get_articulation_state(self):
+        """Every per-frame quantity this device can report, in one snapshot (radians).
+
+        Everything that changes as the simulation runs: the driven joints' state and
+        efforts, the measured joint reaction forces, the last applied action, and the
+        root link's world pose and velocity. The static description (DOF count and
+        names, drive properties, stored reset pose, solver settings) is not repeated
+        here -- :meth:`info` carries that, and it is returned once when the
+        articulation is registered.
+
+        Returns ``None`` when there is nothing to report, rather than raising: a
+        handle invalidated by a timeline stop or a stage change reads back as no
+        joint positions at all, and a caller sampling this every frame wants to skip
+        such a frame and carry on.
+        """
+        if not self.handles_initialized() or self._articulation.get_joint_positions() is None:
+            return None
+
+        position, orientation = self._articulation.get_world_pose()
+        return {
+            **self.get_joints_state(),
+            "applied_joint_efforts": self.get_applied_joint_efforts(),
+            "measured_joint_forces": self.get_measured_joint_forces(),
+            "applied_action": self.get_applied_action(),
+            "world_pose": {
+                "position": position.tolist(),
+                "orientation": orientation.tolist(),
+            },
+            "world_velocity": self.get_world_velocity(),
+        }
+
     def get_dof_limits(self):
         """``[lower, upper]`` radian limits for each driven joint, in ``get_joints_state``'s
         ``joint_positions`` order.
@@ -605,13 +636,13 @@ class SingleArticulation:
         if action is None:
             return {"joint_positions": None, "joint_velocities": None, "joint_efforts": None}
         return {
-            "joint_positions": list(action.joint_positions)
+            "joint_positions": action.joint_positions.tolist()
             if action.joint_positions is not None
             else None,
-            "joint_velocities": list(action.joint_velocities)
+            "joint_velocities": action.joint_velocities.tolist()
             if action.joint_velocities is not None
             else None,
-            "joint_efforts": list(action.joint_efforts)
+            "joint_efforts": action.joint_efforts.tolist()
             if action.joint_efforts is not None
             else None,
         }

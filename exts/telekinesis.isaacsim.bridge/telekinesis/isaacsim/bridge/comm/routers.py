@@ -19,6 +19,8 @@ Routes mirrored from the spec but not yet wired up answer 501 via
 """
 # pylint: enable=line-too-long
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 
 from .dependencies import (
@@ -71,6 +73,34 @@ def not_implemented():
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="Not implemented",
     )
+
+
+async def run_until_first_finished(*coroutines):
+    """Run the given coroutines concurrently until one finishes, then stop the rest.
+
+    Used by the WebSocket routes below, which each need one coroutine per direction
+    of the connection. Isaac Sim owns the event loop these run on, so a task left
+    behind when a connection ends would keep running for the life of the simulator:
+    the survivors are always cancelled and awaited before returning.
+
+    Re-raises whatever the finished coroutine raised, except a client disconnect --
+    that is how a stream normally ends, not a failure.
+    """
+    tasks = [asyncio.ensure_future(coroutine) for coroutine in coroutines]
+    try:
+        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for task in tasks:
+            task.cancel()
+        # A cancelled task is not finished until it has been awaited.
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    # asyncio.wait stores an exception on the task instead of raising it, so a
+    # genuine failure would otherwise vanish here.
+    for task in done:
+        error = task.exception()
+        if error is not None and not isinstance(error, WebSocketDisconnect):
+            raise error
 
 
 # -- articulations (device-kind agnostic) -----------------------------------
@@ -135,7 +165,18 @@ async def stream_joint_positions(websocket: WebSocket, articulation_id: str):
     """High-rate teleport stream: the client opens one connection bound to this articulation
     and pushes {"joint_positions": [...], "indices": [...]?} frames (radians). Fire-and-forget
     -- the server applies each frame and sends nothing back, so the client streams at full rate.
+
+    Only the newest frame is applied, once per simulator update; frames that arrive
+    while one is already waiting are discarded. A client streaming faster than the
+    simulator updates therefore keeps the robot where it wants it *now* instead of
+    working through a backlog of stale positions -- so a drop in frame rate makes the
+    motion coarser, never late. Send a dense path if the intermediate positions
+    matter, and pace it at the simulator's update rate.
     """
+    # Imported here rather than at module scope: scripts/generate_openapi.py imports
+    # this module with no Isaac Sim in the interpreter.
+    import omni.kit.app  # pylint: disable=import-outside-toplevel
+
     service = websocket.app.state.articulation_service
     await websocket.accept()
     try:
@@ -143,28 +184,45 @@ async def stream_joint_positions(websocket: WebSocket, articulation_id: str):
     except HTTPException as exc:
         await websocket.close(code=1008, reason=exc.detail)
         return
-    try:
+
+    # Newest frame received but not yet applied. Receiving only stores it, which is
+    # cheap enough that the receive loop always keeps pace with the client and no
+    # backlog can build.
+    latest_frame = None
+
+    async def receive_frames():
+        nonlocal latest_frame
         while True:
             try:
                 # receive_json() itself can raise (e.g. json.JSONDecodeError, a
-                # ValueError subclass, for a frame that isn't valid JSON) -- kept
-                # inside this same try so a malformed frame is skipped exactly
-                # like a well-formed-but-wrong-shape one, not left to crash the
-                # connection.
-                message = await websocket.receive_json()
+                # ValueError subclass, for a frame that isn't valid JSON).
+                latest_frame = await websocket.receive_json()
+            except ValueError:
+                # Not valid JSON: skip it, keep the stream open.
+                pass1
+
+    async def apply_frames():
+        nonlocal latest_frame
+        app = omni.kit.app.get_app()
+        while True:
+            await app.next_update_async()
+            if latest_frame is None:
+                continue
+            frame, latest_frame = latest_frame, None
+            try:
                 service.stream_joint_positions(
-                    articulation_id, message["joint_positions"], message.get("indices")
+                    articulation_id, frame["joint_positions"], frame.get("indices")
                 )
-            except (KeyError, ValueError):
-                # Bad frame (not valid JSON, or missing/mismatched joint_positions):
-                # skip it, keep the stream open.
+            except (AttributeError, KeyError, TypeError, ValueError):
+                # Well-formed JSON of the wrong shape (not an object, or missing /
+                # mismatched joint_positions): skip it, keep the stream open.
                 pass
             except HTTPException as exc:
                 # The device was deleted mid-stream (get_device now 404s) -- close, don't crash.
                 await websocket.close(code=1008, reason=exc.detail)
                 return
-    except WebSocketDisconnect:
-        pass
+
+    await run_until_first_finished(receive_frames(), apply_frames())
 
 
 @articulations.post(
@@ -187,6 +245,74 @@ async def get_joints_state(
 ):
     """Current positions / velocities / torques of the driven joints."""
     return articulation_service.get_joints_state(articulation_id)
+
+
+@articulations.get(
+    "/articulations/{articulation_id}/articulation_state", summary="Get Articulation State"
+)
+async def get_articulation_state(
+    articulation_id: str, articulation_service=Depends(get_articulation_service)
+):
+    """Every per-frame quantity in one snapshot, or null if the handle is unreadable."""
+    return articulation_service.get_articulation_state(articulation_id)
+
+
+@articulations.websocket("/articulations/{articulation_id}/stream_articulation_state")
+async def stream_articulation_state(websocket: WebSocket, articulation_id: str):
+    """State push stream: the client opens one connection bound to this articulation and
+    the server sends one frame per simulator update, shaped exactly like the
+    ``articulation_state`` getter's response (radians). The client sends nothing.
+
+    Nothing is sent while the timeline is stopped or the articulation's handle is
+    otherwise unreadable; the connection stays open and frames resume on play. A
+    client that reads more slowly than the server sends misses frames rather than
+    falling steadily further behind.
+    """
+    # Imported here rather than at module scope: scripts/generate_openapi.py imports
+    # this module with no Isaac Sim in the interpreter.
+    import omni.kit.app  # pylint: disable=import-outside-toplevel
+
+    service = websocket.app.state.articulation_service
+    await websocket.accept()
+    try:
+        service.get_device(articulation_id)
+    except HTTPException as exc:
+        await websocket.close(code=1008, reason=exc.detail)
+        return
+
+    async def send_state_frames():
+        app = omni.kit.app.get_app()
+        while True:
+            await app.next_update_async()
+            try:
+                state = service.get_articulation_state(articulation_id)
+            except HTTPException as exc:
+                # The device was deleted mid-stream (get_device now 404s) -- close, don't crash.
+                await websocket.close(code=1008, reason=exc.detail)
+                return
+            if state is None:
+                continue
+            try:
+                await websocket.send_json(state)
+            except (TypeError, ValueError):
+                # The state itself could not be serialized -- a real fault worth
+                # surfacing, not a connection problem.
+                raise
+            except Exception:  # pylint: disable=broad-except
+                # The client disconnected between reading the state and sending
+                # it. Pushing to that socket is all this does, so stop.
+                return
+
+    async def watch_for_disconnect():
+        # Nothing is expected on this connection, but something has to read from it:
+        # a disconnect is delivered as a received message, so a send-only handler
+        # would never notice the client had gone and would push frames forever.
+        while True:
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                return
+
+    await run_until_first_finished(send_state_frames(), watch_for_disconnect())
 
 
 @articulations.get("/articulations/{articulation_id}/dof_limits", summary="Get Dof Limits")
