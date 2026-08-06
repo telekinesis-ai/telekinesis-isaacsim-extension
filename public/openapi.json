@@ -337,6 +337,47 @@
         }
       }
     },
+    "/articulations/{articulation_id}/articulation_state": {
+      "get": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Get Articulation State",
+        "description": "Every per-frame quantity in one snapshot, or null if the handle is unreadable.",
+        "operationId": "get_articulation_state_articulations__articulation_id__articulation_state_get",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/articulations/{articulation_id}/dof_limits": {
       "get": {
         "tags": [
@@ -622,6 +663,57 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/articulations/{articulation_id}/dof_gains": {
+      "post": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set Dof Gains",
+        "description": "Retune the position drive's stiffness / damping / maximum effort. Returns the\ndriven joints' resulting drive properties.",
+        "operationId": "set_dof_gains_articulations__articulation_id__dof_gains_post",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DofGainsRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5570,6 +5662,78 @@
         "title": "DefaultJointStateRequest",
         "description": "Body of PUT /articulations/{id}/joints_default_state -- the joint-space\n\"home pose\" applied on the next reset (Stop+Play). Any field left ``None``\nis not touched."
       },
+      "DofGainsRequest": {
+        "properties": {
+          "stiffness": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stiffness"
+          },
+          "damping": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Damping"
+          },
+          "max_effort": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Effort"
+          },
+          "indices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indices"
+          }
+        },
+        "type": "object",
+        "title": "DofGainsRequest",
+        "description": "Body of POST /articulations/{id}/dof_gains -- retune the position drive.\n\n``stiffness`` and ``damping`` are the drive's proportional and derivative\ngains, ``max_effort`` the largest torque/force it may apply. Each may be a\nsingle value for every addressed joint or one value per joint in ``indices``\norder; any field left ``None`` is not touched. ``indices`` defaults to the\ndevice's current driven joints, matching :class:`JointEffortsRequest`.\n\nUsed to correct gains a robot was imported with -- a URDF joint declaring a\nzero effort limit yields a drive that cannot move it -- and to retune tracking\nwithout re-importing. Applies to the running simulation, not the stage."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -6020,13 +6184,6 @@
           "type": {
             "type": "string",
             "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
           }
         },
         "type": "object",

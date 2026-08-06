@@ -44,6 +44,7 @@ from .models import (
     CreateArticulationRequest,
     CreateCameraRequest,
     DefaultJointStateRequest,
+    DofGainsRequest,
     JointEffortsRequest,
     JointPositionsRequest,
     JointVelocitiesRequest,
@@ -162,9 +163,15 @@ async def set_j(
 
 @articulations.websocket("/articulations/{articulation_id}/stream_joint_positions")
 async def stream_joint_positions(websocket: WebSocket, articulation_id: str):
-    """High-rate teleport stream: the client opens one connection bound to this articulation
-    and pushes {"joint_positions": [...], "indices": [...]?} frames (radians). Fire-and-forget
-    -- the server applies each frame and sends nothing back, so the client streams at full rate.
+    """High-rate drive-target stream: the client opens one connection bound to this
+    articulation and pushes {"joint_positions": [...], "indices": [...]?} frames (radians).
+    Fire-and-forget -- the server applies each frame and sends nothing back, so the client
+    streams at full rate.
+
+    Each frame retargets the position drive, so the joints are driven toward the
+    stream rather than placed on it: the measured pose trails the commanded one by
+    the drive's response. Read the result back from
+    ``stream_articulation_state`` rather than assuming the commanded pose was reached.
 
     Only the newest frame is applied, once per simulator update; frames that arrive
     while one is already waiting are discarded. A client streaming faster than the
@@ -199,7 +206,7 @@ async def stream_joint_positions(websocket: WebSocket, articulation_id: str):
                 latest_frame = await websocket.receive_json()
             except ValueError:
                 # Not valid JSON: skip it, keep the stream open.
-                pass1
+                pass
 
     async def apply_frames():
         nonlocal latest_frame
@@ -390,6 +397,19 @@ async def get_dof_properties(
 ):
     """Per-driven-joint drive properties (limits, drive mode, stiffness, damping)."""
     return articulation_service.get_dof_properties(articulation_id)
+
+
+@articulations.post("/articulations/{articulation_id}/dof_gains", summary="Set Dof Gains")
+async def set_dof_gains(
+    articulation_id: str,
+    req: DofGainsRequest,
+    articulation_service=Depends(get_articulation_service),
+):
+    """Retune the position drive's stiffness / damping / maximum effort. Returns the
+    driven joints' resulting drive properties."""
+    return articulation_service.set_dof_gains(
+        articulation_id, req.stiffness, req.damping, req.max_effort, req.indices
+    )
 
 
 @articulations.get(

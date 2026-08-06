@@ -58,7 +58,8 @@ WebSocket routes cannot be described in OpenAPI, so Swagger UI does not list the
 both bound to a single articulation:
 
 - `ws /articulations/{articulation_id}/stream_joint_positions` — the client pushes
-  `{"joint_positions": [...], "indices": [...]?}` frames and the articulation teleports to them.
+  `{"joint_positions": [...], "indices": [...]?}` frames and each one retargets the articulation's
+  position drive, so the joints are driven toward the stream rather than placed on it.
   Only the newest frame is applied per simulator update, so a client streaming faster than the
   simulator updates gets coarser motion rather than motion that lags behind.
 - `ws /articulations/{articulation_id}/stream_articulation_state` — the server pushes one frame per

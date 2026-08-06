@@ -89,6 +89,26 @@ class JointEffortsRequest(BaseModel):
     indices: list[int] | None = None
 
 
+class DofGainsRequest(BaseModel):
+    """Body of POST /articulations/{id}/dof_gains -- retune the position drive.
+
+    ``stiffness`` and ``damping`` are the drive's proportional and derivative
+    gains, ``max_effort`` the largest torque/force it may apply. Each may be a
+    single value for every addressed joint or one value per joint in ``indices``
+    order; any field left ``None`` is not touched. ``indices`` defaults to the
+    device's current driven joints, matching :class:`JointEffortsRequest`.
+
+    Used to correct gains a robot was imported with -- a URDF joint declaring a
+    zero effort limit yields a drive that cannot move it -- and to retune tracking
+    without re-importing. Applies to the running simulation, not the stage.
+    """
+
+    stiffness: list[float] | float | None = None
+    damping: list[float] | float | None = None
+    max_effort: list[float] | float | None = None
+    indices: list[int] | None = None
+
+
 class DefaultJointStateRequest(BaseModel):
     """Body of PUT /articulations/{id}/joints_default_state -- the joint-space
     "home pose" applied on the next reset (Stop+Play). Any field left ``None``

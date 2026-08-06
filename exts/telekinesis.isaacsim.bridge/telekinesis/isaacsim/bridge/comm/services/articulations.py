@@ -171,7 +171,7 @@ class ArticulationService:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     def stream_joint_positions(self, articulation_id, positions, indices):
-        """Teleport the device's chosen joints for a high-rate stream. See
+        """Retarget the device's chosen joints' drive for a high-rate stream. See
         :meth:`..core.articulation.SingleArticulation.stream_joint_positions`.
 
         Deliberately does NOT translate ValueError to HTTPException -- the
@@ -229,6 +229,22 @@ class ArticulationService:
     def get_dof_properties(self, articulation_id):
         """Per-driven-joint drive properties (limits, drive mode, gains)."""
         return {"dof_properties": self.get_device(articulation_id).dof_properties()}
+
+    def set_dof_gains(
+        self, articulation_id, stiffness, damping, max_effort, indices
+    ):
+        """Set the position drive's stiffness / damping / effort ceiling; return the
+        driven joints' resulting drive properties."""
+        device = self.get_device(articulation_id)
+        try:
+            return device.set_dof_gains(
+                stiffness=stiffness,
+                damping=damping,
+                max_effort=max_effort,
+                indices=indices,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     def get_dof_index(self, articulation_id, joint_name):
         """DOF index of ``joint_name`` within the device's driven subset."""

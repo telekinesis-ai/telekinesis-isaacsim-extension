@@ -50,6 +50,24 @@ _SETTLED_FRAMES = 5  # consecutive low-velocity frames => stalled
 _BIND_RETRIES = 60
 _MOTION_MAX_FRAMES = 1800
 
+# Position-drive values substituted for a driven joint that reports none, so that
+# every robot the bridge is asked to position-control can actually be positioned.
+# Two ways a joint arrives without them: a URDF that leaves its joint effort limit
+# at zero (a great many do), which carries through to a drive permitted no torque;
+# and a USD authored with no drive gains, which the bridge uses as it finds it
+# rather than re-authoring, unlike a URDF it imports itself. Either way the joint
+# ignores every position command and its links fall under gravity.
+#
+# Zero is a missing value here rather than a deliberate one, so it is filled in.
+# The stiffness and damping are a firm position drive for a manipulator, chosen to
+# hold a pose against gravity across the size range the bridge sees rather than
+# tuned for any one robot; the effort is a ceiling high enough not to constrain any
+# of them (newton-metres), bounding the drive's output without shaping it. Override
+# any of the three with set_dof_gains.
+_FALLBACK_STIFFNESS = 1.0e7
+_FALLBACK_DAMPING = 1.0e5
+_FALLBACK_MAX_EFFORT = 1.0e6
+
 
 def find_driver_joint(stage, prim_path, dof_names):
     """Return the gripper's actuated driver joint name from ``dof_names``.
@@ -110,6 +128,9 @@ class SingleArticulation:
     async def bind(self):
         """(Re)initialize the articulation against the current physics view.
 
+        Starts the timeline if it is not already running, since an articulation has
+        no physics handle to bind to while it is stopped.
+
         Safe to call repeatedly: reuses the handle and just re-initializes, which
         is needed when the timeline was stopped/replayed between client sessions
         (a stale handle returns None from get_joint_positions). Only reports bound
@@ -132,7 +153,13 @@ class SingleArticulation:
                     self._articulation.num_dof
                     and self._articulation.get_joint_positions() is not None
                 ):
+                    # Order matters, and all four run within this one frame: the
+                    # drive needs usable gains before it is asked to hold a pose,
+                    # and the pose it is aligned to is the one worth recording as
+                    # the reset state.
                     self._resolve_driven_joints()
+                    self._backfill_missing_drive_gains()
+                    self._align_drive_to_current_pose()
                     self._ensure_default_state_populated()
                     carb.log_info(
                         f"[bridge] bound articulation {self.prim_path}: "
@@ -147,6 +174,77 @@ class SingleArticulation:
         if last_exc is not None:
             detail += f" (last error: {last_exc!r})"
         raise RuntimeError(detail)
+
+    def _align_drive_to_current_pose(self):
+        """Point the position drive at the pose the joints are already in.
+
+        A freshly imported articulation carries whatever drive targets the importer
+        authored -- normally zero for every joint, regardless of where the joints
+        were posed on the stage. Starting the timeline therefore makes the drives
+        pull the articulation toward that authored target, which shows up as the
+        arm snapping away from the pose it was set up in the moment physics begins;
+        the lightest, widest-range joints (a wrist) travel the furthest before
+        anything corrects it.
+
+        Aligning the target with the measured positions here, in the same frame the
+        handle becomes valid, leaves the articulation standing where it was. The
+        positions are written back as well, not just commanded, so the alignment
+        holds immediately and without depending on the drive: a joint the drive
+        cannot move (no stiffness) would otherwise keep falling, and any joint that
+        drifted in the few frames the handle took to become valid is put back rather
+        than pulled back. The velocities are zeroed so nothing carries over from a
+        previous run's motion.
+
+        This covers every DOF of the underlying handle rather than just this
+        device's driven subset: the stale targets are a property of the
+        articulation, and the joints this device does not drive would otherwise
+        still be pulled.
+        """
+        positions = self._articulation.get_joint_positions()
+        self._articulation.set_joint_positions(positions)
+        self._articulation.set_joint_velocities(np.zeros_like(positions))
+        self._articulation.apply_action(ArticulationAction(joint_positions=positions))
+
+    def _backfill_missing_drive_gains(self):
+        """Give driven joints whose position drive reports no gains usable ones.
+
+        Every move this device performs is a position-drive command, so a joint whose
+        drive is permitted no torque, or given no stiffness to generate any with,
+        ignores all of them: the joint never moves, its links sag under gravity, and
+        nothing reports an error. A robot the bridge imports from a URDF has its
+        drives authored by the importer and usually arrives with stiffness; one
+        already present in the stage arrives with whatever its USD was authored
+        with, which may be nothing at all.
+
+        Each quantity is filled in only where the drive reports zero, so an authored
+        value is never overridden, and damping is supplied only alongside a supplied
+        stiffness -- adding damping to a drive that already has gains would change
+        how a deliberately tuned joint behaves. What was substituted is logged: the
+        values are chosen to work rather than to describe the real robot, so torque
+        readings from an affected joint do not report its true limits. Filling in
+        the URDF's effort limits, or authoring drives in the USD, is the proper fix;
+        :meth:`set_dof_gains` overrides the substituted values in the meantime.
+        """
+        substituted = {}
+        for name, index, props in zip(self.dof_names, self.joint_indices, self.dof_properties()):
+            gains = {}
+            if props["stiffness"] == 0.0:
+                gains["stiffness"] = _FALLBACK_STIFFNESS
+                if props["damping"] == 0.0:
+                    gains["damping"] = _FALLBACK_DAMPING
+            if props["max_effort"] == 0.0:
+                gains["max_effort"] = _FALLBACK_MAX_EFFORT
+            if gains:
+                self.set_dof_gains(indices=[index], **gains)
+                substituted[name] = gains
+
+        if substituted:
+            carb.log_warn(
+                f"[bridge] articulation {self.prim_path}: substituted position-drive values for "
+                f"joint(s) that reported none: {substituted}. Without them these joints ignore "
+                "position commands and sag under gravity; fill in the URDF's effort limits or "
+                "author the USD's drives to control them with the robot's own figures."
+            )
 
     def _ensure_default_state_populated(self):
         """Isaac reports no stored default (reset) pose until something sets one --
@@ -361,14 +459,20 @@ class SingleArticulation:
         }
 
     def stream_joint_positions(self, positions, indices=None):
-        """Teleport joints for high-rate streaming: write the DOF state directly, with
-        no drive command, no velocity zeroing, and no completion read-back.
+        """Retarget the position drive for high-rate streaming: issue the drive command
+        and nothing else -- no wait for the joints to arrive, no completion read-back.
 
-        Intended to be called repeatedly (e.g. from a WebSocket): the direct state
-        write is the whole operation, so consecutive updates flow smoothly and
-        cheaply. Because it issues no position-drive command, keep streaming to hold
-        a pose -- if updates stop, the position drive settles toward its last
-        commanded target.
+        Intended to be called repeatedly (e.g. from a WebSocket) with a target that
+        moves a little each frame, so the joints follow the stream continuously. The
+        joints are driven there rather than placed there, so they track the stream
+        with the drive's own response: expect the measured pose to trail the
+        commanded one slightly, and gravity sag or a steady-state offset to remain
+        while the drive holds against a load. A joint with no usable drive (zero
+        stiffness and zero maximum effort) does not move at all -- :meth:`bind` warns
+        about those, and :meth:`set_dof_gains` corrects them.
+
+        Because the drive target is the command, stopping the stream holds the last
+        streamed pose.
 
         ``indices`` defaults to this device's driven subset (``joint_indices``),
         matching :meth:`set_j`. This is synchronous and lock-free: it performs no
@@ -381,7 +485,9 @@ class SingleArticulation:
             raise ValueError(f"expected {len(idx)} joint positions, got {target.shape[0]}")
         self._validate_indices(idx)
 
-        self._articulation.set_joint_positions(target, joint_indices=idx)
+        self._articulation.apply_action(
+            ArticulationAction(joint_positions=target, joint_indices=idx)
+        )
         self._target = target
 
     def set_joint_velocities(self, velocities, indices=None):
@@ -548,6 +654,58 @@ class SingleArticulation:
             }
             for i in self.joint_indices
         ]
+
+    def set_dof_gains(self, stiffness=None, damping=None, max_effort=None, indices=None):
+        """Set the position drive's gains and effort ceiling on the chosen joint
+        ``indices`` (defaults to this device's driven subset).
+
+        ``stiffness`` and ``damping`` are the drive's proportional and derivative
+        gains; ``max_effort`` is the largest torque/force the drive may apply. Each
+        may be a single value applied to every addressed joint, or one value per
+        joint in ``indices`` order. Omitted quantities are left untouched.
+
+        The gains a robot arrives with come from its URDF and the importer's
+        defaults, which are not always usable -- a joint declaring a zero effort
+        limit ends up with a drive that cannot move it at all. This is the runtime
+        correction for that, and for retuning tracking without re-importing.
+        Higher stiffness tracks a commanded pose more closely at the cost of
+        stiffer, less stable contacts; damping suppresses the resulting overshoot.
+
+        The change applies to the running simulation only; it is not written back
+        to the stage.
+        """
+        idx = list(self.joint_indices) if indices is None else list(indices)
+        self._validate_indices(idx)
+
+        def as_row(values, quantity):
+            if values is None:
+                return None
+            values = np.asarray(values, dtype=float)
+            try:
+                row = np.broadcast_to(values, (len(idx),))
+            except ValueError as exc:
+                raise ValueError(
+                    f"expected 1 or {len(idx)} value(s) for {quantity}, "
+                    f"got {values.size}"
+                ) from exc
+            if np.any(row < 0.0):
+                raise ValueError(f"{quantity} cannot be negative, got {row.tolist()}")
+            return row.reshape(1, len(idx))
+
+        stiffness_row = as_row(stiffness, "stiffness")
+        damping_row = as_row(damping, "damping")
+        effort_row = as_row(max_effort, "max_effort")
+
+        # The physics view is the only place these are writable --
+        # prims.SingleArticulation exposes no setter, the same gap get_dof_limits
+        # works around. Its arrays carry a leading per-environment dimension.
+        view = self._articulation._articulation_view
+        if stiffness_row is not None or damping_row is not None:
+            view.set_gains(kps=stiffness_row, kds=damping_row, joint_indices=idx)
+        if effort_row is not None:
+            view.set_max_efforts(effort_row, joint_indices=idx)
+
+        return {"applied": True, "indices": idx, "dof_properties": self.dof_properties()}
 
     def get_applied_joint_efforts(self):
         """Efforts last commanded via :meth:`set_joint_efforts` on the driven
