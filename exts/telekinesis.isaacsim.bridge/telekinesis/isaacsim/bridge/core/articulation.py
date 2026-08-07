@@ -467,9 +467,8 @@ class SingleArticulation:
         joints are driven there rather than placed there, so they track the stream
         with the drive's own response: expect the measured pose to trail the
         commanded one slightly, and gravity sag or a steady-state offset to remain
-        while the drive holds against a load. A joint with no usable drive (zero
-        stiffness and zero maximum effort) does not move at all -- :meth:`bind` warns
-        about those, and :meth:`set_dof_gains` corrects them.
+        while the drive holds against a load. How closely the joints follow is a
+        property of their drive gains, which :meth:`set_dof_gains` retunes.
 
         Because the drive target is the command, stopping the stream holds the last
         streamed pose.
@@ -664,12 +663,11 @@ class SingleArticulation:
         may be a single value applied to every addressed joint, or one value per
         joint in ``indices`` order. Omitted quantities are left untouched.
 
-        The gains a robot arrives with come from its URDF and the importer's
-        defaults, which are not always usable -- a joint declaring a zero effort
-        limit ends up with a drive that cannot move it at all. This is the runtime
-        correction for that, and for retuning tracking without re-importing.
-        Higher stiffness tracks a commanded pose more closely at the cost of
-        stiffer, less stable contacts; damping suppresses the resulting overshoot.
+        Use this to retune how a robot tracks a commanded pose without re-importing
+        it, and to replace any value :meth:`bind` had to substitute because the
+        drive reported none, with the figures the real robot's drives use. Higher
+        stiffness tracks a commanded pose more closely at the cost of stiffer, less
+        stable contacts; damping suppresses the resulting overshoot.
 
         The change applies to the running simulation only; it is not written back
         to the stage.
