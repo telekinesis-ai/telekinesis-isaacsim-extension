@@ -683,8 +683,7 @@ class SingleArticulation:
                 row = np.broadcast_to(values, (len(idx),))
             except ValueError as exc:
                 raise ValueError(
-                    f"expected 1 or {len(idx)} value(s) for {quantity}, "
-                    f"got {values.size}"
+                    f"expected 1 or {len(idx)} value(s) for {quantity}, got {values.size}"
                 ) from exc
             if np.any(row < 0.0):
                 raise ValueError(f"{quantity} cannot be negative, got {row.tolist()}")

@@ -32,9 +32,7 @@ def _request(base, method, path, body=None):
 
 def main():
     """Retune every driven joint's position drive stiffness and damping, by id."""
-    parser = argparse.ArgumentParser(
-        description="Retune an articulation's position drive gains."
-    )
+    parser = argparse.ArgumentParser(description="Retune an articulation's position drive gains.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(

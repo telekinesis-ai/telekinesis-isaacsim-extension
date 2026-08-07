@@ -230,9 +230,7 @@ class ArticulationService:
         """Per-driven-joint drive properties (limits, drive mode, gains)."""
         return {"dof_properties": self.get_device(articulation_id).dof_properties()}
 
-    def set_dof_gains(
-        self, articulation_id, stiffness, damping, max_effort, indices
-    ):
+    def set_dof_gains(self, articulation_id, stiffness, damping, max_effort, indices):
         """Set the position drive's stiffness / damping / effort ceiling; return the
         driven joints' resulting drive properties."""
         device = self.get_device(articulation_id)

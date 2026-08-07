@@ -237,9 +237,7 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--prim", required=True, help="camera prim path to register")
-    parser.add_argument(
-        "--keep", action="store_true", help="don't delete the camera at the end"
-    )
+    parser.add_argument("--keep", action="store_true", help="don't delete the camera at the end")
     args = parser.parse_args()
     base = f"http://{args.host}:{args.port}"
     _exercise_routes(base, args)

@@ -82,8 +82,7 @@ def main():
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
 
     ws_url = (
-        f"ws://{args.host}:{args.port}"
-        f"/articulations/{articulation_id}/stream_articulation_state"
+        f"ws://{args.host}:{args.port}/articulations/{articulation_id}/stream_articulation_state"
     )
     print(f"reading {NUM_FRAMES} frames <- {ws_url}")
     asyncio.run(print_state_frames(ws_url))
