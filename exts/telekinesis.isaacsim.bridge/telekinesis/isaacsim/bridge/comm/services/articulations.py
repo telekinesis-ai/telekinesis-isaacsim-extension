@@ -595,8 +595,6 @@ class ArticulationService:
                 gripper_mount_path,
                 gripper.attachment_point_paths,
                 offset,
-                namespace="Tool",
-                variant=f"{arm_leaf}_with_tool",
                 mask_collisions=mask_collisions,
             )
         except RuntimeError as exc:

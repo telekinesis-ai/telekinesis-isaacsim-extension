@@ -30,6 +30,22 @@
   colliding with each other. It only applies to a suction gripper — an articulated one settles
   collisions through the articulation merge.
 
+### Fixed
+- `assemble_robot` with a suction gripper no longer snaps the gripper onto the arm and drags the
+  arm with it when the timeline plays. Three things fed into it:
+  - The placement and the collision mask were authored through `RobotAssembler`'s variant machinery,
+    into a session sublayer that was torn down again, leaving the fixed joint and the attachment
+    points baked against a pose the gripper no longer had. The gripper is now placed at the mount
+    pose directly, in the stage's own edit layer.
+  - Assembly read the arm's pose in the same update that stopped the timeline, before stopping had
+    restored the arm's joints, so the gripper was mounted against the last simulated pose and the
+    arm then moved out from under it. Assembly now waits for the stop to land.
+  - Re-assembling a gripper left the previous assembly's fixed joint in place, so two joints fought
+    over the same body. Stale mount joints are now removed first.
+- The mount joint's local frames are written from the requested offset rather than measured back off
+  the stage, so the joint holds the pose that was asked for regardless of where the arm and the
+  gripper stood when it was created.
+
 ## [0.1.3] - 2026-08-04
 ### Added
 - `GET /articulations/{id}/articulation_state`: every per-frame quantity of one articulation in a

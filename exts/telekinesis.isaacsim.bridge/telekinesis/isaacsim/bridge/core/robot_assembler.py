@@ -12,9 +12,10 @@ Two kinds of gripper, two paths:
   devices keep that *same* handle and each addresses only its own columns
   (resolved by joint name) -- see ``adopt_shared_articulation`` on the device class.
 * A **suction** gripper (:func:`attach_surface_gripper`) has no joints and no
-  articulation to merge, so it is bolted on with a fixed joint that is excluded
-  from the articulation, and its attachment points are re-parked onto the arm. The
-  arm's articulation is unchanged; the gripper stays its own device.
+  articulation to merge, so it is placed at the mount directly, bolted on with a
+  fixed joint that is excluded from the articulation, and its attachment points are
+  re-parked onto the arm. The arm's articulation is unchanged; the gripper stays its
+  own device.
 
 omni/isaac imports live at module top (only imported inside Isaac Sim), matching
 :mod:`.urdf_loader`. ``RobotAssembler`` ships as its own Kit extension, so it is
@@ -30,6 +31,9 @@ import carb
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
 
 _BIND_RETRIES = 60
+# Name of the fixed joint the suction path authors, matched on to clear out the ones
+# an earlier assembly of the same gripper left behind.
+_MOUNT_JOINT_NAME = "AssemblerFixedJoint"
 
 
 def find_prim_by_name(stage, root_path, name):
@@ -65,28 +69,40 @@ def get_articulation_base_link_name(articulation):
     return articulation._articulation_view.body_names[0]
 
 
-def apply_attach_offset(prim_path, translation_m, rotation_deg):
-    """Nudge the attach prim by a custom offset in its own (mount-local) frame.
+def offset_matrix(offset):
+    """Matrix form of a ``models.Transformation`` mount offset, identity for ``None``.
 
-    Applied between ``begin_assembly`` and ``assemble`` so the fixed joint is baked
-    at the adjusted relative pose. No-op when both offsets are zero.
+    ``offset.translation`` is in meters and ``offset.rotation`` is XYZ Euler degrees,
+    both read in the mount frame.
     """
-    if not any(translation_m) and not any(rotation_deg):
-        return
+    if offset is None:
+        return Gf.Matrix4d(1.0)
 
-    prim = omni.usd.get_context().get_stage().GetPrimAtPath(prim_path)
-    old_mat = omni.usd.get_local_transform_matrix(prim)
-
+    rotation_deg = offset.rotation
     rot = (
         Gf.Rotation(Gf.Vec3d(1, 0, 0), rotation_deg[0])
         * Gf.Rotation(Gf.Vec3d(0, 1, 0), rotation_deg[1])
         * Gf.Rotation(Gf.Vec3d(0, 0, 1), rotation_deg[2])
     )
-    offset = Gf.Matrix4d().SetRotate(rot)
-    offset.SetTranslateOnly(Gf.Vec3d(*translation_m))
+    matrix = Gf.Matrix4d().SetRotate(rot)
+    matrix.SetTranslateOnly(Gf.Vec3d(*offset.translation))
+    return matrix
+
+
+def apply_attach_offset(prim_path, offset):
+    """Nudge the attach prim by a custom offset in its own (mount-local) frame.
+
+    Applied between ``begin_assembly`` and ``assemble`` so the fixed joint is baked
+    at the adjusted relative pose. No-op without an offset.
+    """
+    if offset is None:
+        return
+
+    prim = omni.usd.get_context().get_stage().GetPrimAtPath(prim_path)
+    old_mat = omni.usd.get_local_transform_matrix(prim)
 
     # offset * old_mat -> offset expressed in the prim's local frame.
-    new_mat = offset * old_mat
+    new_mat = offset_matrix(offset) * old_mat
     omni.kit.commands.execute(
         "TransformPrimCommand",
         path=prim.GetPath(),
@@ -140,8 +156,7 @@ async def assemble_tool(
         variant,
     )
 
-    if offset is not None:
-        apply_attach_offset(gripper_prim, offset.translation, offset.rotation)
+    apply_attach_offset(gripper_prim, offset)
 
     assembler.assemble()
     assembler.finish_assemble()
@@ -159,32 +174,33 @@ async def attach_surface_gripper(
     gripper_mount_path,
     attachment_point_paths,
     offset,
-    namespace,
-    variant,
     mask_collisions,
 ):
     """Fix a suction gripper to the arm's mount link and re-park its attachment points.
 
     The suction counterpart to :func:`assemble_tool`. A suction gripper is not an
-    articulation, so the two cannot share ``RobotAssembler.assemble()`` -- that path
-    begins by stripping the attachment's articulation root, which a suction gripper
-    does not have. The steps a suction gripper needs instead:
+    articulation, so the two cannot share ``RobotAssembler``'s assembly path -- that
+    one begins by stripping the attachment's articulation root, which a suction
+    gripper does not have, and it authors the result as an asset variant through a
+    session sublayer that is torn down afterwards. The steps a suction gripper needs
+    instead:
 
-    1. ``begin_assembly`` places the gripper at the arm's mount link (the same
-       placement the articulated path uses; it does not touch articulations). When
-       the mount frame is the gripper prim itself, its transform is cleared first --
-       see :func:`_reset_local_transform`.
-    2. ``offset`` is baked in on top of that placement, then the gripper is freed
-       from the stage -- any joint holding it to the world is disabled and it stops
-       being kinematic -- so the new fixed joint is the only thing constraining it.
-    3. A fixed joint excluded from the articulation joins the arm's mount link to
+    1. Any fixed joint an earlier assembly left on the gripper is removed, so the
+       only thing holding the gripper afterwards is the joint this call creates.
+    2. The gripper is moved so its mount body sits on the arm's mount link (see
+       :func:`_place_at_mount`), in the stage's own edit layer, so the pose the
+       gripper is bolted at is the pose it keeps.
+    3. The gripper is freed from the stage -- any joint holding it to the world is
+       disabled and it stops being kinematic -- so the new fixed joint is the only
+       thing constraining it.
+    4. A fixed joint excluded from the articulation joins the arm's mount link to
        the gripper's mount body, leaving the arm's articulation topology unchanged.
-    4. Every attachment point is re-parked onto the arm's mount link: its
+    5. Every attachment point is re-parked onto the arm's mount link: its
        ``physics:body1`` is re-pointed there and its local frame recomputed so the
        parked joint holds nothing. Until this is done the attachment points are
        still parked against whatever body the asset shipped them against, and the
        gripper cannot grip.
-    5. Collisions between the arm and the gripper are masked (``mask_collisions``)
+    6. Collisions between the arm and the gripper are masked (``mask_collisions``)
        -- the cups sit against the flange, and unlike the articulated path there is
        no articulation merge to sort this out.
 
@@ -196,7 +212,14 @@ async def attach_surface_gripper(
     ext_manager.set_extension_enabled_immediate("isaacsim.robot_setup.assembler", True)
     from isaacsim.robot_setup.assembler import robot_assembler as isaac_assembler
 
+    app = omni.kit.app.get_app()
     omni.timeline.get_timeline_interface().stop()
+    # Stopping restores the arm's joints to their authored pose, but not before the
+    # next updates land. Every transform below is read off the arm, so waiting here is
+    # what keeps the gripper from being mounted against the last simulated pose and
+    # then having the arm move out from under it when the timeline plays again.
+    await app.next_update_async()
+    await app.next_update_async()
 
     if not stage.GetPrimAtPath(arm_prim).IsValid():
         raise RuntimeError(f"arm prim {arm_prim!r} not found in the open stage")
@@ -205,62 +228,115 @@ async def attach_surface_gripper(
 
     arm_mount = find_prim_by_name(stage, arm_prim, arm_mount_link)
 
-    if gripper_mount_path == gripper_prim:
-        _reset_local_transform(stage, gripper_prim)
+    _remove_previous_mount_joints(stage, gripper_prim)
+    _place_at_mount(stage, arm_mount, gripper_prim, gripper_mount_path, offset)
 
     assembler = isaac_assembler.RobotAssembler()
-    assembler.begin_assembly(
-        stage,
-        arm_prim,
-        arm_mount,
-        gripper_prim,
-        gripper_mount_path,
-        namespace,
-        variant,
-    )
-
-    if offset is not None:
-        apply_attach_offset(gripper_prim, offset.translation, offset.rotation)
-
     _release_from_stage(stage, assembler, gripper_prim, attachment_point_paths)
 
-    fixed_joint = assembler.create_fixed_joint(
-        gripper_mount_path, target0=arm_mount, target1=gripper_mount_path
-    )
-    fixed_joint.CreateExcludeFromArticulationAttr(True)
+    await app.next_update_async()
+    await app.next_update_async()
+    fixed_joint = _create_mount_joint(stage, arm_mount, gripper_mount_path, offset)
 
+    # Parking reads the placement back off the stage, so let the move above compose.
+    await app.next_update_async()
     _park_attachment_points(stage, isaac_assembler, attachment_point_paths, arm_mount)
 
     if mask_collisions:
         assembler.mask_collisions(arm_prim, gripper_prim)
 
-    assembler.finish_assemble()
-
-    app = omni.kit.app.get_app()
     await app.next_update_async()
     await app.next_update_async()
 
     return fixed_joint.GetPath().pathString
 
 
-def _reset_local_transform(stage, prim_path):
-    """Put a prim back at its parent's origin, so ``begin_assembly`` can place it.
+def _remove_previous_mount_joints(stage, gripper_prim):
+    """Delete the mount joints an earlier assembly of this gripper left behind.
 
-    ``begin_assembly`` reads the mount frame's transform *relative to the prim being
-    attached* and cancels it out, which is right when the mount frame is a link
-    inside the gripper. When the mount frame IS the gripper prim -- the default for a
-    suction gripper, which is one rigid body with no internal mount link -- what it
-    reads instead is the gripper's own placement in the stage, and the gripper ends
-    up displaced by exactly that. Clearing the transform first makes the two
-    readings the same, and costs nothing: the placement is about to be overwritten.
+    Each assembly authors its joint at a fresh path rather than reusing one, so an
+    old joint would survive a re-assembly -- still enabled, and still holding the
+    gripper at whatever pose it was authored for. That fights the new joint for the
+    same body, which PhysX resolves by dragging the arm.
+
+    A re-assembly happens whenever the bridge's assembly record is dropped but the
+    stage is not: re-registering the arm or the gripper, or deleting and re-creating
+    either of them, is enough.
     """
-    prim = stage.GetPrimAtPath(prim_path)
+    stale = [
+        prim.GetPath().pathString
+        for prim in Usd.PrimRange(stage.GetPrimAtPath(gripper_prim))
+        if prim.GetName().startswith(_MOUNT_JOINT_NAME)
+    ]
+    if stale:
+        carb.log_info(f"[bridge] removing stale mount joints before re-assembly: {stale}")
+        omni.kit.commands.execute("DeletePrims", paths=stale, destructive=True)
+
+
+def _place_at_mount(stage, arm_mount_path, gripper_prim, gripper_mount_path, offset):
+    """Move the gripper so its mount body lands on the arm's mount link.
+
+    The pose asked for is ``w_T_g = w_T_m . m_T_g``: the arm mount link's own world
+    transform, with the requested offset ``m_T_g`` (identity when ``offset`` is
+    ``None``) applied in the mount frame. Gf matrices multiply row-vector-first, so
+    that composition is spelled ``m_T_g * w_T_m`` below.
+
+    The gripper's *root* is what carries a transform, so the gripper mount body's
+    pose within the gripper is divided back out; when the mount body is the root
+    itself that factor is the identity. The result is written as the root's transform
+    relative to its parent -- the offset replaces the gripper's placement in the
+    stage rather than adding to it.
+    """
+    gripper = stage.GetPrimAtPath(gripper_prim)
+    gripper_world = omni.usd.get_world_transform_matrix(gripper)
+    parent_world = omni.usd.get_world_transform_matrix(gripper.GetParent())
+    arm_mount_world = omni.usd.get_world_transform_matrix(
+        stage.GetPrimAtPath(arm_mount_path)
+    )
+    gripper_mount_world = omni.usd.get_world_transform_matrix(
+        stage.GetPrimAtPath(gripper_mount_path)
+    )
+
+    # Mount body expressed in the gripper root's frame, so it can be divided out.
+    mount_in_gripper = gripper_mount_world * gripper_world.GetInverse()
+    target_world = mount_in_gripper.GetInverse() * offset_matrix(offset) * arm_mount_world
+
     omni.kit.commands.execute(
         "TransformPrimCommand",
-        path=prim.GetPath(),
-        new_transform_matrix=Gf.Matrix4d(1.0),
-        old_transform_matrix=omni.usd.get_local_transform_matrix(prim),
+        path=gripper.GetPath(),
+        new_transform_matrix=target_world * parent_world.GetInverse(),
+        old_transform_matrix=omni.usd.get_local_transform_matrix(gripper),
     )
+
+
+def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
+    """Bolt the gripper's mount body to the arm's mount link at exactly ``m_T_g``.
+
+    The joint's frame on the arm's mount link is the requested offset, and its frame
+    on the gripper is the gripper mount body's own origin -- which is the pose
+    :func:`_place_at_mount` just moved the gripper to, so the joint is satisfied the
+    moment it is created and there is nothing for physics to correct.
+
+    Both frames are written from the offset rather than measured back off the stage.
+    Measuring is what the assembler does, and it makes the joint only as good as the
+    poses the arm and the gripper happen to hold at that instant; writing the offset
+    means the joint says what was asked for regardless.
+
+    The joint is excluded from the articulation, so the arm's DOF are unchanged.
+    """
+    joint = UsdPhysics.FixedJoint.Define(
+        stage, f"{gripper_mount_path}/{_MOUNT_JOINT_NAME}"
+    )
+    joint.CreateBody0Rel().SetTargets([Sdf.Path(arm_mount_path)])
+    joint.CreateBody1Rel().SetTargets([Sdf.Path(gripper_mount_path)])
+
+    # mount_pose = Gf.Transform(offset_matrix(offset))
+    # joint.CreateLocalPos0Attr().Set(Gf.Vec3f(mount_pose.GetTranslation()))
+    # joint.CreateLocalRot0Attr().Set(Gf.Quatf(mount_pose.GetRotation().GetQuat()))
+    # joint.CreateLocalPos1Attr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
+    # joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
+    # joint.CreateExcludeFromArticulationAttr(True)
+    return joint
 
 
 def _release_from_stage(stage, assembler, gripper_prim, attachment_point_paths):
