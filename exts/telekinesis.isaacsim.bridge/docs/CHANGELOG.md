@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.3.0] - 2026-08-14
+### Added
+- Suction (surface) gripper support as its own device registry, mirroring articulations and
+  cameras: `PUT`/`GET`/`DELETE /surface_grippers` and `GET /surface_grippers` to register, look up,
+  drop and list them.
+- `POST /surface_grippers/{id}/close` and `.../open`: actuate the gripper. Both block by default
+  and return the settled status, so callers never have to sleep before reading it — the gripper
+  acts on the next physics step, and a status read taken straight after the command still reports
+  the previous value. `{"asynchronous": true}` issues the command and returns immediately.
+- `GET /surface_grippers/{id}/status`: status (`Open`/`Closing`/`Closed`), gripped objects and grip
+  distance.
+- `GET`/`PATCH /surface_grippers/{id}/properties`: the gripper's force limits, reach, retry
+  interval and forward axis. The rotation and translation limits are accepted here too and written
+  to every attachment point, since USD stores them per attachment point rather than on the gripper.
+- `GET`/`PATCH /surface_grippers/{id}/attachment_points`: per-suction-cup local poses, Z axis
+  translation drive gains, rotation and translation limits, clearance offset and forward axis.
+- `POST /articulations/{id}/assemble_robot` now accepts a suction gripper. It places the gripper at
+  the arm's flange, joins the two with a fixed joint excluded from the articulation, and re-parks
+  every attachment point onto the arm's mount link so the gripper can grip. Nothing is merged: the
+  arm's DOF are unchanged and the gripper keeps its own id and its own close/open routes. The
+  response reports which path was taken as `gripper_kind`, plus the `fixed_joint` it created.
+
+### Changed
+- **Breaking:** `POST /articulations/{id}/assemble_robot`'s `gripper_articulation_id` field is now
+  `gripper_id`, because it accepts either an `articulation_id` or a `surface_gripper_id`. The old
+  name is not accepted; update clients when upgrading.
+- `assemble_robot` gained `mask_collisions` (default true), which stops the arm and the gripper
+  colliding with each other. It only applies to a suction gripper — an articulated one settles
+  collisions through the articulation merge.
+
 ## [0.1.3] - 2026-08-04
 ### Added
 - `GET /articulations/{id}/articulation_state`: every per-frame quantity of one articulation in a

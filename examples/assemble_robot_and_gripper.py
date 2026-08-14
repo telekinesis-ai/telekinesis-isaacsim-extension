@@ -18,7 +18,7 @@ Flow (all over HTTP):
   1. PUT  /articulations {arm,  urdf_path}                  -> arm articulation
   2. PUT  /articulations {grip, urdf_path?}                 -> gripper articulation
   3. GET  /articulations/{grip}/driver_joint  +  PUT driven_joints  (narrow gripper)
-  4. POST /articulations/{arm_id}/assemble_robot {gripper_articulation_id,
+  4. POST /articulations/{arm_id}/assemble_robot {gripper_id,
          arm_mount_link, gripper_mount_link?, offset?}      -> merged articulation
   5. POST /articulations/{arm_id}/move_j {joint_positions}  (radians) -> blocks
   6. POST /articulations/{grip_id}/move_j {joint_positions:[rad]}     -> blocks
@@ -127,7 +127,7 @@ def run(
         "POST",
         f"/articulations/{arm_id}/assemble_robot",
         {
-            "gripper_articulation_id": gripper_id,
+            "gripper_id": gripper_id,
             "arm_mount_link": arm_mount_link,
             "gripper_mount_link": gripper_mount_link,
             "offset": offset,

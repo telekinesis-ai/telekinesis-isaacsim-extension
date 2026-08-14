@@ -58,7 +58,7 @@ Run the following before merging to main.
 pip install ruff pylint
 ruff check --line-length 100 .
 ruff format --line-length 100 .
-pylint --max-line-length 100 --ignored-modules=omni,carb,isaacsim,pxr --disable=duplicate-code,attribute-defined-outside-init,import-outside-toplevel,unused-argument,broad-exception-caught,protected-access,too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-public-methods,too-many-instance-attributes,too-many-lines exts/telekinesis.isaacsim.bridge/telekinesis examples
+pylint --max-line-length 100 --ignored-modules=omni,carb,isaacsim,pxr,usd --disable=duplicate-code,attribute-defined-outside-init,import-outside-toplevel,unused-argument,broad-exception-caught,protected-access,too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-public-methods,too-many-instance-attributes,too-many-lines exts/telekinesis.isaacsim.bridge/telekinesis examples
 python scripts/generate_openapi.py # should exit 0 and write public/openapi.json
 ```
 On succesful completion, merge to main, and proceed to release.
@@ -66,7 +66,8 @@ On succesful completion, merge to main, and proceed to release.
 <summary>Why these Pylint checks are ignored</summary>
 
 `--ignored-modules` tells Pylint not to fully resolve
-`omni`, `carb`, `isaacsim`, and `pxr`.
+`omni`, `carb`, `isaacsim`, `pxr`, and `usd` (the Isaac robot schema lives in
+`usd.schema.isaac`).
 
 These packages are provided by Isaac Sim. Without Isaac Sim installed,
 Pylint may report unresolved imports or fail to inspect `pxr` members.

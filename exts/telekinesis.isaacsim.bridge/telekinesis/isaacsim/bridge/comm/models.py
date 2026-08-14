@@ -178,22 +178,37 @@ class Transformation(BaseModel):
 class AssembleRobotRequest(BaseModel):
     """Body of POST /articulations/{articulation_id}/assemble_robot.
 
-    The path ``articulation_id`` is the arm. This names the *gripper* articulation
-    to assemble onto it and the links to join them at. ``arm_mount_link`` is the
-    arm's flange (e.g. UR ``wrist_3_link``) -- a RigidBodyAPI link or a Site, not an
-    empty frame like ``tool0``. ``gripper_mount_link`` is the gripper's base link;
-    leave it null/omitted to auto-discover the gripper articulation's root link (its
-    base), which is what the fixed joint must attach to. After assembling, arm and
-    gripper share one articulation; each device keeps driving only its own joints.
+    The path ``articulation_id`` is the arm. ``gripper_id`` names the gripper to
+    assemble onto it -- either an ``articulation_id`` from PUT /articulations or a
+    ``surface_gripper_id`` from PUT /surface_grippers. Which one it is decides how
+    the gripper is attached: an articulated gripper is merged into the arm, so
+    afterwards the two share one articulation and each keeps driving only its own
+    joints; a suction gripper is bolted on with a fixed joint and stays a device of
+    its own, keeping its own close/open routes.
+
+    ``arm_mount_link`` is the arm's flange (e.g. UR ``wrist_3_link``) -- a
+    RigidBodyAPI link or a Site, not an empty frame like ``tool0``.
+
+    ``gripper_mount_link`` is where on the gripper to join it. Leave it
+    null/omitted for the usual case: for an articulated gripper that
+    auto-discovers its root link (its base), which is what the fixed joint must
+    attach to; for a suction gripper it means the registered gripper prim itself,
+    which has to be the gripper's rigid body.
+
     ``offset`` is an optional mount transform baked into the fixed joint
-    (null/omitted => flush attach). Assembling the same pair again is a no-op (the
-    bridge records that they are already assembled and just returns the merged info).
+    (null/omitted => flush attach). ``mask_collisions`` stops the arm and the
+    gripper colliding with each other and only applies to a suction gripper -- for
+    an articulated one the merged articulation settles collisions itself.
+
+    Assembling the same pair again is a no-op (the bridge records that they are
+    already assembled and just returns the assembled info).
     """
 
-    gripper_articulation_id: str
+    gripper_id: str
     arm_mount_link: str
     gripper_mount_link: str | None = None
     offset: Transformation | None = None
+    mask_collisions: bool = True
 
 
 # -- Stage (mirrors the extension's Omniservice schemas) --------------------
@@ -383,3 +398,118 @@ class CameraStringValueRequest(BaseModel):
     lens distortion model)."""
 
     value: str
+
+
+# -- Surface (suction) grippers (device registry, analogous to articulations) --
+
+
+class CreateSurfaceGripperRequest(BaseModel):
+    """Body of PUT /surface_grippers -- register (and bind) one suction gripper.
+
+    ``prim_path`` is the gripper prim itself or any ancestor of it -- usually the
+    gripper asset's root, which is also the prim assemble_robot attaches to an arm.
+    The ``IsaacSurfaceGripper`` prim is found by searching that subtree. There is no
+    ``urdf_path`` counterpart to the articulation route: a suction gripper has no
+    URDF representation, so it must be a prepared USD asset already in the stage.
+    """
+
+    prim_path: str = Field(min_length=1)
+
+
+class GripperActionRequest(BaseModel):
+    """Body of POST /surface_grippers/{id}/close or .../open.
+
+    ``asynchronous`` true issues the command and returns immediately, before the
+    gripper has acted on it -- so the status in the response is still the previous
+    one and the client decides when the grip is done. False (the default) blocks
+    until the gripper has settled and reports what it ended up holding.
+    """
+
+    asynchronous: bool = False
+
+
+class AxisLimit(BaseModel):
+    """A lower and upper bound on one axis."""
+
+    minimum: float
+    maximum: float
+
+
+class AxisLimits(BaseModel):
+    """Bounds per axis. An axis left null/omitted is not touched."""
+
+    x: AxisLimit | None = None
+    y: AxisLimit | None = None
+    z: AxisLimit | None = None
+
+
+class SurfaceGripperPropertiesRequest(BaseModel):
+    """Body of PATCH /surface_grippers/{id}/properties. Any field left null is
+    not touched.
+
+    ``coaxial_force_limit`` and ``shear_force_limit`` are the loads (newtons) that
+    break a grip along and across the gripper's forward axis;
+    ``max_grip_distance`` is how far (meters) it reaches for a surface;
+    ``retry_interval`` is how long (seconds) a close keeps trying before giving up
+    on the cups that found nothing; ``forward_axis`` (``X``/``Y``/``Z``) is the
+    axis it grips along.
+
+    ``rotation_limits`` (degrees) and ``translation_limits`` (meters) are how far a
+    gripped object may swivel and slide once held. USD stores them on each of the
+    gripper's attachment points rather than on the gripper, so setting them here
+    writes the same limits to all of them; PATCH .../attachment_points gives
+    individual attachment points different limits.
+    """
+
+    coaxial_force_limit: float | None = None
+    shear_force_limit: float | None = None
+    max_grip_distance: float | None = None
+    retry_interval: float | None = None
+    forward_axis: str | None = None
+    rotation_limits: AxisLimits | None = None
+    translation_limits: AxisLimits | None = None
+
+
+class JointLocalPose(BaseModel):
+    """One of a joint's two local frames: where the joint sits on that body.
+
+    ``translation`` is ``[x, y, z]`` in meters and ``rotation`` XYZ Euler degrees,
+    the same pair :class:`Transformation` uses. Either may be null to leave it
+    untouched -- which is why this is its own model rather than a
+    :class:`Transformation`, whose omitted fields mean identity.
+    """
+
+    translation: list[float] | None = None
+    rotation: list[float] | None = None
+
+
+class AttachmentPointPropertiesRequest(BaseModel):
+    """Body of PATCH /surface_grippers/{id}/attachment_points.
+
+    An attachment point is one of the D6 joints a suction gripper grips with -- one
+    per cup. ``joint_paths`` selects which to write, defaulting to all of them; any
+    other field left null is not touched.
+
+    The Z axis translation drive's ``stiffness`` and ``damping`` govern how firmly a
+    gripped object is pulled in along the forward axis; ``rotation_limits``
+    (degrees) and ``translation_limits`` (meters) how far it may then swivel and
+    slide; ``clearance_offset`` (meters) how far ahead of the cup the search for a
+    surface begins; ``forward_axis`` (``X``/``Y``/``Z``) which way it looks.
+
+    ``local_pose_0`` and ``local_pose_1`` are the joint's frames on its two bodies.
+    They normally come from assembly rather than by hand -- attaching the gripper to
+    an arm re-parks every attachment point and recomputes ``local_pose_1`` to match.
+
+    ``clearance_offset`` and ``forward_axis`` are read when the gripper starts, so a
+    change to either applies from the next Stop+Play rather than immediately.
+    """
+
+    joint_paths: list[str] | None = None
+    local_pose_0: JointLocalPose | None = None
+    local_pose_1: JointLocalPose | None = None
+    z_axis_translation_drive_stiffness: float | None = None
+    z_axis_translation_drive_damping: float | None = None
+    rotation_limits: AxisLimits | None = None
+    translation_limits: AxisLimits | None = None
+    clearance_offset: float | None = None
+    forward_axis: str | None = None

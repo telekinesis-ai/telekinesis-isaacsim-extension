@@ -517,7 +517,7 @@
           "articulations"
         ],
         "summary": "Assemble Robot",
-        "description": "Assemble a gripper onto this arm; both devices then share one articulation.\nA no-op if this arm and gripper are already assembled.",
+        "description": "Assemble a gripper onto this arm, either articulated (merged into the arm's\narticulation) or suction (bolted on, staying its own device). A no-op if this arm\nand gripper are already assembled.",
         "operationId": "assemble_robot_articulations__articulation_id__assemble_robot_post",
         "parameters": [
           {
@@ -1826,6 +1826,467 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SolverThresholdRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/surface_grippers": {
+      "get": {
+        "tags": [
+          "surface_grippers"
+        ],
+        "summary": "List Surface Grippers",
+        "description": "Every registered surface gripper id mapped to its prim path.",
+        "operationId": "list_surface_grippers_surface_grippers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "surface_grippers"
+        ],
+        "summary": "Create Surface Gripper",
+        "description": "Register (and bind) one suction gripper; returns its id, prims and state.",
+        "operationId": "create_surface_gripper_surface_grippers_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSurfaceGripperRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/surface_grippers/{surface_gripper_id}": {
+      "get": {
+        "tags": [
+          "surface_grippers"
+        ],
+        "summary": "Get Surface Gripper",
+        "description": "Id + description (prims, attachment points, properties, state). 404 if unknown.",
+        "operationId": "get_surface_gripper_surface_grippers__surface_gripper_id__get",
+        "parameters": [
+          {
+            "name": "surface_gripper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Surface Gripper Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "surface_grippers"
+        ],
+        "summary": "Delete Surface Gripper",
+        "description": "Unregister the surface gripper (the USD prim is left in the stage).",
+        "operationId": "delete_surface_gripper_surface_grippers__surface_gripper_id__delete",
+        "parameters": [
+          {
+            "name": "surface_gripper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Surface Gripper Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/surface_grippers/{surface_gripper_id}/close": {
+      "post": {
+        "tags": [
+          "surface_grippers"
+        ],
+        "summary": "Close Gripper",
+        "description": "Grip whatever the gripper's attachment points can reach; blocks unless asynchronous.",
+        "operationId": "close_gripper_surface_grippers__surface_gripper_id__close_post",
+        "parameters": [
+          {
+            "name": "surface_gripper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Surface Gripper Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GripperActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/surface_grippers/{surface_gripper_id}/open": {
+      "post": {
+        "tags": [
+          "surface_grippers"
+        ],
+        "summary": "Open Gripper",
+        "description": "Release everything the gripper holds; blocks unless asynchronous.",
+        "operationId": "open_gripper_surface_grippers__surface_gripper_id__open_post",
+        "parameters": [
+          {
+            "name": "surface_gripper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Surface Gripper Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GripperActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/surface_grippers/{surface_gripper_id}/status": {
+      "get": {
+        "tags": [
+          "surface_grippers"
+        ],
+        "summary": "Get Gripper Status",
+        "description": "Current status (Open/Closing/Closed), gripped objects and grip distance.",
+        "operationId": "get_gripper_status_surface_grippers__surface_gripper_id__status_get",
+        "parameters": [
+          {
+            "name": "surface_gripper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Surface Gripper Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/surface_grippers/{surface_gripper_id}/properties": {
+      "get": {
+        "tags": [
+          "surface_grippers"
+        ],
+        "summary": "Get Properties",
+        "description": "The gripper's grip-behaviour properties (force limits, reach, retry, forward axis).",
+        "operationId": "get_surface_gripper_properties_surface_grippers__surface_gripper_id__properties_get",
+        "parameters": [
+          {
+            "name": "surface_gripper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Surface Gripper Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "surface_grippers"
+        ],
+        "summary": "Set Properties",
+        "description": "Set the grip-behaviour properties (fields left null are untouched); returns them.",
+        "operationId": "set_surface_gripper_properties_surface_grippers__surface_gripper_id__properties_patch",
+        "parameters": [
+          {
+            "name": "surface_gripper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Surface Gripper Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SurfaceGripperPropertiesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/surface_grippers/{surface_gripper_id}/attachment_points": {
+      "get": {
+        "tags": [
+          "surface_grippers"
+        ],
+        "summary": "Get Attachment Points",
+        "description": "Per-attachment-point properties (bodies, local poses, drive, limits, clearance).",
+        "operationId": "get_attachment_points_surface_grippers__surface_gripper_id__attachment_points_get",
+        "parameters": [
+          {
+            "name": "surface_gripper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Surface Gripper Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "surface_grippers"
+        ],
+        "summary": "Set Attachment Point Properties",
+        "description": "Set properties on the selected attachment points (all of them by default).",
+        "operationId": "set_attachment_point_properties_surface_grippers__surface_gripper_id__attachment_points_patch",
+        "parameters": [
+          {
+            "name": "surface_gripper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Surface Gripper Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachmentPointPropertiesRequest"
               }
             }
           }
@@ -5302,9 +5763,9 @@
       },
       "AssembleRobotRequest": {
         "properties": {
-          "gripper_articulation_id": {
+          "gripper_id": {
             "type": "string",
-            "title": "Gripper Articulation Id"
+            "title": "Gripper Id"
           },
           "arm_mount_link": {
             "type": "string",
@@ -5330,15 +5791,181 @@
                 "type": "null"
               }
             ]
+          },
+          "mask_collisions": {
+            "type": "boolean",
+            "title": "Mask Collisions",
+            "default": true
           }
         },
         "type": "object",
         "required": [
-          "gripper_articulation_id",
+          "gripper_id",
           "arm_mount_link"
         ],
         "title": "AssembleRobotRequest",
-        "description": "Body of POST /articulations/{articulation_id}/assemble_robot.\n\nThe path ``articulation_id`` is the arm. This names the *gripper* articulation\nto assemble onto it and the links to join them at. ``arm_mount_link`` is the\narm's flange (e.g. UR ``wrist_3_link``) -- a RigidBodyAPI link or a Site, not an\nempty frame like ``tool0``. ``gripper_mount_link`` is the gripper's base link;\nleave it null/omitted to auto-discover the gripper articulation's root link (its\nbase), which is what the fixed joint must attach to. After assembling, arm and\ngripper share one articulation; each device keeps driving only its own joints.\n``offset`` is an optional mount transform baked into the fixed joint\n(null/omitted => flush attach). Assembling the same pair again is a no-op (the\nbridge records that they are already assembled and just returns the merged info)."
+        "description": "Body of POST /articulations/{articulation_id}/assemble_robot.\n\nThe path ``articulation_id`` is the arm. ``gripper_id`` names the gripper to\nassemble onto it -- either an ``articulation_id`` from PUT /articulations or a\n``surface_gripper_id`` from PUT /surface_grippers. Which one it is decides how\nthe gripper is attached: an articulated gripper is merged into the arm, so\nafterwards the two share one articulation and each keeps driving only its own\njoints; a suction gripper is bolted on with a fixed joint and stays a device of\nits own, keeping its own close/open routes.\n\n``arm_mount_link`` is the arm's flange (e.g. UR ``wrist_3_link``) -- a\nRigidBodyAPI link or a Site, not an empty frame like ``tool0``.\n\n``gripper_mount_link`` is where on the gripper to join it. Leave it\nnull/omitted for the usual case: for an articulated gripper that\nauto-discovers its root link (its base), which is what the fixed joint must\nattach to; for a suction gripper it means the registered gripper prim itself,\nwhich has to be the gripper's rigid body.\n\n``offset`` is an optional mount transform baked into the fixed joint\n(null/omitted => flush attach). ``mask_collisions`` stops the arm and the\ngripper colliding with each other and only applies to a suction gripper -- for\nan articulated one the merged articulation settles collisions itself.\n\nAssembling the same pair again is a no-op (the bridge records that they are\nalready assembled and just returns the assembled info)."
+      },
+      "AttachmentPointPropertiesRequest": {
+        "properties": {
+          "joint_paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joint Paths"
+          },
+          "local_pose_0": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JointLocalPose"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "local_pose_1": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JointLocalPose"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "z_axis_translation_drive_stiffness": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Axis Translation Drive Stiffness"
+          },
+          "z_axis_translation_drive_damping": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Axis Translation Drive Damping"
+          },
+          "rotation_limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AxisLimits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "translation_limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AxisLimits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clearance_offset": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clearance Offset"
+          },
+          "forward_axis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forward Axis"
+          }
+        },
+        "type": "object",
+        "title": "AttachmentPointPropertiesRequest",
+        "description": "Body of PATCH /surface_grippers/{id}/attachment_points.\n\nAn attachment point is one of the D6 joints a suction gripper grips with -- one\nper cup. ``joint_paths`` selects which to write, defaulting to all of them; any\nother field left null is not touched.\n\nThe Z axis translation drive's ``stiffness`` and ``damping`` govern how firmly a\ngripped object is pulled in along the forward axis; ``rotation_limits``\n(degrees) and ``translation_limits`` (meters) how far it may then swivel and\nslide; ``clearance_offset`` (meters) how far ahead of the cup the search for a\nsurface begins; ``forward_axis`` (``X``/``Y``/``Z``) which way it looks.\n\n``local_pose_0`` and ``local_pose_1`` are the joint's frames on its two bodies.\nThey normally come from assembly rather than by hand -- attaching the gripper to\nan arm re-parks every attachment point and recomputes ``local_pose_1`` to match.\n\n``clearance_offset`` and ``forward_axis`` are read when the gripper starts, so a\nchange to either applies from the next Stop+Play rather than immediately."
+      },
+      "AxisLimit": {
+        "properties": {
+          "minimum": {
+            "type": "number",
+            "title": "Minimum"
+          },
+          "maximum": {
+            "type": "number",
+            "title": "Maximum"
+          }
+        },
+        "type": "object",
+        "required": [
+          "minimum",
+          "maximum"
+        ],
+        "title": "AxisLimit",
+        "description": "A lower and upper bound on one axis."
+      },
+      "AxisLimits": {
+        "properties": {
+          "x": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AxisLimit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "y": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AxisLimit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "z": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AxisLimit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "AxisLimits",
+        "description": "Bounds per axis. An axis left null/omitted is not touched."
       },
       "CameraApertureRequest": {
         "properties": {
@@ -5613,6 +6240,21 @@
         "title": "CreateCameraRequest",
         "description": "Body of PUT /cameras -- register (and bind) one camera.\n\n``resolution`` is ``[width, height]`` in pixels. ``data_types`` is the set of\nrender outputs to produce (default ``[\"rgb\"]``); each must be a supported\ncamera data type. ``frequency`` (Hz) is optional; ``None`` follows the render\nloop."
       },
+      "CreateSurfaceGripperRequest": {
+        "properties": {
+          "prim_path": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prim Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prim_path"
+        ],
+        "title": "CreateSurfaceGripperRequest",
+        "description": "Body of PUT /surface_grippers -- register (and bind) one suction gripper.\n\n``prim_path`` is the gripper prim itself or any ancestor of it -- usually the\ngripper asset's root, which is also the prim assemble_robot attaches to an arm.\nThe ``IsaacSurfaceGripper`` prim is found by searching that subtree. There is no\n``urdf_path`` counterpart to the articulation route: a suction gripper has no\nURDF representation, so it must be a prepared USD asset already in the stage."
+      },
       "DefaultJointStateRequest": {
         "properties": {
           "joint_positions": {
@@ -5734,6 +6376,18 @@
         "title": "DofGainsRequest",
         "description": "Body of POST /articulations/{id}/dof_gains -- retune the position drive.\n\n``stiffness`` and ``damping`` are the drive's proportional and derivative\ngains, ``max_effort`` the largest torque/force it may apply. Each may be a\nsingle value for every addressed joint or one value per joint in ``indices``\norder; any field left ``None`` is not touched. ``indices`` defaults to the\ndevice's current driven joints, matching :class:`JointEffortsRequest`.\n\nUsed to correct gains a robot was imported with -- a URDF joint declaring a\nzero effort limit yields a drive that cannot move it -- and to retune tracking\nwithout re-importing. Applies to the running simulation, not the stage."
       },
+      "GripperActionRequest": {
+        "properties": {
+          "asynchronous": {
+            "type": "boolean",
+            "title": "Asynchronous",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "GripperActionRequest",
+        "description": "Body of POST /surface_grippers/{id}/close or .../open.\n\n``asynchronous`` true issues the command and returns immediately, before the\ngripper has acted on it -- so the status in the response is still the previous\none and the client decides when the grip is done. False (the default) blocks\nuntil the gripper has settled and reports what it ended up holding."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -5777,6 +6431,41 @@
         ],
         "title": "JointEffortsRequest",
         "description": "Body of POST /articulations/{id}/joint_efforts -- direct torque/force drive.\n\nBypasses the position/velocity drive; only takes effect if the target\njoint's drive stiffness and damping are zero. ``indices`` defaults to the\ndevice's current driven joints, matching :class:`JointVelocitiesRequest`."
+      },
+      "JointLocalPose": {
+        "properties": {
+          "translation": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation"
+          },
+          "rotation": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotation"
+          }
+        },
+        "type": "object",
+        "title": "JointLocalPose",
+        "description": "One of a joint's two local frames: where the joint sits on that body.\n\n``translation`` is ``[x, y, z]`` in meters and ``rotation`` XYZ Euler degrees,\nthe same pair :class:`Transformation` uses. Either may be null to leave it\nuntouched -- which is why this is its own model rather than a\n:class:`Transformation`, whose omitted fields mean identity."
       },
       "JointPositionsRequest": {
         "properties": {
@@ -6082,6 +6771,88 @@
         "type": "object",
         "title": "StageUnits",
         "description": "Body/response of the stage-units routes."
+      },
+      "SurfaceGripperPropertiesRequest": {
+        "properties": {
+          "coaxial_force_limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coaxial Force Limit"
+          },
+          "shear_force_limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shear Force Limit"
+          },
+          "max_grip_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Grip Distance"
+          },
+          "retry_interval": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Interval"
+          },
+          "forward_axis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forward Axis"
+          },
+          "rotation_limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AxisLimits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "translation_limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AxisLimits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "SurfaceGripperPropertiesRequest",
+        "description": "Body of PATCH /surface_grippers/{id}/properties. Any field left null is\nnot touched.\n\n``coaxial_force_limit`` and ``shear_force_limit`` are the loads (newtons) that\nbreak a grip along and across the gripper's forward axis;\n``max_grip_distance`` is how far (meters) it reaches for a surface;\n``retry_interval`` is how long (seconds) a close keeps trying before giving up\non the cups that found nothing; ``forward_axis`` (``X``/``Y``/``Z``) is the\naxis it grips along.\n\n``rotation_limits`` (degrees) and ``translation_limits`` (meters) are how far a\ngripped object may swivel and slide once held. USD stores them on each of the\ngripper's attachment points rather than on the gripper, so setting them here\nwrites the same limits to all of them; PATCH .../attachment_points gives\nindividual attachment points different limits."
       },
       "TimelineAction": {
         "type": "string",

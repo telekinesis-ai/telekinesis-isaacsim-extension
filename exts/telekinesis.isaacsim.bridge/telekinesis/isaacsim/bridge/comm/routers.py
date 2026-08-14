@@ -29,10 +29,12 @@ from .dependencies import (
     get_general_service,
     get_prim_service,
     get_stage_service,
+    get_surface_gripper_service,
 )
 from .models import (
     ApplyRelativePoseRequest,
     AssembleRobotRequest,
+    AttachmentPointPropertiesRequest,
     CameraApertureRequest,
     CameraClippingRangeRequest,
     CameraFloatValueRequest,
@@ -43,8 +45,10 @@ from .models import (
     CaptureRequest,
     CreateArticulationRequest,
     CreateCameraRequest,
+    CreateSurfaceGripperRequest,
     DefaultJointStateRequest,
     DofGainsRequest,
+    GripperActionRequest,
     JointEffortsRequest,
     JointPositionsRequest,
     JointVelocitiesRequest,
@@ -61,6 +65,7 @@ from .models import (
     SolverIterationCountRequest,
     SolverThresholdRequest,
     StageUnits,
+    SurfaceGripperPropertiesRequest,
     TimelineAction,
     UpdateCollidersRequest,
     UpdatePoseRequest,
@@ -354,15 +359,17 @@ async def assemble_robot(
     req: AssembleRobotRequest,
     articulation_service=Depends(get_articulation_service),
 ):
-    """Assemble a gripper onto this arm; both devices then share one articulation.
-    A no-op if this arm and gripper are already assembled.
+    """Assemble a gripper onto this arm, either articulated (merged into the arm's
+    articulation) or suction (bolted on, staying its own device). A no-op if this arm
+    and gripper are already assembled.
     """
     return await articulation_service.assemble_robot(
         articulation_id,
-        req.gripper_articulation_id,
+        req.gripper_id,
         req.arm_mount_link,
         req.gripper_mount_link,
         req.offset,
+        req.mask_collisions,
     )
 
 
@@ -1259,6 +1266,142 @@ async def is_paused(camera_id: str, camera_service=Depends(get_camera_service)):
     return camera_service.is_paused(camera_id)
 
 
+# -- surface (suction) grippers ---------------------------------------------
+#
+# A suction gripper is a registered device with an id, exactly like an articulation
+# or a camera: PUT /surface_grippers hands back a surface_gripper_id, then every
+# other route addresses that id -- including
+# /articulations/{arm}/assemble_robot, which takes it as its gripper_id.
+#
+# It is not an articulation: there are no joints to drive, so instead of move_j it
+# has close and open, and instead of joint limits and gains it has grip properties
+# and attachment points.
+
+surface_grippers = APIRouter(tags=["surface_grippers"])
+
+
+@surface_grippers.put("/surface_grippers", summary="Create Surface Gripper")
+async def create_surface_gripper(
+    req: CreateSurfaceGripperRequest,
+    surface_gripper_service=Depends(get_surface_gripper_service),
+):
+    """Register (and bind) one suction gripper; returns its id, prims and state."""
+    return await surface_gripper_service.create_surface_gripper(req.prim_path)
+
+
+@surface_grippers.get("/surface_grippers", summary="List Surface Grippers")
+async def list_surface_grippers(surface_gripper_service=Depends(get_surface_gripper_service)):
+    """Every registered surface gripper id mapped to its prim path."""
+    return surface_gripper_service.list_surface_grippers()
+
+
+@surface_grippers.get("/surface_grippers/{surface_gripper_id}", summary="Get Surface Gripper")
+async def get_surface_gripper(
+    surface_gripper_id: str, surface_gripper_service=Depends(get_surface_gripper_service)
+):
+    """Id + description (prims, attachment points, properties, state). 404 if unknown."""
+    return surface_gripper_service.get_surface_gripper(surface_gripper_id)
+
+
+@surface_grippers.delete("/surface_grippers/{surface_gripper_id}", summary="Delete Surface Gripper")
+async def delete_surface_gripper(
+    surface_gripper_id: str, surface_gripper_service=Depends(get_surface_gripper_service)
+):
+    """Unregister the surface gripper (the USD prim is left in the stage)."""
+    return surface_gripper_service.delete_surface_gripper(surface_gripper_id)
+
+
+@surface_grippers.post("/surface_grippers/{surface_gripper_id}/close", summary="Close Gripper")
+async def close_gripper(
+    surface_gripper_id: str,
+    req: GripperActionRequest,
+    surface_gripper_service=Depends(get_surface_gripper_service),
+):
+    """Grip whatever the gripper's attachment points can reach; blocks unless asynchronous."""
+    return await surface_gripper_service.close_gripper(surface_gripper_id, req.asynchronous)
+
+
+@surface_grippers.post("/surface_grippers/{surface_gripper_id}/open", summary="Open Gripper")
+async def open_gripper(
+    surface_gripper_id: str,
+    req: GripperActionRequest,
+    surface_gripper_service=Depends(get_surface_gripper_service),
+):
+    """Release everything the gripper holds; blocks unless asynchronous."""
+    return await surface_gripper_service.open_gripper(surface_gripper_id, req.asynchronous)
+
+
+@surface_grippers.get("/surface_grippers/{surface_gripper_id}/status", summary="Get Gripper Status")
+async def get_gripper_status(
+    surface_gripper_id: str, surface_gripper_service=Depends(get_surface_gripper_service)
+):
+    """Current status (Open/Closing/Closed), gripped objects and grip distance."""
+    return surface_gripper_service.get_status(surface_gripper_id)
+
+
+@surface_grippers.get("/surface_grippers/{surface_gripper_id}/properties", summary="Get Properties")
+async def get_surface_gripper_properties(
+    surface_gripper_id: str, surface_gripper_service=Depends(get_surface_gripper_service)
+):
+    """The gripper's grip-behaviour properties (force limits, reach, retry, forward axis)."""
+    return surface_gripper_service.get_properties(surface_gripper_id)
+
+
+@surface_grippers.patch(
+    "/surface_grippers/{surface_gripper_id}/properties", summary="Set Properties"
+)
+async def set_surface_gripper_properties(
+    surface_gripper_id: str,
+    req: SurfaceGripperPropertiesRequest,
+    surface_gripper_service=Depends(get_surface_gripper_service),
+):
+    """Set the grip-behaviour properties (fields left null are untouched); returns them."""
+    return surface_gripper_service.set_properties(
+        surface_gripper_id,
+        req.coaxial_force_limit,
+        req.shear_force_limit,
+        req.max_grip_distance,
+        req.retry_interval,
+        req.forward_axis,
+        req.rotation_limits,
+        req.translation_limits,
+    )
+
+
+@surface_grippers.get(
+    "/surface_grippers/{surface_gripper_id}/attachment_points", summary="Get Attachment Points"
+)
+async def get_attachment_points(
+    surface_gripper_id: str, surface_gripper_service=Depends(get_surface_gripper_service)
+):
+    """Per-attachment-point properties (bodies, local poses, drive, limits, clearance)."""
+    return surface_gripper_service.get_attachment_points(surface_gripper_id)
+
+
+@surface_grippers.patch(
+    "/surface_grippers/{surface_gripper_id}/attachment_points",
+    summary="Set Attachment Point Properties",
+)
+async def set_attachment_point_properties(
+    surface_gripper_id: str,
+    req: AttachmentPointPropertiesRequest,
+    surface_gripper_service=Depends(get_surface_gripper_service),
+):
+    """Set properties on the selected attachment points (all of them by default)."""
+    return surface_gripper_service.set_attachment_point_properties(
+        surface_gripper_id,
+        req.joint_paths,
+        req.local_pose_0,
+        req.local_pose_1,
+        req.z_axis_translation_drive_stiffness,
+        req.z_axis_translation_drive_damping,
+        req.rotation_limits,
+        req.translation_limits,
+        req.clearance_offset,
+        req.forward_axis,
+    )
+
+
 # -- trajectories -----------------------------------------------------------
 
 trajectories = APIRouter(prefix="/trajectories", tags=["trajectories"])
@@ -1382,6 +1525,7 @@ async def sweep_collisions():
 
 ALL_ROUTERS = (
     articulations,
+    surface_grippers,
     cameras,
     general,
     stage,
