@@ -980,10 +980,9 @@ cameras = APIRouter(tags=["cameras"])
 
 @cameras.put("/cameras", summary="Create Camera")
 async def create_camera(req: CreateCameraRequest, camera_service=Depends(get_camera_service)):
-    """Register (and bind) one camera; returns its id, prim, resolution and optics."""
-    return await camera_service.create_camera(
-        req.prim_path, req.resolution, req.data_types, req.frequency
-    )
+    """Register (and bind) one camera; returns its id, prim, resolution, optics, and
+    its active and supported data types."""
+    return await camera_service.create_camera(req.prim_path, req.resolution, req.frequency)
 
 
 @cameras.get("/cameras", summary="List Cameras")
@@ -994,7 +993,8 @@ async def list_cameras(camera_service=Depends(get_camera_service)):
 
 @cameras.get("/cameras/{camera_id}", summary="Get Camera")
 async def get_camera(camera_id: str, camera_service=Depends(get_camera_service)):
-    """Id + static description (prim, resolution, optics). 404 if unknown."""
+    """Id + description (prim, resolution, optics, active/supported data types). 404 if
+    unknown."""
     return camera_service.get_camera(camera_id)
 
 
@@ -1006,8 +1006,10 @@ async def delete_camera(camera_id: str, camera_service=Depends(get_camera_servic
 
 @cameras.post("/cameras/{camera_id}/capture", summary="Capture Frame")
 async def capture(camera_id: str, req: CaptureRequest, camera_service=Depends(get_camera_service)):
-    """Pump one frame and return the requested outputs (all bound types if omitted)."""
-    return await camera_service.capture(camera_id, req.data_types)
+    """Pump one frame and return the requested outputs (all active ones if omitted).
+
+    A captured pointcloud is in the camera frame unless ``world_frame`` is set."""
+    return await camera_service.capture(camera_id, req.data_types, req.world_frame)
 
 
 @cameras.get("/cameras/{camera_id}/rgb", summary="Get Rgb")
@@ -1030,9 +1032,9 @@ async def get_depth(camera_id: str, camera_service=Depends(get_camera_service)):
 
 @cameras.get("/cameras/{camera_id}/pointcloud", summary="Get Pointcloud")
 async def get_pointcloud(
-    camera_id: str, world_frame: bool = Query(True), camera_service=Depends(get_camera_service)
+    camera_id: str, world_frame: bool = Query(False), camera_service=Depends(get_camera_service)
 ):
-    """Latest pointcloud (N, 3) in world (default) or camera frame."""
+    """Latest pointcloud (N, 3) in camera (default) or world frame."""
     return camera_service.get_pointcloud(camera_id, world_frame)
 
 

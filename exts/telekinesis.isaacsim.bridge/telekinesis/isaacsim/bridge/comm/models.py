@@ -313,26 +313,35 @@ class UpdateCollidersRequest(BaseModel):
 class CreateCameraRequest(BaseModel):
     """Body of PUT /cameras -- register (and bind) one camera.
 
-    ``resolution`` is ``[width, height]`` in pixels. ``data_types`` is the set of
-    render outputs to produce (default ``["rgb"]``); each must be a supported
-    camera data type. ``frequency`` (Hz) is optional; ``None`` follows the render
-    loop.
+    ``resolution`` is ``[width, height]`` in pixels. ``frequency`` (Hz) is optional;
+    ``None`` follows the render loop.
+
+    A new camera produces ``rgb``/``rgba``. Other render outputs are activated the
+    first time ``POST /cameras/{id}/capture`` asks for them, so they are not named
+    here; the response lists both what is active and what is supported.
     """
 
     prim_path: str = Field(min_length=1)
     resolution: list[int] = [1280, 720]
-    data_types: list[str] | None = None
     frequency: float | None = None
 
 
 class CaptureRequest(BaseModel):
     """Body of POST /cameras/{id}/capture -- pump one frame and read outputs.
 
-    ``data_types`` selects which of the camera's bound outputs to return; ``None``
-    returns them all.
+    ``data_types`` selects which render outputs to return; ``None`` returns every
+    output currently active, which is ``rgb``/``rgba`` on a new camera. Requesting a
+    supported output that is not active yet activates it, costing a few frames of
+    warmup on that first capture. ``GET /cameras/{id}`` reports both the active and
+    the supported sets.
+
+    ``world_frame`` selects the coordinate frame of the ``pointcloud`` output and is
+    ignored by every other one. Points come back relative to the camera unless it is
+    set, matching the frame a physical depth camera reports in.
     """
 
     data_types: list[str] | None = None
+    world_frame: bool = False
 
 
 class CameraWorldPoseRequest(BaseModel):

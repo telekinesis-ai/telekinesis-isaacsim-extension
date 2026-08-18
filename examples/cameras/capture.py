@@ -2,7 +2,11 @@
 POST /cameras/{id}/capture {data_types?} ->
 {<data_type>: <array or null>, ..., rendering_frame, timestamp}
 
-Pumps one frame and returns the requested outputs (all bound types if omitted).
+Pumps one frame and returns the requested outputs (every output currently active
+if omitted, which is rgb/rgba on a new camera). Requesting a supported output
+that is not active yet activates it, so that first capture takes a few extra
+frames of annotator warmup. GET /cameras/{id} lists both sets.
+
 Image arrays can be large; this prints only each output's shape, not its pixels.
 
 Run:  python capture.py --id camera1

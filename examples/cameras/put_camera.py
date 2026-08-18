@@ -1,16 +1,17 @@
 """
-PUT /cameras {prim_path, resolution?, data_types?, frequency?} ->
-{camera_id, prim_path, resolution, data_types, focal_length, ...}
+PUT /cameras {prim_path, resolution?, frequency?} ->
+{camera_id, prim_path, resolution, active_data_types, supported_data_types,
+ focal_length, ...}
 
 Registers (and binds) a camera at ``prim_path``. If no Camera prim exists there,
-Isaac Sim creates one. ``data_types`` picks the render outputs to produce
-(default ["rgb"]). Registering the same prim again re-binds it to the same id.
+Isaac Sim creates one. A new camera produces ``rgb``/``rgba``; other render
+outputs are activated the first time capture.py asks for them. Registering the
+same prim again re-binds it to the same id.
 
 Requires Isaac Sim launched with ``--enable_cameras``.
 
 Run:  python put_camera.py
       python put_camera.py --prim /World/Camera
-      python put_camera.py --prim /World/Camera --data-types rgb depth
 """
 
 import argparse
@@ -53,9 +54,6 @@ def main():
     parser.add_argument("--prim", default=CAMERA_PRIM_PATH, help="camera prim path to register")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
-    parser.add_argument(
-        "--data-types", nargs="+", default=None, help="render outputs, e.g. rgb depth"
-    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
@@ -66,7 +64,6 @@ def main():
         {
             "prim_path": args.prim,
             "resolution": [args.width, args.height],
-            "data_types": args.data_types,
         },
     )
 

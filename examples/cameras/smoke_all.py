@@ -102,7 +102,14 @@ def _exercise_registry_routes(base, root):
 
 def _exercise_capture_routes(base, root):
     """Exercise capture and image-data routes."""
-    _post(base, f"POST {root}/capture", f"{root}/capture", {"data_types": ["rgb", "depth"]})
+    # Capturing depth/pointcloud attaches their annotators, which the matching GET
+    # routes below then have data to return -- a new camera starts with rgb only.
+    _post(
+        base,
+        f"POST {root}/capture",
+        f"{root}/capture",
+        {"data_types": ["rgb", "depth", "pointcloud"]},
+    )
     _get(base, f"GET {root}/rgb", f"{root}/rgb")
     _get(base, f"GET {root}/rgba", f"{root}/rgba")
     _get(base, f"GET {root}/depth", f"{root}/depth")
@@ -206,7 +213,7 @@ def _exercise_collection_routes(base, root):
 def _exercise_routes(base, args):
     """Create a camera and exercise the exposed camera routes."""
     ok, status, payload = _call(
-        base, "PUT", "/cameras", {"prim_path": args.prim, "data_types": ["rgb", "depth"]}
+        base, "PUT", "/cameras", {"prim_path": args.prim}
     )
     created = _record("PUT /cameras (create)", ok, status, payload)
     if not created or "camera_id" not in created:

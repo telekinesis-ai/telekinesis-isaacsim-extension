@@ -66,13 +66,18 @@ class CameraService:
         except Exception:  # cleanup must not fail the caller (stage may be gone)
             pass
 
-    async def create_camera(self, prim_path, resolution, data_types, frequency):
+    async def create_camera(self, prim_path, resolution, frequency):
         """Register (and bind) the camera at ``prim_path`` and return its info.
 
         One camera per *requested* prim; PUTting the same prim again keeps its id
-        but **rebuilds the device with the new config** (resolution / data_types /
-        frequency), so the response always reflects the request. Ids are 1-based:
-        ``camera1``, ``camera2``, ...
+        but **rebuilds the device with the new config** (resolution / frequency), so
+        the response always reflects the request. Ids are 1-based: ``camera1``,
+        ``camera2``, ...
+
+        A newly registered camera produces ``rgb``/``rgba``; the annotators for
+        other render outputs are attached the first time :meth:`capture` asks for
+        them. The response reports both sets: ``active_data_types`` (produced now)
+        and ``supported_data_types`` (everything ``capture`` accepts).
         """
         prim_path = prim_path.rstrip("/") or "/"
 
@@ -94,19 +99,18 @@ class CameraService:
                 camera_id = existing_id
 
             # Build + bind the NEW device before touching any existing one, so a bad
-            # re-PUT (wrong resolution/data_types/frequency, or a prim that won't
+            # re-PUT (wrong resolution/frequency, or a prim that won't
             # bind) leaves the currently-registered camera untouched and working.
             try:
                 device = Camera(
                     prim_path,
                     name=camera_id,
                     resolution=tuple(resolution),
-                    data_types=data_types,
                     frequency=frequency,
                 )
             except Exception as exc:
-                # Bad input value: unknown data_type, non-divisor frequency, or a
-                # prim that isn't a Camera -- all raised at construction. 400, not
+                # Bad input value: a non-divisor frequency, or a prim that isn't a
+                # Camera -- all raised at construction. 400, not
                 # the 500 a bare Exception would otherwise become. Construction has
                 # no await, so rolling back a freshly-reserved id here is race-free.
                 if existing_id is None:
@@ -156,13 +160,20 @@ class CameraService:
 
     # -- capture ---------------------------------------------------------------
 
-    async def capture(self, camera_id, data_types):
+    async def capture(self, camera_id, data_types, world_frame=False):
         """Pump one frame and return the requested outputs. ``data_types`` may be
-        None (return every bound output). See :meth:`..core.camera.Camera.capture`."""
+        None (return every output currently active). An output that is not active yet
+        is activated here, which costs a few frames of warmup on that first capture.
+        ``world_frame`` applies to the ``pointcloud`` output alone.
+        See :meth:`..core.camera.Camera.capture`."""
         try:
-            return await self.get_device(camera_id).capture(data_types)
+            return await self.get_device(camera_id).capture(data_types, world_frame=world_frame)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            # 422, mirroring a failed bind: the request named real data types, but a
+            # newly attached annotator never produced data.
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     def get_rgb(self, camera_id):
         """Latest RGB image (H, W, 3), or null if not ready."""
@@ -176,8 +187,8 @@ class CameraService:
         """Latest depth image (H, W), or null."""
         return {"depth": self.get_device(camera_id).get_depth()}
 
-    def get_pointcloud(self, camera_id, world_frame=True):
-        """Latest pointcloud (N, 3) in world or camera frame."""
+    def get_pointcloud(self, camera_id, world_frame=False):
+        """Latest pointcloud (N, 3) in world or, by default, camera frame."""
         return {"pointcloud": self.get_device(camera_id).get_pointcloud(world_frame=world_frame)}
 
     # -- pose ------------------------------------------------------------------

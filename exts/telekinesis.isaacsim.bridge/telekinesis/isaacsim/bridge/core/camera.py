@@ -29,6 +29,13 @@ style as the articulation (no background worker, no command queue). Cameras
 require RTX sensor rendering: Isaac Sim must be launched with ``--enable_cameras``
 and the render product needs a few frames of warmup before it yields data, which
 :meth:`bind` waits out with the same retry-loop shape as the articulation.
+
+Render outputs are attached lazily. Every attached annotator costs a render pass
+per frame for as long as it stays attached, so :meth:`bind` attaches only the rgb
+annotator (which serves ``rgb`` and ``rgba``) and :meth:`capture` attaches the
+rest the first time it is asked for them. Attaching is what costs warmup, not
+reading, so annotators are never detached afterwards: a capture loop would
+otherwise re-pay that warmup on every iteration.
 """
 
 import math
@@ -83,6 +90,11 @@ POSE_AXES = ("world", "ros", "usd")
 # as extras.
 BRIDGE_ONLY_METHODS = frozenset({"bind", "capture", "info"})
 
+# Data types active as soon as the camera is bound: initialize() attaches the rgb
+# annotator that serves both. Every other type is attached on first request (see
+# Camera.capture).
+_INITIAL_ACTIVE_DATA_TYPES = ("rgb", "rgba")
+
 # Cameras need several frames of RTX warmup before the render product produces a
 # non-empty frame; reuse the articulation's retry budget so a freshly created
 # camera has time to come up before bind gives up.
@@ -133,13 +145,31 @@ def _to_json(value):
     return value
 
 
+def _is_ready(value):
+    """Whether a read-back render output counts as warmed up.
+
+    ``None`` is how the frame-dict outputs report "no data yet". The array getters
+    report the same state as an empty array instead (``get_pointcloud`` returns
+    ``np.array([])`` until the render product produces points), so an empty result
+    counts as not ready either. Empty is also a legitimate steady-state result for
+    the outputs that describe scene contents, which is why the warmup loop only
+    warns about a value that stays empty rather than failing on it.
+    """
+    if value is None:
+        return False
+    if isinstance(value, (list, tuple, dict)) and len(value) == 0:
+        return False
+    return True
+
+
 class Camera:
     """Binds a single camera at ``prim_path`` and exposes its full API.
 
     Named to match the isaacsim.sensors.camera.Camera handle it wraps (imported as
     the ``camera_sensor`` module, not the bare class, so it doesn't shadow this
     one). Construction wraps/creates the USD Camera prim; :meth:`bind` initializes
-    the render product, attaches the requested annotators, and waits for warmup.
+    the render product, attaches the rgb annotator, and waits for warmup. Other
+    render outputs are attached the first time :meth:`capture` asks for them.
     """
 
     def __init__(
@@ -149,23 +179,16 @@ class Camera:
         frequency=None,
         dt=None,
         resolution=(1280, 720),
-        data_types=None,
         position=None,
         orientation=None,
     ):
-        """Wrap/create the camera prim and validate ``data_types``; call :meth:`bind`
-        before capturing.
+        """Wrap/create the camera prim; call :meth:`bind` before capturing.
 
         ``resolution`` is ``(width, height)`` in pixels (isaacsim convention).
-        ``data_types`` is the set of outputs to produce (default ``["rgb"]``); each
-        must be in :data:`SUPPORTED_DATA_TYPES` or this raises ``ValueError``,
-        mirroring the articulation's unknown-joint-name check. ``rgb`` is always
-        available (attached by ``initialize``).
         """
         self.prim_path = prim_path
         self._name = name
         self.resolution = tuple(resolution)
-        self.data_types = self._validate_data_types(data_types or ["rgb"])
         self._camera = camera_sensor.Camera(
             prim_path=prim_path,
             name=name,
@@ -175,6 +198,10 @@ class Camera:
             position=None if position is None else np.asarray(position, dtype=float),
             orientation=None if orientation is None else np.asarray(orientation, dtype=float),
         )
+        # Render outputs currently attached and warmed up -- a subset of
+        # SUPPORTED_DATA_TYPES. bind() seeds it with the rgb pair; capture()
+        # extends it on demand.
+        self.active_data_types = []
         self._initialized = False
         self._start_time = time.monotonic()
 
@@ -196,10 +223,12 @@ class Camera:
 
         Mirrors :meth:`..core.articulation.SingleArticulation.bind`: play the
         timeline, pump ``next_update_async`` a couple frames, call ``initialize()``
-        (attaches the rgb annotator), register the annotators for the remaining
-        ``data_types``, then loop until a frame reads back non-empty (RTX warmup).
-        ``carb.log_info`` on success; raises ``RuntimeError`` carrying the last
-        error if the camera never yields data.
+        (attaches the rgb annotator), then loop until a frame reads back non-empty
+        (RTX warmup). Only ``rgb``/``rgba`` are attached here -- every other render
+        output costs a render pass per frame for as long as it stays attached, so
+        :meth:`capture` attaches those on first request instead. ``carb.log_info``
+        on success; raises ``RuntimeError`` carrying the last error if the camera
+        never yields data.
         """
         omni.timeline.get_timeline_interface().play()
         app = omni.kit.app.get_app()
@@ -208,44 +237,98 @@ class Camera:
 
         if not self._initialized:
             self._camera.initialize()
-            self._register_annotators()
             self._initialized = True
 
-        probe = self.data_types[0]
+        # Appended rather than assigned: re-binding an already-bound camera must
+        # not forget the outputs capture() has since attached, or the next request
+        # for one would attach it a second time.
+        for data_type in _INITIAL_ACTIVE_DATA_TYPES:
+            if data_type not in self.active_data_types:
+                self.active_data_types.append(data_type)
+
+        await self._wait_for_warmup(["rgb"])
+        carb.log_info(
+            f"[bridge] bound camera {self.prim_path}: "
+            f"{self.resolution} {self.active_data_types}"
+        )
+
+    async def _wait_for_warmup(self, data_types):
+        """Pump frames until every type in ``data_types`` reads back usable data.
+
+        A newly attached annotator needs a few render frames before its data is
+        valid, so every attach is followed by this loop. When the frame budget runs
+        out, an output that never produced anything at all raises ``RuntimeError``
+        carrying the last read error; one that produced an empty result is only
+        logged, since empty can be the correct answer (a pointcloud of a scene the
+        camera sees nothing in, bounding boxes with no labelled prims).
+        """
+        app = omni.kit.app.get_app()
+        pending = list(data_types)
         last_exc = None
+
         for _ in range(_BIND_RETRIES):
             await app.next_update_async()
             try:
-                if self._read(probe) is not None:
-                    carb.log_info(
-                        f"[bridge] bound camera {self.prim_path}: "
-                        f"{self.resolution} {self.data_types}"
-                    )
+                pending = [d for d in pending if not _is_ready(self._read(d))]
+                if not pending:
                     return
             except Exception as exc:  # data not ready yet -> keep pumping frames
                 last_exc = exc
 
-        detail = f"camera at {self.prim_path} did not produce data"
+        empty, absent = [], []
+        for data_type in pending:
+            try:
+                (empty if self._read(data_type) is not None else absent).append(data_type)
+            except Exception as exc:
+                last_exc = exc
+                absent.append(data_type)
+
+        if empty:
+            carb.log_warn(
+                f"[bridge] camera {self.prim_path}: {empty} still empty after warmup"
+            )
+        if not absent:
+            return
+
+        detail = f"camera at {self.prim_path} did not produce data for {absent}"
         if last_exc is not None:
             detail += f" (last error: {last_exc!r})"
         raise RuntimeError(detail)
 
-    def _register_annotators(self):
-        """Attach the annotator for each requested data type.
+    async def _attach_data_types(self, data_types):
+        """Attach the annotators serving ``data_types``, then wait out their warmup.
 
-        ``rgb``/``rgba`` are served by the rgb annotator that ``initialize`` already
-        attached, so they are skipped; every other type maps to an ``add_*_to_frame``
-        via :data:`DATA_TYPE_TO_ADDER`.
+        Types already attached are skipped, so a repeated capture of the same types
+        pays nothing. Several types can share one annotator (``depth`` and
+        ``distance_to_image_plane``), in which case the second one attaches nothing
+        and is merely recorded as available.
         """
-        for data_type in self.data_types:
-            adder = DATA_TYPE_TO_ADDER.get(data_type)
-            if adder is not None:
-                getattr(self._camera, adder)()
+        missing = [d for d in data_types if d not in self.active_data_types]
+        if not missing:
+            return
 
-    def _read(self, data_type):
+        attached_adders = {
+            DATA_TYPE_TO_ADDER[d] for d in self.active_data_types if d in DATA_TYPE_TO_ADDER
+        }
+        for data_type in missing:
+            adder = DATA_TYPE_TO_ADDER.get(data_type)
+            if adder is not None and adder not in attached_adders:
+                getattr(self._camera, adder)()
+                attached_adders.add(adder)
+
+        # Recorded before the wait so a warmup failure still reflects what is
+        # attached -- the annotators are on the render product either way.
+        self.active_data_types.extend(missing)
+        await self._wait_for_warmup(missing)
+        carb.log_info(f"[bridge] camera {self.prim_path}: attached {missing}")
+
+    def _read(self, data_type, world_frame=False):
         """Read one annotator's latest value as JSON, dispatching to the dedicated
         getter where the handle has one (rgb/rgba/depth/pointcloud) and falling back
-        to the current frame otherwise. Returns ``None`` when data is not ready."""
+        to the current frame otherwise. Returns ``None`` when data is not ready.
+
+        ``world_frame`` applies to ``pointcloud`` alone and is ignored by every
+        other output."""
         if data_type == "rgb":
             return _to_json(self._camera.get_rgb(device=_HOST_DEVICE))
         if data_type == "rgba":
@@ -253,43 +336,60 @@ class Camera:
         if data_type in ("depth", "distance_to_image_plane"):
             return _to_json(self._camera.get_depth(device=_HOST_DEVICE))
         if data_type == "pointcloud":
-            return _to_json(self._camera.get_pointcloud(device=_HOST_DEVICE))
+            return _to_json(
+                self._camera.get_pointcloud(device=_HOST_DEVICE, world_frame=world_frame)
+            )
         return _to_json(self._camera.get_current_frame().get(data_type))
 
-    async def capture(self, data_types=None):
-        """Pump one frame and return a JSON snapshot of the requested annotators.
+    async def capture(self, data_types=None, world_frame=False):
+        """Pump one frame and return a JSON snapshot of the requested outputs.
 
-        The core read method (analogue of the articulation's ``move_j``): awaits one
-        ``next_update_async`` so the render product is current, then returns
-        ``{<data_type>: <array/list or None>, ...}`` plus ``rendering_frame`` and a
-        monotonic ``timestamp`` -- mirroring ``get_joints_state``'s dict-with-timestamp
-        shape. ``data_types`` defaults to every type this camera was bound with;
-        requesting a type this camera wasn't bound with (so no annotator is attached
-        to produce it) raises ``ValueError`` rather than silently returning ``null``.
+        The core read method (analogue of the articulation's ``move_j``): attaches
+        any requested output not already attached, awaits one ``next_update_async``
+        so the render product is current, then returns ``{<data_type>: <array/list
+        or None>, ...}`` plus ``rendering_frame`` and a monotonic ``timestamp`` --
+        mirroring ``get_joints_state``'s dict-with-timestamp shape.
+
+        ``data_types`` defaults to every output currently active, which is
+        ``rgb``/``rgba`` on a freshly bound camera. Each must be in
+        :data:`SUPPORTED_DATA_TYPES` or this raises ``ValueError``, mirroring the
+        articulation's unknown-joint-name check.
+
+        ``world_frame`` selects the coordinate frame of the ``pointcloud`` output and
+        is ignored by every other one. It defaults to ``False``, so points come back
+        relative to the camera -- the frame a physical depth camera reports in.
+
+        The first capture of an output pays a few render frames of annotator warmup
+        and is correspondingly slower; the annotator then stays attached, so later
+        captures of it are not. An attached annotator costs a render pass per frame
+        whether or not it is captured, so ask only for what is needed.
         """
-        requested = list(data_types) if data_types is not None else list(self.data_types)
-        # rgb/rgba are always attached by initialize(); every other type must have
-        # been bound at create time (its annotator attached in _register_annotators).
-        available = set(self.data_types) | {"rgb", "rgba"}
-        unavailable = [d for d in requested if d not in available]
-        if unavailable:
-            raise ValueError(
-                f"camera at {self.prim_path} was not bound with data type(s) {unavailable}; "
-                f"available: {sorted(available)}"
-            )
+        requested = self._validate_data_types(
+            data_types if data_types is not None else self.active_data_types
+        )
+        await self._attach_data_types(requested)
         await omni.kit.app.get_app().next_update_async()
-        out = {data_type: self._read(data_type) for data_type in requested}
+        out = {
+            data_type: self._read(data_type, world_frame=world_frame)
+            for data_type in requested
+        }
         out["rendering_frame"] = _to_json(self._camera.get_current_frame().get("rendering_frame"))
         out["timestamp"] = time.monotonic() - self._start_time
         return out
 
     def info(self):
-        """Static description of this camera: prim path, bound data types, resolution,
-        frequency, focal length, apertures, clipping range, projection, and lens
-        distortion model. The analogue of ``SingleArticulation.info()``."""
+        """Description of this camera: prim path, data types, resolution, frequency,
+        focal length, apertures, clipping range, projection, and lens distortion
+        model. The analogue of ``SingleArticulation.info()``.
+
+        ``active_data_types`` are the render outputs the camera is producing right
+        now, and grows as :meth:`capture` is asked for further ones.
+        ``supported_data_types`` is the fixed set :meth:`capture` accepts; asking for
+        one that is not active yet activates it."""
         return {
             "prim_path": self.prim_path,
-            "data_types": list(self.data_types),
+            "active_data_types": list(self.active_data_types),
+            "supported_data_types": sorted(SUPPORTED_DATA_TYPES),
             "resolution": list(self.resolution),
             "frequency": self.get_frequency(),
             "focal_length": self.get_focal_length(),
@@ -317,6 +417,8 @@ class Camera:
         """Detach annotators and destroy the render product for this camera."""
         self._camera.destroy()
         self._initialized = False
+        # The annotators went with the render product, so nothing is active now.
+        self.active_data_types = []
 
     def resume(self):
         """Resume data collection / frame updates."""
@@ -577,8 +679,11 @@ class Camera:
         """Latest depth (distance to image plane) as a nested list ``(H, W)``, or ``None``."""
         return _to_json(self._camera.get_depth(device=device))
 
-    def get_pointcloud(self, device=_HOST_DEVICE, world_frame=True):
-        """Latest pointcloud as a nested list ``(N, 3)`` in world or camera frame."""
+    def get_pointcloud(self, device=_HOST_DEVICE, world_frame=False):
+        """Latest pointcloud as a nested list ``(N, 3)``.
+
+        ``world_frame`` returns the points in stage coordinates; the default returns
+        them relative to the camera, the frame a physical depth camera reports in."""
         return _to_json(self._camera.get_pointcloud(device=device, world_frame=world_frame))
 
     # -- optics ----------------------------------------------------------------

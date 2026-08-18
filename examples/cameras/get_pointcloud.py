@@ -2,13 +2,13 @@
 GET /cameras/{id}/pointcloud?world_frame -> {pointcloud: [[x, y, z], ...] or null}
 
 Reads the latest pointcloud without re-pumping (use capture.py to force a fresh
-frame). ``world_frame`` (default true) returns points in world coordinates; pass
---camera-frame for camera-relative points. Prints the point count, not the points.
+frame). Points are camera-relative by default; pass --world-frame for points in
+world coordinates. Prints the point count, not the points.
 
 Requires the camera to have been bound with the "pointcloud" data type.
 
 Run:  python get_pointcloud.py --id camera1
-      python get_pointcloud.py --id camera1 --camera-frame
+      python get_pointcloud.py --id camera1 --world-frame
 """
 
 import argparse
@@ -45,10 +45,10 @@ def main():
         "--id", required=True, dest="camera_id", help="camera_id from put_camera.py"
     )
     parser.add_argument(
-        "--camera-frame",
-        action="store_false",
+        "--world-frame",
+        action="store_true",
         dest="world_frame",
-        help="return camera-relative points instead of world-frame",
+        help="return world-frame points instead of camera-relative",
     )
     args = parser.parse_args()
 

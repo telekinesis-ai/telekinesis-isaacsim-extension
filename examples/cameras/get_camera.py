@@ -1,5 +1,6 @@
 """
-GET /cameras/{id} -> {camera_id, prim_path, resolution, data_types, focal_length, ...}
+GET /cameras/{id} -> {camera_id, prim_path, resolution, active_data_types,
+                      supported_data_types, focal_length, ...}
 
 Requires the id to already be registered -- run put_camera.py first.
 
