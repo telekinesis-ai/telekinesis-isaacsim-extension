@@ -18,7 +18,9 @@ stay one-liners. The ``..core.camera`` import pulls in isaacsim, so this module
 imports only inside Isaac Sim -- same as the articulation service.
 
 Wire units mirror the rest of the bridge: stage units (meters) for poses/apertures,
-pixels for resolution/intrinsics, plain arrays for images.
+pixels for resolution/intrinsics. Render outputs are carried as numpy arrays; the
+routers encode them into the binary frame :mod:`..comm.binary` describes, while
+every other value here is JSON.
 """
 
 import asyncio
@@ -176,19 +178,21 @@ class CameraService:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     def get_rgb(self, camera_id):
-        """Latest RGB image (H, W, 3), or null if not ready."""
+        """Latest RGB image as a (H, W, 3) uint8 array, or None if not ready."""
         return {"rgb": self.get_device(camera_id).get_rgb()}
 
     def get_rgba(self, camera_id):
-        """Latest RGBA image (H, W, 4), or null."""
+        """Latest RGBA image as a (H, W, 4) uint8 array, or None."""
         return {"rgba": self.get_device(camera_id).get_rgba()}
 
     def get_depth(self, camera_id):
-        """Latest depth image (H, W), or null."""
+        """Latest depth image as a (H, W) float32 array, or None. Pixels that hit
+        nothing are inf."""
         return {"depth": self.get_device(camera_id).get_depth()}
 
     def get_pointcloud(self, camera_id, world_frame=False):
-        """Latest pointcloud (N, 3) in world or, by default, camera frame."""
+        """Latest pointcloud as an (N, 3) array in world or, by default, camera
+        frame."""
         return {"pointcloud": self.get_device(camera_id).get_pointcloud(world_frame=world_frame)}
 
     # -- pose ------------------------------------------------------------------

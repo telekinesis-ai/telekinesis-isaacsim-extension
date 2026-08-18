@@ -21,8 +21,18 @@ Routes mirrored from the spec but not yet wired up answer 501 via
 
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 
+from . import binary
 from .dependencies import (
     get_articulation_service,
     get_camera_service,
@@ -1004,38 +1014,77 @@ async def delete_camera(camera_id: str, camera_service=Depends(get_camera_servic
     return camera_service.delete_camera(camera_id)
 
 
-@cameras.post("/cameras/{camera_id}/capture", summary="Capture Frame")
+@cameras.post(
+    "/cameras/{camera_id}/capture",
+    summary="Capture Frame",
+    response_class=Response,
+    responses=binary.OCTET_STREAM_RESPONSES,
+)
 async def capture(camera_id: str, req: CaptureRequest, camera_service=Depends(get_camera_service)):
-    """Pump one frame and return the requested outputs (all active ones if omitted).
+    """Pump one frame and return the requested outputs (all active ones if omitted)
+    as one binary frame (see :mod:`.binary`).
 
     A captured pointcloud is in the camera frame unless ``world_frame`` is set."""
-    return await camera_service.capture(camera_id, req.data_types, req.world_frame)
+    frame = await camera_service.capture(camera_id, req.data_types, req.world_frame)
+    return Response(binary.encode(frame), media_type=binary.MEDIA_TYPE)
 
 
-@cameras.get("/cameras/{camera_id}/rgb", summary="Get Rgb")
+@cameras.get(
+    "/cameras/{camera_id}/rgb",
+    summary="Get Rgb",
+    response_class=Response,
+    responses=binary.OCTET_STREAM_RESPONSES,
+)
 async def get_rgb(camera_id: str, camera_service=Depends(get_camera_service)):
-    """Latest RGB image (H, W, 3), or null if not ready."""
-    return camera_service.get_rgb(camera_id)
+    """Latest RGB image (H, W, 3) uint8, as a binary frame (see :mod:`.binary`); the
+    output is null in the frame if it is not ready."""
+    return Response(
+        binary.encode(camera_service.get_rgb(camera_id)), media_type=binary.MEDIA_TYPE
+    )
 
 
-@cameras.get("/cameras/{camera_id}/rgba", summary="Get Rgba")
+@cameras.get(
+    "/cameras/{camera_id}/rgba",
+    summary="Get Rgba",
+    response_class=Response,
+    responses=binary.OCTET_STREAM_RESPONSES,
+)
 async def get_rgba(camera_id: str, camera_service=Depends(get_camera_service)):
-    """Latest RGBA image (H, W, 4), or null."""
-    return camera_service.get_rgba(camera_id)
+    """Latest RGBA image (H, W, 4) uint8, as a binary frame (see :mod:`.binary`)."""
+    return Response(
+        binary.encode(camera_service.get_rgba(camera_id)), media_type=binary.MEDIA_TYPE
+    )
 
 
-@cameras.get("/cameras/{camera_id}/depth", summary="Get Depth")
+@cameras.get(
+    "/cameras/{camera_id}/depth",
+    summary="Get Depth",
+    response_class=Response,
+    responses=binary.OCTET_STREAM_RESPONSES,
+)
 async def get_depth(camera_id: str, camera_service=Depends(get_camera_service)):
-    """Latest depth image (H, W), or null."""
-    return camera_service.get_depth(camera_id)
+    """Latest depth image (H, W) float32, as a binary frame (see :mod:`.binary`).
+    Pixels that hit nothing are inf."""
+    return Response(
+        binary.encode(camera_service.get_depth(camera_id)), media_type=binary.MEDIA_TYPE
+    )
 
 
-@cameras.get("/cameras/{camera_id}/pointcloud", summary="Get Pointcloud")
+@cameras.get(
+    "/cameras/{camera_id}/pointcloud",
+    summary="Get Pointcloud",
+    response_class=Response,
+    responses=binary.OCTET_STREAM_RESPONSES,
+)
 async def get_pointcloud(
     camera_id: str, world_frame: bool = Query(False), camera_service=Depends(get_camera_service)
 ):
-    """Latest pointcloud (N, 3) in camera (default) or world frame."""
-    return camera_service.get_pointcloud(camera_id, world_frame)
+    """Latest pointcloud (N, 3) in camera (default) or world frame, as a binary frame
+    (see :mod:`.binary`)."""
+    return Response(
+        binary.encode(camera_service.get_pointcloud(camera_id, world_frame)),
+        media_type=binary.MEDIA_TYPE,
+    )
 
 
 @cameras.get("/cameras/{camera_id}/world_pose", summary="Get World Pose")

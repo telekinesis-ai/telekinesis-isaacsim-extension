@@ -56,6 +56,53 @@ Use **radians** for joint values and **meters** for length-related values. Angul
 suction gripper's attachment points are the exception: those are **degrees**, the native unit of
 `UsdPhysics` limits.
 
+### Camera image payloads
+
+Five camera routes answer `application/octet-stream` instead of JSON, because a 1280x720 RGB frame
+is 2.8 MB of raw bytes but 58 MB as JSON nested lists, and building those lists takes seconds on the
+same thread that renders and steps physics:
+
+- `POST /cameras/{id}/capture`
+- `GET /cameras/{id}/rgb`, `.../rgba`, `.../depth`, `.../pointcloud`
+
+Every other camera route — optics, poses, the registry — is unchanged JSON.
+
+One response is one self-contained frame:
+
+| offset | size | contents |
+| --- | --- | --- |
+| 0 | 4 | magic `TKB1`, ASCII — identifies the format and its version |
+| 4 | 4 | manifest length `N`, uint32 little-endian |
+| 8 | `N` | manifest, UTF-8 JSON |
+| `8+N` | rest | every array's raw bytes, concatenated |
+
+```json
+{
+  "structure": {"rgb": {"__ndarray__": 0}, "rendering_frame": 412, "timestamp": 12.35},
+  "arrays": [{"shape": [720, 1280, 3], "dtype": "uint8", "offset": 0, "nbytes": 2764800}]
+}
+```
+
+`structure` is the body the route would otherwise have returned as JSON, with every array replaced
+by `{"__ndarray__": <index into arrays>}`. Nesting is preserved, so an output that is itself a dict
+(`semantic_segmentation` is `{"data": ..., "info": {...}}`) needs no special handling, and an output
+that is not ready is still `null`. Each `arrays` entry gives one array's slice of the array region,
+with `offset` counted from `8+N` rather than from the start of the frame. Arrays are C-contiguous in
+the host's native byte order, so a client reinterprets the bytes in place — no copy, and the arrays
+a decoder hands back are read-only views into the response body. `dtype` is a numpy dtype name; for
+the record-dtype outputs (`occlusion`, the `bounding_box_*` family) it is numpy's list of field
+descriptors instead, since a name does not describe those.
+
+Depth is float32 in stage units and pixels that hit nothing are `inf` — the JSON responses reported
+those as `null`, since JSON has no `inf`.
+
+A pointcloud carries only the pixels that hit geometry, so it holds at most one point per pixel and
+shrinks as more of the image is background. A camera whose view holds no geometry reports `(0, 3)`:
+an empty pointcloud, not a missing one.
+
+Errors keep the `{"detail": ...}` JSON contract on these routes too, so read a response by its
+content type rather than by its status alone. `examples/cameras/capture.py` has a decoder to copy.
+
 ### Suction (surface) grippers
 
 A suction gripper is a registered device with an id, like an articulation or a camera:

@@ -1,15 +1,18 @@
 """
-GET /cameras/{id}/depth -> {depth: [[d, ...], ...] or null}
+GET /cameras/{id}/depth -> binary frame carrying {depth: (H, W) float32 or null}
 
 Reads the latest depth frame (distance to image plane, stage units) without
-re-pumping (use capture.py to force a fresh frame). Background pixels that hit
-nothing come back as null. Prints the image shape, not the pixels.
+re-pumping (use capture.py to force a fresh frame). Pixels that hit nothing come
+back as inf. The response is a binary frame, not JSON -- see _decode below. Prints
+the image shape, not the pixels.
 
 Run:  python get_depth.py --id camera1
 """
 
 import argparse
+import json
 
+import numpy as np
 import requests
 
 HOST = "127.0.0.1"
@@ -18,19 +21,52 @@ DEFAULT_TIMEOUT = 30.0
 
 
 def _request(base, method, path, body=None):
-    """Send one request and return the decoded JSON (None for an empty body)."""
+    """Send one request and return the raw response body."""
     response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
     response.raise_for_status()
-    return response.json() if response.content else None
+    return response.content
 
 
-def _shape(value):
-    """Nested-list dimensions, for a compact printout of a big image array."""
-    dims = []
-    while isinstance(value, list):
-        dims.append(len(value))
-        value = value[0] if value else None
-    return dims
+def _decode(payload):
+    """Rebuild one binary camera frame into the dict the route describes.
+
+    Frame layout: 4-byte magic b"TKB1", the manifest length as a little-endian
+    uint32, that many bytes of UTF-8 JSON manifest, then every array's raw bytes
+    concatenated. The manifest's "structure" is the response body with each array
+    replaced by {"__ndarray__": <index>}, and its "arrays" list gives each array's
+    shape, dtype and slice of the array region. Arrays are C-contiguous in native
+    byte order, so np.frombuffer views them without copying -- the arrays this
+    returns are read-only.
+    """
+    if payload[:4] != b"TKB1":
+        raise ValueError(f"not a camera binary frame: {payload[:4]!r}")
+    manifest_length = int.from_bytes(payload[4:8], "little")
+    manifest = json.loads(payload[8 : 8 + manifest_length])
+    region = 8 + manifest_length
+
+    arrays = []
+    for entry in manifest["arrays"]:
+        start = region + entry["offset"]
+        dtype = entry["dtype"]
+        if isinstance(dtype, list):  # record dtype, sent as numpy's descr
+            dtype = np.dtype([tuple(field) for field in dtype])
+        arrays.append(
+            np.frombuffer(payload[start : start + entry["nbytes"]], dtype=dtype).reshape(
+                entry["shape"]
+            )
+        )
+    return _restore(manifest["structure"], arrays)
+
+
+def _restore(value, arrays):
+    """Put the decoded arrays back where their markers are."""
+    if isinstance(value, dict):
+        if len(value) == 1 and "__ndarray__" in value:
+            return arrays[value["__ndarray__"]]
+        return {key: _restore(item, arrays) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_restore(item, arrays) for item in value]
+    return value
 
 
 def main():
@@ -44,8 +80,13 @@ def main():
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    depth = _request(base, "GET", f"/cameras/{args.camera_id}/depth")["depth"]
-    print("depth:", "null (not ready)" if depth is None else f"shape {_shape(depth)}")
+    depth = _decode(_request(base, "GET", f"/cameras/{args.camera_id}/depth"))["depth"]
+    if depth is None:
+        print("depth: null (not ready)")
+        return
+    finite = np.isfinite(depth)
+    print(f"depth: shape {depth.shape} dtype {depth.dtype}")
+    print(f"{finite.sum()} of {depth.size} pixels hit something")
 
 
 if __name__ == "__main__":

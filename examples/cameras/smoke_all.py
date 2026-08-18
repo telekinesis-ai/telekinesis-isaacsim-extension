@@ -14,7 +14,9 @@ Run:
 """
 
 import argparse
+import json
 
+import numpy as np
 import requests
 
 HOST = "127.0.0.1"
@@ -24,30 +26,70 @@ DEFAULT_TIMEOUT = 60.0
 _results = []  # (label, "PASS" | "FAIL" | "SKIP", detail)
 
 
-def _shape(value):
-    """Nested-list dimensions, so we log an image's shape instead of its pixels."""
-    dims = []
-    while isinstance(value, list):
-        dims.append(len(value))
-        value = value[0] if value else None
-    return dims
+def _decode(payload):
+    """Rebuild one binary camera frame into the dict the route describes.
+
+    Frame layout: 4-byte magic b"TKB1", the manifest length as a little-endian
+    uint32, that many bytes of UTF-8 JSON manifest, then every array's raw bytes
+    concatenated. The manifest's "structure" is the response body with each array
+    replaced by {"__ndarray__": <index>}, and its "arrays" list gives each array's
+    shape, dtype and slice of the array region.
+    """
+    if payload[:4] != b"TKB1":
+        raise ValueError(f"not a camera binary frame: {payload[:4]!r}")
+    manifest_length = int.from_bytes(payload[4:8], "little")
+    manifest = json.loads(payload[8 : 8 + manifest_length])
+    region = 8 + manifest_length
+
+    arrays = []
+    for entry in manifest["arrays"]:
+        start = region + entry["offset"]
+        dtype = entry["dtype"]
+        if isinstance(dtype, list):  # record dtype, sent as numpy's descr
+            dtype = np.dtype([tuple(field) for field in dtype])
+        arrays.append(
+            np.frombuffer(payload[start : start + entry["nbytes"]], dtype=dtype).reshape(
+                entry["shape"]
+            )
+        )
+    return _restore(manifest["structure"], arrays)
+
+
+def _restore(value, arrays):
+    """Put the decoded arrays back where their markers are."""
+    if isinstance(value, dict):
+        if len(value) == 1 and "__ndarray__" in value:
+            return arrays[value["__ndarray__"]]
+        return {key: _restore(item, arrays) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_restore(item, arrays) for item in value]
+    return value
 
 
 def _brief(payload):
     """One-line summary of a response body (shapes for big arrays)."""
     if isinstance(payload, dict):
         return "{" + ", ".join(f"{k}: {_brief(v)}" for k, v in payload.items()) + "}"
+    if isinstance(payload, np.ndarray):
+        return f"array{list(payload.shape)} {payload.dtype}"
     if isinstance(payload, list):
-        return f"array{_shape(payload)}"
+        return f"list[{len(payload)}]"
     return repr(payload)
 
 
 def _call(base, method, path, body=None):
-    """Return (ok, status, payload). payload is JSON on success, else the detail."""
+    """Return (ok, status, payload). payload is the decoded body on success, else
+    the detail.
+
+    The image routes answer a binary frame and everything else answers JSON, so the
+    content type decides how the body is read. An error is JSON on every route.
+    """
     try:
         resp = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.RequestException as exc:
         return False, "ERR", str(exc)
+    if resp.ok and "application/octet-stream" in resp.headers.get("content-type", ""):
+        return True, resp.status_code, _decode(resp.content)
     payload = resp.json() if resp.content else None
     if resp.ok:
         return True, resp.status_code, payload

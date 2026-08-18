@@ -173,7 +173,7 @@ telekinesis.isaacsim.bridge
 
 ## Error Handling
 
-Errors always come back as `{"detail": "..."}` with one of the status codes below. Every failure the bridge anticipates raises `fastapi.HTTPException` with one of these codes (at the point in `comm/services/*.py` where the failure is detected); anything unanticipated falls through to a global handler in `comm/server.py` that still returns this same JSON shape at `500`, instead of a bare-text crash.
+Errors always come back as `{"detail": "..."}` with one of the status codes below. That holds on the camera image routes too, which answer `application/octet-stream` on success (see **Camera image payloads** in the extension's `docs/README.md`) but JSON on failure, so a client picks how to read a response by its content type rather than by its status alone. Every failure the bridge anticipates raises `fastapi.HTTPException` with one of these codes (at the point in `comm/services/*.py` where the failure is detected); anything unanticipated falls through to a global handler in `comm/server.py` that still returns this same JSON shape at `500`, instead of a bare-text crash.
 
 This follows FastAPI's own conventions rather than a separate error-code standard: `fastapi.HTTPException` is used directly wherever a service detects a specific failure, and `422` is left as FastAPI/pydantic's automatic default for request-body validation errors (missing/wrong-typed fields) rather than overridden. The specific case-to-code choices below (e.g. "no stage open" -> `409`, "bind/import failed" -> `422`) are this app's own convention, informed by common REST practice -- neither RFC 9110 nor the FastAPI docs prescribe a decision rule for picking among codes for a given case, they only define what each code generically means. See [FastAPI's error-handling docs](https://fastapi.tiangolo.com/tutorial/handling-errors/) and [RFC 9110 §15](https://www.rfc-editor.org/rfc/rfc9110.html#name-status-codes) for those definitions.
 
@@ -190,6 +190,7 @@ This follows FastAPI's own conventions rather than a separate error-code standar
 
 ## Implementation Notes
 
+- **Camera images are binary.** `POST /cameras/{id}/capture` and the `rgb`/`rgba`/`depth`/`pointcloud` getters answer one binary frame (`comm/binary.py`) rather than JSON nested lists. Because requests run on Isaac's own loop, the seconds a JSON encode of a 720p frame took were seconds in which nothing rendered or stepped. `core/camera.py` therefore hands render outputs back as C-contiguous host numpy, and the routers encode them; every other camera read stays JSON-ready Python.
 - **Single-threaded on Isaac's loop.** All requests run on Isaac Sim's own asyncio loop - no extra threads. Blocking moves yield with `next_update_async()` so the server stays responsive to other requests while a move is in progress.
 - **Articulation IDs are stable.** IDs are 1-based (`articulation1`, `articulation2`, …) and the same prim path always gets the same ID across repeated `PUT` calls.
 - **Assembly is idempotent.** `POST /articulations/{id}/assemble_robot` for the same arm+gripper pair is a no-op; it returns `already_assembled=true`. The registry is cleared when the stage changes.

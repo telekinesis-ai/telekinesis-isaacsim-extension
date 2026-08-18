@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.4.0] - 2026-08-18
+### Changed
+- **Breaking:** the camera image routes (`POST /cameras/{id}/capture`, `GET /cameras/{id}/rgb`,
+  `.../rgba`, `.../depth`, `.../pointcloud`) answer `application/octet-stream` instead of JSON. One
+  response is a binary frame: a `TKB1` magic, a length-prefixed JSON manifest naming each array's
+  shape, dtype and byte range, then the arrays' raw bytes. Every other camera route stays JSON, and
+  errors still answer `{"detail": ...}`, so a client picks how to read a response by its content
+  type. `docs/README.md` documents the layout and `examples/cameras/capture.py` has a decoder.
+  Encoding one 1280x720 RGB frame went from 4.8 s and 58 MB to 0.45 ms and 2.8 MB; because the
+  bridge serves requests on Isaac Sim's own main-thread loop, that time was time in which nothing
+  rendered or stepped, so a capture no longer stalls the simulation.
+- Depth and pointcloud values that are `inf` now arrive as `inf` rather than `null`. A depth pixel
+  that hit nothing was indistinguishable from missing data before, because JSON has no `inf`.
+- **Breaking:** `PUT /cameras` no longer accepts `data_types`. Render outputs are activated on
+  demand: a new camera produces `rgb`/`rgba`, and asking `POST /cameras/{id}/capture` for any other
+  supported output activates it, at the cost of a few frames of annotator warmup on that one call.
+  Every attached annotator costs a render pass per frame for as long as it stays attached, so this
+  stops a camera paying for outputs nobody reads. The camera's response reports `active_data_types`
+  (produced now) and `supported_data_types` (everything `capture` accepts) in place of
+  `data_types`.
+- **Breaking:** a pointcloud now comes back relative to the camera unless `world_frame` is set,
+  matching the frame a physical depth camera reports in. `POST /cameras/{id}/capture` accepts
+  `world_frame` for the same reason, and `GET /cameras/{id}/pointcloud?world_frame` defaults to
+  false rather than true.
+- `POST /cameras/{id}/capture` answers 422 when an output it just activated never produced data,
+  mirroring a failed bind.
+
+### Fixed
+- An empty pointcloud reports shape `(0, 3)` float32, the shape and type a pointcloud has. Isaac Sim
+  answers a flat empty array whenever it has no points to give, whatever the reason, so a client had
+  to special-case a `(0,)` float64 result.
+- Activating an output whose first result is legitimately empty no longer spends the whole warmup
+  budget waiting for it, which delayed that capture by 60 render frames and filled the log with
+  Isaac Sim's "a few render frames may be required" warning. Warmup now asks whether the annotator
+  has produced a result rather than whether the result has anything in it — for a pointcloud those
+  differ, since a camera pointed at empty space produces an empty one every frame.
+
 ## [0.3.0] - 2026-08-14
 ### Added
 - Suction (surface) gripper support as its own device registry, mirroring articulations and

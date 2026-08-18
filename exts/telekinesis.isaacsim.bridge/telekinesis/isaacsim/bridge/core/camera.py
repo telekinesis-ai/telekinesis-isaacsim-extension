@@ -13,16 +13,24 @@ and reads/authors its render outputs and optical parameters. The design mirrors
   one). This class adds the bridge's bind/retry/warmup and HTTP-facing conversion
   on top of that single Isaac Sim handle.
 * Every public method of the underlying ``Camera`` is exposed one-to-one with the
-  same name (the project convention: "match isaacsim naming"). The correspondence
-  is asserted by ``tests/test_camera_api_mapping.py``. The only additions are the
-  bridge-specific :meth:`bind`, :meth:`capture`, and :meth:`info` (see
+  same name (the project convention: "match isaacsim naming"). The only additions
+  are the bridge-specific :meth:`bind`, :meth:`capture`, and :meth:`info` (see
   ``BRIDGE_ONLY_METHODS`` below).
 
 Native Isaac units throughout: stage units (meters) for poses/apertures, pixels
-for resolution/intrinsics, row-major image arrays. Every method returns
-JSON-serializable Python (lists/floats/ints/dicts), never raw numpy/warp/torch --
-the future service layer maps ``ValueError`` (bad client input) and ``RuntimeError``
-(bind failure) to HTTP errors, exactly as the articulation service does.
+for resolution/intrinsics, row-major image arrays. A read that produces a render
+output returns C-contiguous host numpy, which the comm layer sends as a binary
+frame; every other read returns JSON-ready Python (lists/floats/ints/dicts). The
+service layer maps ``ValueError`` (bad client input) and ``RuntimeError`` (bind or
+warmup failure) to HTTP errors, exactly as the articulation service does.
+
+Reading an annotator copies its data from the GPU to the host and synchronizes, so
+it happens on the main thread with the rest of the update -- that cost cannot be
+moved. Turning the result into bytes is a memcpy of a few milliseconds and is
+deliberately left on the main thread too: it holds the GIL, so a worker thread
+would contend rather than run alongside, and the array is a view into a buffer the
+next render frame may recycle, so serializing it while the loop advances would tear
+the frame.
 
 The capture path follows the same ``async def`` / ``next_update_async`` blocking
 style as the articulation (no background worker, no command queue). Cameras
@@ -49,11 +57,8 @@ import carb
 
 # -- static tables ----------------------------------------------------------
 #
-# Plain module-level constants (no isaacsim needed to read them). The one-to-one
-# mapping test (tests/test_camera_api_mapping.py) ast-parses ISAAC_CAMERA_CLASS
-# and BRIDGE_ONLY_METHODS out of this file rather than importing it, so this
-# module stays importable only inside the Isaac Sim runtime while the test still
-# runs anywhere.
+# Plain module-level constants (no isaacsim needed to read them), naming the handle
+# this wrapper mirrors and the methods that have no counterpart on it.
 
 # The underlying handle this wrapper mirrors one-to-one, as (module, qualname).
 ISAAC_CAMERA_CLASS = ("isaacsim.sensors.camera", "Camera")
@@ -100,9 +105,23 @@ _INITIAL_ACTIVE_DATA_TYPES = ("rgb", "rgba")
 # camera has time to come up before bind gives up.
 _BIND_RETRIES = 60
 
-# Read image/annotator data onto the host so it converts to plain Python lists
-# without a device round-trip in every getter.
+# Read image/annotator data onto the host so every getter hands back numpy without
+# a device round-trip.
 _HOST_DEVICE = "cpu"
+
+# Data types whose empty result is a legitimate answer rather than a warmup state:
+# they describe what the camera sees, so a view holding nothing to describe reports
+# nothing. Warmup tests these against the annotator's frame entry instead of against
+# the emptiness of the value (see Camera._is_warmed_up).
+_POSSIBLY_EMPTY_DATA_TYPES = frozenset(
+    {
+        "pointcloud",
+        "occlusion",
+        "bounding_box_2d_tight",
+        "bounding_box_2d_loose",
+        "bounding_box_3d",
+    }
+)
 
 
 def _to_json(value):
@@ -113,11 +132,11 @@ def _to_json(value):
     Returns ``None`` unchanged (several getters return ``None`` before data is
     available).
 
-    Non-finite floats (``inf``/``nan``) are mapped to ``None``: a depth frame has
-    ``inf`` for background pixels that hit nothing, and Starlette serializes
-    responses with ``allow_nan=False``, so leaving them in would make the whole
-    response invalid JSON (a 500). ``None`` is JSON-legal and unambiguous versus a
-    real distance.
+    Non-finite floats (``inf``/``nan``) are mapped to ``None``: JSON has no token for
+    either, and Starlette serializes responses with ``allow_nan=False``, so leaving
+    them in would make the whole response invalid JSON (a 500). Render outputs do not
+    go through here -- they keep their ``inf``/``nan`` as real bytes (see
+    :func:`_to_host_arrays`).
     """
     if value is None:
         return None
@@ -145,18 +164,48 @@ def _to_json(value):
     return value
 
 
+def _to_host_arrays(value):
+    """Convert an Isaac return value into host numpy, ready for the binary frame.
+
+    Handles the numpy/warp/torch arrays and nested dicts the annotators return, and
+    delegates anything that is not an array to :func:`_to_json` so the scalars
+    travelling alongside it stay JSON-ready.
+
+    Arrays are made C-contiguous: ``Camera.get_rgb`` slices the rgba buffer, so it
+    hands back a strided view whose raw bytes are not the image. ``inf`` and ``nan``
+    are left alone -- a depth frame's background pixels stay ``inf``, which is what
+    they mean.
+    """
+    if value is None:
+        return None
+    if hasattr(value, "numpy"):  # warp array / cpu torch tensor -> numpy
+        try:
+            value = value.numpy()
+        except Exception:  # pragma: no cover - defensive; fall through to below
+            pass
+    if isinstance(value, np.ndarray):
+        return np.ascontiguousarray(value)
+    if isinstance(value, dict):
+        return {k: _to_host_arrays(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_host_arrays(v) for v in value]
+    return _to_json(value)
+
+
 def _is_ready(value):
     """Whether a read-back render output counts as warmed up.
 
-    ``None`` is how the frame-dict outputs report "no data yet". The array getters
-    report the same state as an empty array instead (``get_pointcloud`` returns
-    ``np.array([])`` until the render product produces points), so an empty result
-    counts as not ready either. Empty is also a legitimate steady-state result for
-    the outputs that describe scene contents, which is why the warmup loop only
-    warns about a value that stays empty rather than failing on it.
+    ``None`` is how the frame-dict outputs report "no data yet", and the image
+    getters report it as ``None`` too, so an empty result counts as not ready. Empty
+    is a legitimate steady-state result for the outputs that describe scene contents
+    -- ``pointcloud`` above all -- so those are tested with
+    :meth:`Camera._is_warmed_up` instead, and the warmup loop only warns about a
+    value that stays empty rather than failing on it.
     """
     if value is None:
         return False
+    if isinstance(value, np.ndarray):
+        return value.size > 0
     if isinstance(value, (list, tuple, dict)) and len(value) == 0:
         return False
     return True
@@ -252,6 +301,25 @@ class Camera:
             f"{self.resolution} {self.active_data_types}"
         )
 
+    def _is_warmed_up(self, data_type):
+        """Whether ``data_type`` has produced output at least once.
+
+        Distinguishes "no data yet" from "nothing to report", which the getters
+        cannot: ``get_pointcloud`` answers an empty array both while the annotator
+        is still warming up and when the camera's view holds no geometry, so waiting
+        for a non-empty read would spend the whole frame budget on a scene that is
+        simply empty. The frame dict the annotators write into does distinguish the
+        two -- its entry stays ``None`` until the annotator computes -- so for the
+        outputs that can legitimately be empty, either signal counts: the annotator
+        has written a frame entry, or the read came back with something in it. The
+        frame entry alone would not do, because a camera sampling below the render
+        rate refreshes it only every few frames.
+        """
+        if data_type in _POSSIBLY_EMPTY_DATA_TYPES:
+            if self._camera.get_current_frame().get(data_type) is not None:
+                return True
+        return _is_ready(self._read(data_type))
+
     async def _wait_for_warmup(self, data_types):
         """Pump frames until every type in ``data_types`` reads back usable data.
 
@@ -269,7 +337,7 @@ class Camera:
         for _ in range(_BIND_RETRIES):
             await app.next_update_async()
             try:
-                pending = [d for d in pending if not _is_ready(self._read(d))]
+                pending = [d for d in pending if not self._is_warmed_up(d)]
                 if not pending:
                     return
             except Exception as exc:  # data not ready yet -> keep pumping frames
@@ -323,31 +391,30 @@ class Camera:
         carb.log_info(f"[bridge] camera {self.prim_path}: attached {missing}")
 
     def _read(self, data_type, world_frame=False):
-        """Read one annotator's latest value as JSON, dispatching to the dedicated
-        getter where the handle has one (rgb/rgba/depth/pointcloud) and falling back
-        to the current frame otherwise. Returns ``None`` when data is not ready.
+        """Read one annotator's latest value as host numpy, dispatching to the
+        dedicated getter where the handle has one (rgb/rgba/depth/pointcloud) and
+        falling back to the current frame otherwise. Returns ``None`` when data is
+        not ready.
 
         ``world_frame`` applies to ``pointcloud`` alone and is ignored by every
         other output."""
         if data_type == "rgb":
-            return _to_json(self._camera.get_rgb(device=_HOST_DEVICE))
+            return _to_host_arrays(self._camera.get_rgb(device=_HOST_DEVICE))
         if data_type == "rgba":
-            return _to_json(self._camera.get_rgba(device=_HOST_DEVICE))
+            return _to_host_arrays(self._camera.get_rgba(device=_HOST_DEVICE))
         if data_type in ("depth", "distance_to_image_plane"):
-            return _to_json(self._camera.get_depth(device=_HOST_DEVICE))
+            return _to_host_arrays(self._camera.get_depth(device=_HOST_DEVICE))
         if data_type == "pointcloud":
-            return _to_json(
-                self._camera.get_pointcloud(device=_HOST_DEVICE, world_frame=world_frame)
-            )
-        return _to_json(self._camera.get_current_frame().get(data_type))
+            return self.get_pointcloud(world_frame=world_frame)
+        return _to_host_arrays(self._camera.get_current_frame().get(data_type))
 
     async def capture(self, data_types=None, world_frame=False):
-        """Pump one frame and return a JSON snapshot of the requested outputs.
+        """Pump one frame and return a snapshot of the requested outputs.
 
         The core read method (analogue of the articulation's ``move_j``): attaches
         any requested output not already attached, awaits one ``next_update_async``
-        so the render product is current, then returns ``{<data_type>: <array/list
-        or None>, ...}`` plus ``rendering_frame`` and a monotonic ``timestamp`` --
+        so the render product is current, then returns ``{<data_type>: <array or
+        None>, ...}`` plus ``rendering_frame`` and a monotonic ``timestamp`` --
         mirroring ``get_joints_state``'s dict-with-timestamp shape.
 
         ``data_types`` defaults to every output currently active, which is
@@ -441,9 +508,9 @@ class Camera:
         return list(self._camera.supported_annotators)
 
     def get_current_frame(self, clone=False):
-        """JSON snapshot of the current frame dict (all attached annotators plus
-        rendering time/frame)."""
-        return _to_json(self._camera.get_current_frame(clone=clone))
+        """Snapshot of the current frame dict (all attached annotators plus rendering
+        time/frame), with each annotator's data as an array."""
+        return _to_host_arrays(self._camera.get_current_frame(clone=clone))
 
     # -- rate control ----------------------------------------------------------
 
@@ -668,23 +735,36 @@ class Camera:
     # -- data getters ----------------------------------------------------------
 
     def get_rgb(self, device=_HOST_DEVICE):
-        """Latest RGB image as a nested list ``(H, W, 3)``, or ``None`` if not ready."""
-        return _to_json(self._camera.get_rgb(device=device))
+        """Latest RGB image as a ``(H, W, 3)`` uint8 array, or ``None`` if not ready."""
+        return _to_host_arrays(self._camera.get_rgb(device=device))
 
     def get_rgba(self, device=_HOST_DEVICE):
-        """Latest RGBA image as a nested list ``(H, W, 4)``, or ``None``."""
-        return _to_json(self._camera.get_rgba(device=device))
+        """Latest RGBA image as a ``(H, W, 4)`` uint8 array, or ``None``."""
+        return _to_host_arrays(self._camera.get_rgba(device=device))
 
     def get_depth(self, device=_HOST_DEVICE):
-        """Latest depth (distance to image plane) as a nested list ``(H, W)``, or ``None``."""
-        return _to_json(self._camera.get_depth(device=device))
+        """Latest depth (distance to image plane) as a ``(H, W)`` float32 array in
+        stage units, or ``None``. Pixels that hit nothing are ``inf``."""
+        return _to_host_arrays(self._camera.get_depth(device=device))
 
     def get_pointcloud(self, device=_HOST_DEVICE, world_frame=False):
-        """Latest pointcloud as a nested list ``(N, 3)``.
+        """Latest pointcloud as an ``(N, 3)`` float32 array.
 
         ``world_frame`` returns the points in stage coordinates; the default returns
-        them relative to the camera, the frame a physical depth camera reports in."""
-        return _to_json(self._camera.get_pointcloud(device=device, world_frame=world_frame))
+        them relative to the camera, the frame a physical depth camera reports in.
+
+        A camera whose view holds no geometry reports ``(0, 3)``: an empty
+        pointcloud, not a missing one. Only the points that hit something are
+        returned, so ``N`` is at most one point per pixel and is smaller whenever
+        part of the image is background."""
+        points = _to_host_arrays(
+            self._camera.get_pointcloud(device=device, world_frame=world_frame)
+        )
+        if isinstance(points, np.ndarray) and points.ndim != 2:
+            # isaacsim reports "no points" as a flat empty array, whatever the
+            # reason; reshape it so a client can index the result unconditionally.
+            return np.zeros((0, 3), dtype=np.float32)
+        return points
 
     # -- optics ----------------------------------------------------------------
 

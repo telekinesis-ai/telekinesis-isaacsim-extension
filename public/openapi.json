@@ -2337,7 +2337,7 @@
           "cameras"
         ],
         "summary": "Create Camera",
-        "description": "Register (and bind) one camera; returns its id, prim, resolution and optics.",
+        "description": "Register (and bind) one camera; returns its id, prim, resolution, optics, and\nits active and supported data types.",
         "operationId": "create_camera_cameras_put",
         "requestBody": {
           "content": {
@@ -2377,7 +2377,7 @@
           "cameras"
         ],
         "summary": "Get Camera",
-        "description": "Id + static description (prim, resolution, optics). 404 if unknown.",
+        "description": "Id + description (prim, resolution, optics, active/supported data types). 404 if\nunknown.",
         "operationId": "get_camera_cameras__camera_id__get",
         "parameters": [
           {
@@ -2457,7 +2457,7 @@
           "cameras"
         ],
         "summary": "Capture Frame",
-        "description": "Pump one frame and return the requested outputs (all bound types if omitted).",
+        "description": "Pump one frame and return the requested outputs (all active ones if omitted)\nas one binary frame (see :mod:`.binary`).\n\nA captured pointcloud is in the camera frame unless ``world_frame`` is set.",
         "operationId": "capture_cameras__camera_id__capture_post",
         "parameters": [
           {
@@ -2484,9 +2484,7 @@
           "200": {
             "description": "Successful Response",
             "content": {
-              "application/json": {
-                "schema": {}
-              }
+              "application/octet-stream": {}
             }
           },
           "422": {
@@ -2508,7 +2506,7 @@
           "cameras"
         ],
         "summary": "Get Rgb",
-        "description": "Latest RGB image (H, W, 3), or null if not ready.",
+        "description": "Latest RGB image (H, W, 3) uint8, as a binary frame (see :mod:`.binary`); the\noutput is null in the frame if it is not ready.",
         "operationId": "get_rgb_cameras__camera_id__rgb_get",
         "parameters": [
           {
@@ -2525,9 +2523,7 @@
           "200": {
             "description": "Successful Response",
             "content": {
-              "application/json": {
-                "schema": {}
-              }
+              "application/octet-stream": {}
             }
           },
           "422": {
@@ -2549,7 +2545,7 @@
           "cameras"
         ],
         "summary": "Get Rgba",
-        "description": "Latest RGBA image (H, W, 4), or null.",
+        "description": "Latest RGBA image (H, W, 4) uint8, as a binary frame (see :mod:`.binary`).",
         "operationId": "get_rgba_cameras__camera_id__rgba_get",
         "parameters": [
           {
@@ -2566,9 +2562,7 @@
           "200": {
             "description": "Successful Response",
             "content": {
-              "application/json": {
-                "schema": {}
-              }
+              "application/octet-stream": {}
             }
           },
           "422": {
@@ -2590,7 +2584,7 @@
           "cameras"
         ],
         "summary": "Get Depth",
-        "description": "Latest depth image (H, W), or null.",
+        "description": "Latest depth image (H, W) float32, as a binary frame (see :mod:`.binary`).\nPixels that hit nothing are inf.",
         "operationId": "get_depth_cameras__camera_id__depth_get",
         "parameters": [
           {
@@ -2607,9 +2601,7 @@
           "200": {
             "description": "Successful Response",
             "content": {
-              "application/json": {
-                "schema": {}
-              }
+              "application/octet-stream": {}
             }
           },
           "422": {
@@ -2631,7 +2623,7 @@
           "cameras"
         ],
         "summary": "Get Pointcloud",
-        "description": "Latest pointcloud (N, 3) in world (default) or camera frame.",
+        "description": "Latest pointcloud (N, 3) in camera (default) or world frame, as a binary frame\n(see :mod:`.binary`).",
         "operationId": "get_pointcloud_cameras__camera_id__pointcloud_get",
         "parameters": [
           {
@@ -2649,7 +2641,7 @@
             "required": false,
             "schema": {
               "type": "boolean",
-              "default": true,
+              "default": false,
               "title": "World Frame"
             }
           }
@@ -2658,9 +2650,7 @@
           "200": {
             "description": "Successful Response",
             "content": {
-              "application/json": {
-                "schema": {}
-              }
+              "application/octet-stream": {}
             }
           },
           "422": {
@@ -6157,11 +6147,16 @@
               }
             ],
             "title": "Data Types"
+          },
+          "world_frame": {
+            "type": "boolean",
+            "title": "World Frame",
+            "default": false
           }
         },
         "type": "object",
         "title": "CaptureRequest",
-        "description": "Body of POST /cameras/{id}/capture -- pump one frame and read outputs.\n\n``data_types`` selects which of the camera's bound outputs to return; ``None``\nreturns them all."
+        "description": "Body of POST /cameras/{id}/capture -- pump one frame and read outputs.\n\n``data_types`` selects which render outputs to return; ``None`` returns every\noutput currently active, which is ``rgb``/``rgba`` on a new camera. Requesting a\nsupported output that is not active yet activates it, costing a few frames of\nwarmup on that first capture. ``GET /cameras/{id}`` reports both the active and\nthe supported sets.\n\n``world_frame`` selects the coordinate frame of the ``pointcloud`` output and is\nignored by every other one. Points come back relative to the camera unless it is\nset, matching the frame a physical depth camera reports in."
       },
       "CreateArticulationRequest": {
         "properties": {
@@ -6207,20 +6202,6 @@
               720
             ]
           },
-          "data_types": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Data Types"
-          },
           "frequency": {
             "anyOf": [
               {
@@ -6238,7 +6219,7 @@
           "prim_path"
         ],
         "title": "CreateCameraRequest",
-        "description": "Body of PUT /cameras -- register (and bind) one camera.\n\n``resolution`` is ``[width, height]`` in pixels. ``data_types`` is the set of\nrender outputs to produce (default ``[\"rgb\"]``); each must be a supported\ncamera data type. ``frequency`` (Hz) is optional; ``None`` follows the render\nloop."
+        "description": "Body of PUT /cameras -- register (and bind) one camera.\n\n``resolution`` is ``[width, height]`` in pixels. ``frequency`` (Hz) is optional;\n``None`` follows the render loop.\n\nA new camera produces ``rgb``/``rgba``. Other render outputs are activated the\nfirst time ``POST /cameras/{id}/capture`` asks for them, so they are not named\nhere; the response lists both what is active and what is supported."
       },
       "CreateSurfaceGripperRequest": {
         "properties": {
@@ -6955,13 +6936,6 @@
           "type": {
             "type": "string",
             "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
           }
         },
         "type": "object",
