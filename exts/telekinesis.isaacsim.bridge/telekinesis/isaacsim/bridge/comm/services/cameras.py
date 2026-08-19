@@ -71,10 +71,15 @@ class CameraService:
     async def create_camera(self, prim_path, resolution, frequency):
         """Register (and bind) the camera at ``prim_path`` and return its info.
 
-        One camera per *requested* prim; PUTting the same prim again keeps its id
-        but **rebuilds the device with the new config** (resolution / frequency), so
-        the response always reflects the request. Ids are 1-based: ``camera1``,
-        ``camera2``, ...
+        One camera per *requested* prim; PUTting the same prim again keeps its id **and
+        the camera already bound to that prim**, applying the requested resolution /
+        frequency to it, so the response always reflects the request. Ids are 1-based:
+        ``camera1``, ``camera2``, ...
+
+        The device is reused rather than rebuilt because Isaac Sim hands a second camera
+        over the same prim the *same* render product (replicator returns an existing one
+        for a matching prim and resolution), so freeing the first camera afterwards would
+        take the second one's annotators off the render product with it.
 
         A newly registered camera produces ``rgb``/``rgba``; the annotators for
         other render outputs are attached the first time :meth:`capture` asks for
@@ -89,51 +94,69 @@ class CameraService:
         # first. setdefault is synchronous, so concurrent callers land on one Lock.
         lock = self._create_locks.setdefault(prim_path, asyncio.Lock())
         async with lock:
-            existing_id = self._id_by_prim.get(prim_path)
-            if existing_id is None:
-                # Reserve a fresh id synchronously -- before the bind() await below,
-                # which yields the loop. The per-prim lock does NOT serialize creates
-                # of *different* prims, so deferring the increment past the await
-                # would let two of them grab the same cameraN.
-                self._count += 1
-                camera_id = f"camera{self._count}"
-            else:
-                camera_id = existing_id
+            camera_id = self._id_by_prim.get(prim_path)
+            device = None if camera_id is None else self._devices.get(camera_id)
 
-            # Build + bind the NEW device before touching any existing one, so a bad
-            # re-PUT (wrong resolution/frequency, or a prim that won't
-            # bind) leaves the currently-registered camera untouched and working.
-            try:
-                device = Camera(
-                    prim_path,
-                    name=camera_id,
-                    resolution=tuple(resolution),
-                    frequency=frequency,
-                )
-            except Exception as exc:
-                # Bad input value: a non-divisor frequency, or a prim that isn't a
-                # Camera -- all raised at construction. 400, not
-                # the 500 a bare Exception would otherwise become. Construction has
-                # no await, so rolling back a freshly-reserved id here is race-free.
-                if existing_id is None:
-                    self._count -= 1
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            if device is not None and device.is_bound:
+                # Reuse: the registered camera still owns its render product, so the
+                # requested configuration is applied to it in place.
+                self._configure(device, resolution, frequency)
+            else:
+                reserved_id = camera_id is None
+                if reserved_id:
+                    # Reserve a fresh id synchronously -- before the bind() await below,
+                    # which yields the loop. The per-prim lock does NOT serialize creates
+                    # of *different* prims, so deferring the increment past the await
+                    # would let two of them grab the same cameraN.
+                    self._count += 1
+                    camera_id = f"camera{self._count}"
+                try:
+                    replacement = Camera(
+                        prim_path,
+                        name=camera_id,
+                        resolution=tuple(resolution),
+                        frequency=frequency,
+                    )
+                except Exception as exc:
+                    # Bad input value: a non-divisor frequency, or a prim that isn't a
+                    # Camera -- all raised at construction. 400, not the 500 a bare
+                    # Exception would otherwise become. Construction has no await, so
+                    # rolling back a freshly reserved id here is race-free.
+                    if reserved_id:
+                        self._count -= 1
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
+                if device is not None:
+                    # An unbound device holds no render product, so freeing it here
+                    # cannot strand the replacement's annotators.
+                    self._safe_destroy(device)
+                device = replacement
+                self._devices[camera_id] = device
+                self._id_by_prim[prim_path] = camera_id
+
             try:
                 await device.bind()
             except RuntimeError as exc:
                 # 422: well-formed request, but the camera couldn't be brought up
-                # (needs --enable_cameras / RTX warmup). Free its partial resources.
-                self._safe_destroy(device)
+                # (needs --enable_cameras / RTX warmup). The device stays registered, so
+                # a retry rebinds it rather than spending an id per attempt.
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-            # Success: commit. Free any prior device for this prim so a re-PUT frees
-            # the old render product/annotators instead of leaking them to the GC.
-            previous = self._devices.get(camera_id)
-            if previous is not None and previous is not device:
-                self._safe_destroy(previous)
-            self._id_by_prim[prim_path] = camera_id  # no-op on re-PUT; commits a fresh id
-            self._devices[camera_id] = device
             return {"camera_id": camera_id, "prim_path": device.prim_path, **device.info()}
+
+    @staticmethod
+    def _configure(device, resolution, frequency):
+        """Apply a create request's resolution / frequency to an already-bound camera.
+
+        Only what the request changes is written, so a re-PUT of the same configuration
+        does not touch the render product. A value the camera rejects is a bad input
+        value, hence 400 rather than the 500 a bare ValueError would become.
+        """
+        try:
+            if tuple(resolution) != device.resolution:
+                device.set_resolution(resolution)
+            if frequency is not None and float(frequency) != device.get_frequency():
+                device.set_frequency(frequency)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     def get_camera(self, camera_id):
         """Info for one registered camera (id, prim, resolution, optics), or 404."""

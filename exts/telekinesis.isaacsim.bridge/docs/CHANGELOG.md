@@ -28,6 +28,12 @@
   mirroring a failed bind.
 
 ### Fixed
+- `PUT /cameras` for a prim that is already registered now keeps and reconfigures the camera
+  bound to it instead of building a second one. Isaac Sim hands a second camera over the same
+  prim the same render product, so freeing the first one afterwards took the second one's
+  annotators with it and every following capture answered `Annotator rgb is not attached to any
+  render products.` Connecting to the same simulated camera again -- a second client session, or
+  a second run of a script -- hit this on its first capture.
 - An empty pointcloud reports shape `(0, 3)` float32, the shape and type a pointcloud has. Isaac Sim
   answers a flat empty array whenever it has no points to give, whatever the reason, so a client had
   to special-case a `(0,)` float64 result.

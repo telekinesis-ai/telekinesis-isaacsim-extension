@@ -480,6 +480,12 @@ class Camera:
         """Reset the sensor's timing state after a simulation reset."""
         self._camera.post_reset()
 
+    @property
+    def is_bound(self):
+        """Whether this camera currently holds a render product with its annotators
+        attached, which is what :meth:`bind` establishes and :meth:`destroy` gives up."""
+        return self._initialized
+
     def destroy(self):
         """Detach annotators and destroy the render product for this camera."""
         self._camera.destroy()
