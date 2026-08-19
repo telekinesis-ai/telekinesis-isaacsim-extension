@@ -243,7 +243,13 @@ async def attach_surface_gripper(
     _park_attachment_points(stage, isaac_assembler, attachment_point_paths, arm_mount)
 
     if mask_collisions:
-        assembler.mask_collisions(arm_prim, gripper_prim)
+        # The pair filter is authored on the GRIPPER, not on the arm: it is symmetric,
+        # and applying an API schema to the arm's root prim resyncs the arm's whole
+        # subtree. A robot imported from URDF carries its link visuals as instanceable
+        # prims referencing shared prototypes, and that resync is what drops them --
+        # the links lose their meshes while the frames keep moving. Nothing else in
+        # this function writes to the arm, so the attach leaves it composed as it was.
+        assembler.mask_collisions(gripper_prim, arm_prim)
 
     await app.next_update_async()
     await app.next_update_async()
@@ -330,12 +336,12 @@ def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
     joint.CreateBody0Rel().SetTargets([Sdf.Path(arm_mount_path)])
     joint.CreateBody1Rel().SetTargets([Sdf.Path(gripper_mount_path)])
 
-    # mount_pose = Gf.Transform(offset_matrix(offset))
-    # joint.CreateLocalPos0Attr().Set(Gf.Vec3f(mount_pose.GetTranslation()))
-    # joint.CreateLocalRot0Attr().Set(Gf.Quatf(mount_pose.GetRotation().GetQuat()))
-    # joint.CreateLocalPos1Attr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
-    # joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
-    # joint.CreateExcludeFromArticulationAttr(True)
+    mount_pose = Gf.Transform(offset_matrix(offset))
+    joint.CreateLocalPos0Attr().Set(Gf.Vec3f(mount_pose.GetTranslation()))
+    joint.CreateLocalRot0Attr().Set(Gf.Quatf(mount_pose.GetRotation().GetQuat()))
+    joint.CreateLocalPos1Attr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
+    joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
+    joint.CreateExcludeFromArticulationAttr(True)
     return joint
 
 

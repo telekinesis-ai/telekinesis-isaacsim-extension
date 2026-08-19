@@ -68,14 +68,12 @@ class ArticulationService:
         """Register (and bind) the articulation at ``prim_path`` and return its info.
 
         One articulation per *requested* prim; PUTting the same prim again returns
-        the same id (and rebinds). We key on the requested path, not the resolved
-        one: importing a URDF resolves to the nested articulation root
-        (``/World/ur10e/root_joint``) while an already-present prim resolves to
-        itself (``/World/ur10e``), so keying on the resolved path would hand the
-        same articulation two ids across the load-vs-already-loaded paths. Ids are
-        1-based: ``articulation1``, ``articulation2``, ... The bind runs every time:
-        a new client session may follow a timeline stop/replay, which invalidates
-        the cached articulation handle.
+        the same id (and rebinds). We key on the requested path, so a client that
+        passes ``urdf_path`` defensively gets the same id whether the robot had to
+        be imported or was already in the stage. Ids are 1-based: ``articulation1``,
+        ``articulation2``, ... The bind runs every time: a new client session may
+        follow a timeline stop/replay, which invalidates the cached articulation
+        handle.
         """
         # Normalize a trailing slash so "/World/ur10e" and "/World/ur10e/" register as
         # the same articulation (USD paths are case-sensitive, so case is left alone).
