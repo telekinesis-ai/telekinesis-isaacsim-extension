@@ -15,11 +15,13 @@ icon = "data/icon.png"
 writeTarget.kit = true
 
 [dependencies]
+"isaacsim.asset.importer.urdf" = {}
 "isaacsim.core.api" = {}
 "isaacsim.gui.components" = {}
 "isaacsim.robot.schema" = {}
 "isaacsim.robot.surface_gripper" = {}
 "omni.kit.uiapp" = {}
+"omni.usd.schema.physx" = {}
 
 [python.pipapi]
 requirements = ["fastapi", "uvicorn", "pydantic", "websockets"]

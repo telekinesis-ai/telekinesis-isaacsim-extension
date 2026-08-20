@@ -32,7 +32,7 @@ import omni.timeline
 from isaacsim.core import prims
 from isaacsim.core.utils.types import ArticulationAction
 import carb
-from pxr import Usd, UsdPhysics
+from pxr import PhysxSchema, Usd, UsdPhysics
 
 from .robot_assembler import get_articulation_base_link_name
 
@@ -588,7 +588,9 @@ class SingleArticulation:
         """Static description of this device: DOF count/names, per-joint drive
         properties, stored reset pose, and the PhysX solver/collision settings
         that were baked in when the articulation was authored (or set via the
-        setters below). The bind happens in the service's PUT /articulations.
+        setters below). A solver setting the articulation does not carry is
+        reported as null, PhysX simulating it with its own default. The bind
+        happens in the service's PUT /articulations.
         """
         return {
             "num_dof": self.num_dof,
@@ -872,51 +874,94 @@ class SingleArticulation:
         self._articulation.set_angular_velocity(target)
 
     def get_solver_position_iteration_count(self):
-        """PhysX position-solver iteration count for this articulation."""
-        return int(self._articulation.get_solver_position_iteration_count())
+        """PhysX position-solver iteration count for this articulation, ``None`` when the
+        articulation does not carry one."""
+        count = self._physx_setting("solverPositionIterationCount")
+        return None if count is None else int(count)
 
     def set_solver_position_iteration_count(self, count):
         """Set the PhysX position-solver iteration count (accuracy vs. perf)."""
         if count < 0:
             raise ValueError(f"solver position iteration count must be >= 0, got {count}")
-        self._articulation.set_solver_position_iteration_count(int(count))
+        self._set_physx_setting("solverPositionIterationCount", int(count))
 
     def get_solver_velocity_iteration_count(self):
-        """PhysX velocity-solver iteration count for this articulation."""
-        return int(self._articulation.get_solver_velocity_iteration_count())
+        """PhysX velocity-solver iteration count for this articulation, ``None`` when the
+        articulation does not carry one."""
+        count = self._physx_setting("solverVelocityIterationCount")
+        return None if count is None else int(count)
 
     def set_solver_velocity_iteration_count(self, count):
         """Set the PhysX velocity-solver iteration count (accuracy vs. perf)."""
         if count < 0:
             raise ValueError(f"solver velocity iteration count must be >= 0, got {count}")
-        self._articulation.set_solver_velocity_iteration_count(int(count))
+        self._set_physx_setting("solverVelocityIterationCount", int(count))
 
     def get_stabilization_threshold(self):
         """Mass-normalized kinetic energy below which PhysX may stabilize this
-        articulation (settle small residual jitter)."""
-        return float(self._articulation.get_stabilization_threshold())
+        articulation (settle small residual jitter), ``None`` when the articulation does
+        not carry a threshold."""
+        threshold = self._physx_setting("stabilizationThreshold")
+        return None if threshold is None else float(threshold)
 
     def set_stabilization_threshold(self, threshold):
         """Set the stabilization threshold. See :meth:`get_stabilization_threshold`."""
         if threshold < 0:
             raise ValueError(f"stabilization threshold must be >= 0, got {threshold}")
-        self._articulation.set_stabilization_threshold(float(threshold))
+        self._set_physx_setting("stabilizationThreshold", float(threshold))
 
     def get_enabled_self_collisions(self):
-        """Whether this articulation's own links can collide with each other."""
-        return bool(self._articulation.get_enabled_self_collisions())
+        """Whether this articulation's own links can collide with each other, ``None``
+        when the articulation does not carry the flag."""
+        enabled = self._physx_setting("enabledSelfCollisions")
+        return None if enabled is None else bool(enabled)
 
     def set_enabled_self_collisions(self, enabled):
         """Enable/disable self-collision between this articulation's own links."""
-        self._articulation.set_enabled_self_collisions(bool(enabled))
+        self._set_physx_setting("enabledSelfCollisions", bool(enabled))
 
     def get_sleep_threshold(self):
         """Velocity threshold below which PhysX lets this articulation sleep
-        (skip simulation) to save performance."""
-        return float(self._articulation.get_sleep_threshold())
+        (skip simulation) to save performance, ``None`` when the articulation does not
+        carry a threshold."""
+        threshold = self._physx_setting("sleepThreshold")
+        return None if threshold is None else float(threshold)
 
     def set_sleep_threshold(self, threshold):
         """Set the sleep threshold. See :meth:`get_sleep_threshold`."""
         if threshold < 0:
             raise ValueError(f"sleep threshold must be >= 0, got {threshold}")
-        self._articulation.set_sleep_threshold(float(threshold))
+        self._set_physx_setting("sleepThreshold", float(threshold))
+
+    def _physx_setting(self, name):
+        """Value of PhysX's ``name`` setting on this articulation, or ``None`` when the
+        articulation does not carry it.
+
+        These settings are optional: an articulation that leaves one out is simulated
+        with PhysX's own default for it and has no value to report. Read off the prim
+        PhysX resolved as the articulation's root -- which is not necessarily the prim
+        path this device was registered at -- rather than through the articulation
+        handle, whose reader turns an absent setting into a type error or a NaN.
+        """
+        prim = self._physx_articulation_prim()
+        attribute = prim.GetAttribute(f"physxArticulation:{name}")
+        return attribute.Get() if attribute else None
+
+    def _set_physx_setting(self, name, value):
+        """Write PhysX's ``name`` setting on this articulation.
+
+        An articulation carrying none of these settings has no attribute to write to, so
+        they are added to it first, every one of them at the default PhysX was already
+        simulating it with; only ``name`` is then given the requested value.
+        """
+        prim = self._physx_articulation_prim()
+        if not prim.GetAttribute(f"physxArticulation:{name}"):
+            PhysxSchema.PhysxArticulationAPI.Apply(prim)
+        prim.GetAttribute(f"physxArticulation:{name}").Set(value)
+
+    def _physx_articulation_prim(self):
+        """Prim PhysX simulates as this articulation's root, which is where its solver
+        settings live. ``prim_path`` is the handle's resolved root, not the path the
+        device was registered at (a container prim holding the articulation below it).
+        """
+        return self._articulation.prim.GetStage().GetPrimAtPath(self._articulation.prim_path)
