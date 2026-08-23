@@ -27,6 +27,7 @@ from .dependencies import (
     get_articulation_service,
     get_camera_service,
     get_general_service,
+    get_lidar_service,
     get_prim_service,
     get_stage_service,
 )
@@ -43,11 +44,17 @@ from .models import (
     CaptureRequest,
     CreateArticulationRequest,
     CreateCameraRequest,
+    CreateLidarRequest,
     DefaultJointStateRequest,
     DofGainsRequest,
     JointEffortsRequest,
     JointPositionsRequest,
     JointVelocitiesRequest,
+    LidarBoolValueRequest,
+    LidarCaptureRequest,
+    LidarFloatValueRequest,
+    LidarLocalPoseRequest,
+    LidarWorldPoseRequest,
     OpenSceneRequest,
     PrimPathRequest,
     SetDrivenJointsRequest,
@@ -1259,6 +1266,406 @@ async def is_paused(camera_id: str, camera_service=Depends(get_camera_service)):
     return camera_service.is_paused(camera_id)
 
 
+# -- lidars (device registry, analogous to cameras) --------------------------
+#
+# A lidar is a registered device with an id, exactly like a camera: PUT /lidars
+# hands back a lidar_id, then every other route addresses that id. Wraps the
+# legacy PhysX Lidar sensor (isaacsim.sensors.physx._range_sensor).
+
+lidars = APIRouter(tags=["lidars"])
+
+
+@lidars.put("/lidars", summary="Create Lidar")
+async def create_lidar(req: CreateLidarRequest, lidar_service=Depends(get_lidar_service)):
+    """Register (and bind) one lidar; returns its id, prim, and scan configuration."""
+    return await lidar_service.create_lidar(
+        req.prim_path,
+        req.min_range,
+        req.max_range,
+        req.horizontal_fov,
+        req.vertical_fov,
+        req.horizontal_resolution,
+        req.vertical_resolution,
+        req.rotation_rate,
+        req.high_lod,
+        req.draw_points,
+        req.draw_lines,
+        req.yaw_offset,
+        req.data_types,
+    )
+
+
+@lidars.get("/lidars", summary="List Lidars")
+async def list_lidars(lidar_service=Depends(get_lidar_service)):
+    """Every registered lidar id mapped to its prim path."""
+    return lidar_service.list_lidars()
+
+
+@lidars.get("/lidars/{lidar_id}", summary="Get Lidar")
+async def get_lidar(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Id + static description (prim, scan configuration). 404 if unknown."""
+    return lidar_service.get_lidar(lidar_id)
+
+
+@lidars.delete("/lidars/{lidar_id}", summary="Delete Lidar")
+async def delete_lidar(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Unregister the lidar (the USD prim is left in the stage)."""
+    return lidar_service.delete_lidar(lidar_id)
+
+
+@lidars.post("/lidars/{lidar_id}/capture", summary="Capture Scan")
+async def capture_lidar(
+    lidar_id: str, req: LidarCaptureRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Pump one frame and return the requested outputs (all bound types if omitted)."""
+    return await lidar_service.capture(lidar_id, req.data_types)
+
+
+@lidars.websocket("/lidars/{lidar_id}/stream_scan")
+async def stream_scan(websocket: WebSocket, lidar_id: str):
+    """Scan push stream: the client opens one connection bound to this lidar and
+    the server sends one frame per simulator update, shaped exactly like the
+    ``capture`` response (every bound data type plus ``num_cols_ticked`` and
+    ``timestamp``). The client sends nothing.
+
+    Unlike the articulation state stream, capturing a lidar frame already
+    blocks on one ``next_update_async`` (see
+    :meth:`..core.lidar.Lidar.capture`), so this handler paces itself off that
+    call instead of pumping the app loop itself. A client that reads more
+    slowly than the server sends misses frames rather than falling steadily
+    further behind.
+    """
+    service = websocket.app.state.lidar_service
+    await websocket.accept()
+    try:
+        service.get_device(lidar_id)
+    except HTTPException as exc:
+        await websocket.close(code=1008, reason=exc.detail)
+        return
+
+    async def send_scan_frames():
+        while True:
+            try:
+                frame = await service.capture(lidar_id, None)
+            except HTTPException as exc:
+                # The device was deleted mid-stream (get_device now 404s) -- close, don't crash.
+                await websocket.close(code=1008, reason=exc.detail)
+                return
+            try:
+                await websocket.send_json(frame)
+            except (TypeError, ValueError):
+                # The frame itself could not be serialized -- a real fault worth
+                # surfacing, not a connection problem.
+                raise
+            except Exception:  # pylint: disable=broad-except
+                # The client disconnected between capturing and sending the
+                # frame. Pushing to that socket is all this does, so stop.
+                return
+
+    async def watch_for_disconnect():
+        # Nothing is expected on this connection, but something has to read from it:
+        # a disconnect is delivered as a received message, so a send-only handler
+        # would never notice the client had gone and would push frames forever.
+        while True:
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                return
+
+    await run_until_first_finished(send_scan_frames(), watch_for_disconnect())
+
+
+@lidars.get("/lidars/{lidar_id}/depth", summary="Get Depth")
+async def get_lidar_depth(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Latest quantized depth buffer (num_rows, num_cols), or null."""
+    return lidar_service.get_depth_data(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/linear_depth", summary="Get Linear Depth")
+async def get_lidar_linear_depth(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Latest linear depth buffer in meters (num_rows, num_cols), or null."""
+    return lidar_service.get_linear_depth_data(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/intensity", summary="Get Intensity")
+async def get_lidar_intensity(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Latest return-intensity buffer (num_rows, num_cols), or null."""
+    return lidar_service.get_intensity_data(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/zenith", summary="Get Zenith")
+async def get_lidar_zenith(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Per-row vertical scan angles (radians), or null."""
+    return lidar_service.get_zenith_data(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/azimuth", summary="Get Azimuth")
+async def get_lidar_azimuth(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Per-column horizontal scan angles (radians), or null."""
+    return lidar_service.get_azimuth_data(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/point_cloud", summary="Get Point Cloud")
+async def get_lidar_point_cloud(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Latest hit points in world frame (N, 3), or null."""
+    return lidar_service.get_point_cloud_data(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/semantic", summary="Get Semantic")
+async def get_lidar_semantic(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Per-hit semantic ids, or null. Requires enable_semantics."""
+    return lidar_service.get_semantic_data(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/world_pose", summary="Get World Pose")
+async def get_lidar_world_pose(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """World-frame pose {position, orientation}."""
+    return lidar_service.get_world_pose(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/world_pose", summary="Set World Pose")
+async def set_lidar_world_pose(
+    lidar_id: str, req: LidarWorldPoseRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set the world-frame pose; returns the resulting pose."""
+    return lidar_service.set_world_pose(lidar_id, req.position, req.orientation)
+
+
+@lidars.get("/lidars/{lidar_id}/local_pose", summary="Get Local Pose")
+async def get_lidar_local_pose(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Local-frame (parent-relative) pose {translation, orientation}."""
+    return lidar_service.get_local_pose(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/local_pose", summary="Set Local Pose")
+async def set_lidar_local_pose(
+    lidar_id: str, req: LidarLocalPoseRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set the local-frame pose; returns the resulting pose."""
+    return lidar_service.set_local_pose(lidar_id, req.translation, req.orientation)
+
+
+@lidars.get("/lidars/{lidar_id}/min_range", summary="Get Min Range")
+async def get_lidar_min_range(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Minimum sensing range (stage units)."""
+    return lidar_service.get_min_range(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/min_range", summary="Set Min Range")
+async def set_lidar_min_range(
+    lidar_id: str, req: LidarFloatValueRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set the minimum sensing range (stage units)."""
+    return lidar_service.set_min_range(lidar_id, req.value)
+
+
+@lidars.get("/lidars/{lidar_id}/max_range", summary="Get Max Range")
+async def get_lidar_max_range(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Maximum sensing range (stage units)."""
+    return lidar_service.get_max_range(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/max_range", summary="Set Max Range")
+async def set_lidar_max_range(
+    lidar_id: str, req: LidarFloatValueRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set the maximum sensing range (stage units)."""
+    return lidar_service.set_max_range(lidar_id, req.value)
+
+
+@lidars.get("/lidars/{lidar_id}/horizontal_fov", summary="Get Horizontal Fov")
+async def get_lidar_horizontal_fov(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Horizontal field of view (degrees)."""
+    return lidar_service.get_horizontal_fov(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/horizontal_fov", summary="Set Horizontal Fov")
+async def set_lidar_horizontal_fov(
+    lidar_id: str, req: LidarFloatValueRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set the horizontal field of view (degrees)."""
+    return lidar_service.set_horizontal_fov(lidar_id, req.value)
+
+
+@lidars.get("/lidars/{lidar_id}/vertical_fov", summary="Get Vertical Fov")
+async def get_lidar_vertical_fov(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Vertical field of view (degrees)."""
+    return lidar_service.get_vertical_fov(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/vertical_fov", summary="Set Vertical Fov")
+async def set_lidar_vertical_fov(
+    lidar_id: str, req: LidarFloatValueRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set the vertical field of view (degrees)."""
+    return lidar_service.set_vertical_fov(lidar_id, req.value)
+
+
+@lidars.get("/lidars/{lidar_id}/horizontal_resolution", summary="Get Horizontal Resolution")
+async def get_lidar_horizontal_resolution(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Horizontal angular resolution (degrees per column)."""
+    return lidar_service.get_horizontal_resolution(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/horizontal_resolution", summary="Set Horizontal Resolution")
+async def set_lidar_horizontal_resolution(
+    lidar_id: str, req: LidarFloatValueRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set the horizontal angular resolution (degrees per column)."""
+    return lidar_service.set_horizontal_resolution(lidar_id, req.value)
+
+
+@lidars.get("/lidars/{lidar_id}/vertical_resolution", summary="Get Vertical Resolution")
+async def get_lidar_vertical_resolution(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Vertical angular resolution (degrees per row)."""
+    return lidar_service.get_vertical_resolution(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/vertical_resolution", summary="Set Vertical Resolution")
+async def set_lidar_vertical_resolution(
+    lidar_id: str, req: LidarFloatValueRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set the vertical angular resolution (degrees per row)."""
+    return lidar_service.set_vertical_resolution(lidar_id, req.value)
+
+
+@lidars.get("/lidars/{lidar_id}/rotation_rate", summary="Get Rotation Rate")
+async def get_lidar_rotation_rate(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Rotation rate (Hz); 0 means an instantaneous full-sweep lidar."""
+    return lidar_service.get_rotation_rate(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/rotation_rate", summary="Set Rotation Rate")
+async def set_lidar_rotation_rate(
+    lidar_id: str, req: LidarFloatValueRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set the rotation rate (Hz)."""
+    return lidar_service.set_rotation_rate(lidar_id, req.value)
+
+
+@lidars.get("/lidars/{lidar_id}/yaw_offset", summary="Get Yaw Offset")
+async def get_lidar_yaw_offset(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Yaw offset applied to the scan pattern (degrees)."""
+    return lidar_service.get_yaw_offset(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/yaw_offset", summary="Set Yaw Offset")
+async def set_lidar_yaw_offset(
+    lidar_id: str, req: LidarFloatValueRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set the yaw offset (degrees)."""
+    return lidar_service.set_yaw_offset(lidar_id, req.value)
+
+
+@lidars.get("/lidars/{lidar_id}/high_lod", summary="Get High Lod")
+async def get_lidar_high_lod(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Whether the sensor renders at high level-of-detail."""
+    return lidar_service.get_high_lod(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/high_lod", summary="Set High Lod")
+async def set_lidar_high_lod(
+    lidar_id: str, req: LidarBoolValueRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set whether the sensor renders at high level-of-detail."""
+    return lidar_service.set_high_lod(lidar_id, req.value)
+
+
+@lidars.get("/lidars/{lidar_id}/draw_points", summary="Get Draw Points")
+async def get_lidar_draw_points(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Whether hit points are drawn in the viewport."""
+    return lidar_service.get_draw_points(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/draw_points", summary="Set Draw Points")
+async def set_lidar_draw_points(
+    lidar_id: str, req: LidarBoolValueRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set whether hit points are drawn in the viewport."""
+    return lidar_service.set_draw_points(lidar_id, req.value)
+
+
+@lidars.get("/lidars/{lidar_id}/draw_lines", summary="Get Draw Lines")
+async def get_lidar_draw_lines(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Whether scan rays are drawn in the viewport."""
+    return lidar_service.get_draw_lines(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/draw_lines", summary="Set Draw Lines")
+async def set_lidar_draw_lines(
+    lidar_id: str, req: LidarBoolValueRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set whether scan rays are drawn in the viewport."""
+    return lidar_service.set_draw_lines(lidar_id, req.value)
+
+
+@lidars.get("/lidars/{lidar_id}/enable_semantics", summary="Get Enable Semantics")
+async def get_lidar_enable_semantics(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Whether per-hit semantic labels are captured."""
+    return lidar_service.get_enable_semantics(lidar_id)
+
+
+@lidars.put("/lidars/{lidar_id}/enable_semantics", summary="Set Enable Semantics")
+async def set_lidar_enable_semantics(
+    lidar_id: str, req: LidarBoolValueRequest, lidar_service=Depends(get_lidar_service)
+):
+    """Set whether per-hit semantic labels are captured."""
+    return lidar_service.set_enable_semantics(lidar_id, req.value)
+
+
+@lidars.get("/lidars/{lidar_id}/num_rows", summary="Get Num Rows")
+async def get_lidar_num_rows(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Number of scan rows (vertical channels) the sensor currently reports."""
+    return lidar_service.get_num_rows(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/num_cols", summary="Get Num Cols")
+async def get_lidar_num_cols(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Number of scan columns (horizontal samples) a full sweep produces."""
+    return lidar_service.get_num_cols(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/num_cols_ticked", summary="Get Num Cols Ticked")
+async def get_lidar_num_cols_ticked(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Number of scan columns completed so far this physics step."""
+    return lidar_service.get_num_cols_ticked(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/azimuth_range", summary="Get Azimuth Range")
+async def get_lidar_azimuth_range(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """[min, max] horizontal scan angles (radians)."""
+    return lidar_service.get_azimuth_range(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/zenith_range", summary="Get Zenith Range")
+async def get_lidar_zenith_range(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """[min, max] vertical scan angles (radians)."""
+    return lidar_service.get_zenith_range(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/is_lidar_sensor", summary="Get Is Lidar Sensor")
+async def get_is_lidar_sensor(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Whether the registered prim currently resolves to a live PhysX lidar sensor."""
+    return lidar_service.is_lidar_sensor(lidar_id)
+
+
+@lidars.post("/lidars/{lidar_id}/pause", summary="Pause Lidar")
+async def pause_lidar(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Pause sensor computation."""
+    return lidar_service.pause(lidar_id)
+
+
+@lidars.post("/lidars/{lidar_id}/resume", summary="Resume Lidar")
+async def resume_lidar(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Resume sensor computation."""
+    return lidar_service.resume(lidar_id)
+
+
+@lidars.get("/lidars/{lidar_id}/is_paused", summary="Get Is Paused")
+async def is_lidar_paused(lidar_id: str, lidar_service=Depends(get_lidar_service)):
+    """Whether sensor computation is currently paused."""
+    return lidar_service.is_paused(lidar_id)
+
+
 # -- trajectories -----------------------------------------------------------
 
 trajectories = APIRouter(prefix="/trajectories", tags=["trajectories"])
@@ -1383,6 +1790,7 @@ async def sweep_collisions():
 ALL_ROUTERS = (
     articulations,
     cameras,
+    lidars,
     general,
     stage,
     prims,

@@ -38,3 +38,8 @@ def get_general_service(request: Request):
 def get_camera_service(request: Request):
     """The shared :class:`..services.cameras.CameraService`."""
     return request.app.state.camera_service
+
+
+def get_lidar_service(request: Request):
+    """The shared :class:`..services.lidars.LidarService`."""
+    return request.app.state.lidar_service

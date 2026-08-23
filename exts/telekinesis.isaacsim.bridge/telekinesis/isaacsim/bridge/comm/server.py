@@ -56,6 +56,7 @@ import carb
 
 from .services.articulations import ArticulationService
 from .services.cameras import CameraService
+from .services.lidars import LidarService
 from .services.general import GeneralService
 from .services.prims import PrimService
 from .services.stage import StageService
@@ -75,6 +76,7 @@ class BridgeServer:
         self._port = port
         self._articulation_service = None  # set by _build_app; cleared by stop()
         self._camera_service = None  # set by _build_app; cleared by stop()
+        self._lidar_service = None  # set by _build_app; cleared by stop()
         self._app = self._build_app()
         self._server = None
         self._serve_task = None
@@ -104,7 +106,13 @@ class BridgeServer:
             self._articulation_service.clear()
         if self._camera_service is not None:
             self._camera_service.clear()
-        if self._articulation_service is not None or self._camera_service is not None:
+        if self._lidar_service is not None:
+            self._lidar_service.clear()
+        if (
+            self._articulation_service is not None
+            or self._camera_service is not None
+            or self._lidar_service is not None
+        ):
             carb.log_info("[bridge] cleared device registry (stage changed).")
 
     def stop(self):
@@ -113,6 +121,8 @@ class BridgeServer:
             self._articulation_service.clear()
         if self._camera_service is not None:
             self._camera_service.clear()
+        if self._lidar_service is not None:
+            self._lidar_service.clear()
         if self._server is not None:
             self._server.should_exit = True
             self._server = None
@@ -140,9 +150,11 @@ class BridgeServer:
         # reach them via Depends (see .dependencies), keyed by these app.state names.
         self._articulation_service = ArticulationService()
         self._camera_service = CameraService()
+        self._lidar_service = LidarService()
         stage_service = StageService()
         app.state.articulation_service = self._articulation_service
         app.state.camera_service = self._camera_service
+        app.state.lidar_service = self._lidar_service
         app.state.stage_service = stage_service
         app.state.prim_service = PrimService(stage_service)  # composes the stage service
         app.state.general_service = GeneralService()
