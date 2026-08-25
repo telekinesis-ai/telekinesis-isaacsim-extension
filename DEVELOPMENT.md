@@ -37,6 +37,80 @@ exts/telekinesis.isaacsim.bridge
 > Use forward slashes in paths — Kit is unreliable with Windows backslashes.
 4. Search for `telekinesis.isaacsim.bridge` (Under Third Party) and enable it. Tick **Autoload** to enable it on every launch.
 
+<details>
+<summary>Force-enable the local copy when an older published version wins</summary>
+
+Kit resolves an extension by name, so the search path added above and the Community Registry
+both offer `telekinesis.isaacsim.bridge`. When an older copy is already enabled, Kit keeps it and
+your local edits appear to do nothing — the giveaway is that the version shown in the Extension
+Manager is not the `version` in `exts/telekinesis.isaacsim.bridge/config/extension.toml`.
+
+The cause is usually **Autoload**, which persists the *versioned* ID rather than the extension
+name. Ticking Autoload on, say, `0.1.0` writes this into
+`%LOCALAPPDATA%\ov\data\Kit\Isaac-Sim Full\<kit_version>\user.config.json`:
+
+```json
+"exts": {
+    "enabled": {
+        "0": "telekinesis.isaacsim.bridge-0.1.0"
+    }
+}
+```
+
+That is a pin, not "use the newest". Every later launch enables that exact build, so installing a
+newer version changes nothing — nothing ever asked for latest.
+
+**Clearing the pin:**
+
+1. Start Isaac Sim.
+2. In the Extension Manager, disable the old version — and untick **Autoload** on it too.
+   Disabling alone does not remove the pin.
+3. Close Isaac Sim normally, via the window's close button or **File ▸ Exit**.
+4. Start Isaac Sim again, and confirm the Extension Manager now shows your local version.
+5. If not, **Window ▸ Extensions**, enable the extension under **User**
+6. Also select **Autoload**
+
+Step 3 matters: Kit rewrites `user.config.json` on a clean shutdown, which is what actually drops
+the entry. Killing the process or ending it from Task Manager loses the change and the old version
+comes back on the next launch.
+
+**Swapping versions within a running session**
+
+To switch without restarting, address both copies by their `name-version` IDs. Open **Window ▸
+Script Editor** and run:
+
+```python
+import omni.kit.app
+
+m = omni.kit.app.get_app().get_extension_manager()
+
+m.set_extension_enabled_immediate(
+    "telekinesis.isaacsim.bridge-0.1.0",
+    False,
+)
+
+m.set_extension_enabled_immediate(
+    "telekinesis.isaacsim.bridge-0.4.0",
+    True,
+)
+
+print(
+    "ACTIVE:",
+    m.get_enabled_extension_id("telekinesis.isaacsim.bridge")
+)
+```
+
+Substitute the actual versions: the first ID is the stale copy to disable, the second is the
+version in your local `extension.toml`. Both must be exact — an ID that matches nothing is
+ignored silently rather than raising, so the `ACTIVE:` print is how you confirm the swap took.
+
+`_immediate` means the extension is torn down and started up in-process, so `on_shutdown()` and
+`on_startup()` run and the bridge's HTTP server rebinds its port. This lasts only for the current
+session — if the old version is still pinned by Autoload, the next launch goes back to it. Clear
+the pin as above to make the change stick.
+
+</details>
+
 ## Verify
 
 Install the client-side dependencies used by the examples before running them:
@@ -112,15 +186,26 @@ There is currently no CI for these checks, so run them manually before each PR.
 #### 2.1. One-time repository setup
 
 The repository must be public and carry the `omniverse-kit-extension` topic — that topic is how
-NVIDIA's nightly crawler finds the extension at all.
+NVIDIA's nightly crawler finds the extension at all. Both are set once, from the repo page on
+github.com.
 
-```bash
-gh repo edit --visibility public --accept-visibility-change-consequences
-gh repo edit --add-topic omniverse-kit-extension
+**Make the repository public**
 
-# Verify both landed.
-gh repo view --json visibility,repositoryTopics
-```
+1. Go to **Settings ▸ General** and scroll to **Danger Zone**.
+2. Click **Change visibility ▸ Change to public**, then confirm by typing the repository name.
+
+Going public is not practically reversible: once the code is out, it can be cloned, cached, and
+indexed by third parties, and switching back to private later does not retract those copies.
+Check the *whole history* rather than just the current files first — a credential deleted in a
+later commit is still readable in the commit that added it.
+
+**Add the topic**
+
+1. On the repo's **Code** tab, click the gear icon next to **About** in the right-hand sidebar.
+2. Type `omniverse-kit-extension` into **Topics**, press Enter, then **Save changes**.
+
+Confirm the sidebar now shows the topic as a chip and the label beside the repo name reads
+**Public**.
 
 Then check the metadata in `exts/telekinesis.isaacsim.bridge/config/extension.toml`:
 
@@ -154,11 +239,6 @@ local branch has drifted, so you find out before the release rather than during 
 
 1. Bump `version` in `exts/telekinesis.isaacsim.bridge/config/extension.toml`, then read it
    back so the rest of the steps can reuse it:
-
-```bash
-VERSION=$(python -c "import tomllib; print(tomllib.load(open('exts/telekinesis.isaacsim.bridge/config/extension.toml','rb'))['package']['version'])")
-echo "VERSION=$VERSION"
-```
 
 ```powershell
 $VERSION = python -c "import tomllib; print(tomllib.load(open('exts/telekinesis.isaacsim.bridge/config/extension.toml','rb'))['package']['version'])"
@@ -219,21 +299,24 @@ Two things here are easy to get wrong:
 
 #### 2.5. Publish the GitHub release
 
-The tag must already be pushed (previous step) — `gh` attaches the release to the existing tag.
-Requires the [GitHub CLI](https://cli.github.com/), authenticated once with `gh auth login`.
+The tag must already be pushed (previous step) — the release attaches to the existing tag rather
+than creating a new one.
 
-```bash
-gh release create "v$VERSION" \
-  "packages/telekinesis-ai-telekinesis-isaacsim-extension-windows-x86_64-v$VERSION.zip" \
-  --title "v$VERSION" \
-  --notes-file exts/telekinesis.isaacsim.bridge/docs/CHANGELOG.md
-```
+1. Go to the repo's **Releases** page and click **Draft a new release**.
+2. In the **Choose a tag** dropdown, pick the existing `v$VERSION` tag. It must appear in the
+   list already; if GitHub instead offers to *create* it, the tag was never pushed — go back to
+   step 2.4. Do not let this page create the tag, or it will point at the branch head rather
+   than the squashed release commit.
+3. Set the release title to `v$VERSION`.
+4. Paste the `## [$VERSION]` section of
+   `exts/telekinesis.isaacsim.bridge/docs/CHANGELOG.md` into the description.
+5. Drag `packages/telekinesis-ai-telekinesis-isaacsim-extension-windows-x86_64-v$VERSION.zip`
+   into the **Attach binaries** area and wait for the upload to finish before publishing — a
+   release published mid-upload lists no asset, and NVIDIA's crawler needs the ZIP.
+6. Leave **Set as a pre-release** unticked, then click **Publish release**.
 
-Verify the release and its asset:
-
-```bash
-gh release view "v$VERSION"
-```
+Verify on the Releases page that the release is tagged `v$VERSION`, is marked **Latest**, and
+lists the ZIP under **Assets**.
 
 Sanity-check that the tag exists on the remote and points where you expect:
 

@@ -52,13 +52,22 @@ _MOTION_MAX_FRAMES = 1800
 
 # Position-drive values substituted for a driven joint that reports none, so that
 # every robot the bridge is asked to position-control can actually be positioned.
-# Two ways a joint arrives without them: a URDF that leaves its joint effort limit
+# Three ways a joint arrives unusable: a URDF that leaves its joint effort limit
 # at zero (a great many do), which carries through to a drive permitted no torque;
-# and a USD authored with no drive gains, which the bridge uses as it finds it
-# rather than re-authoring, unlike a URDF it imports itself. Either way the joint
-# ignores every position command and its links fall under gravity.
+# a USD authored with no drive gains, which the bridge uses as it finds it rather
+# than re-authoring, unlike a URDF it imports itself; and a drive given stiffness
+# but no damping, which does respond to commands but rings.
 #
 # Zero is a missing value here rather than a deliberate one, so it is filled in.
+# Each quantity is filled in only where the drive reports zero -- an authored
+# value is never overridden. That restraint matters beyond tidiness: the drive's
+# damping is the gain on its *velocity* term, and this class only ever writes
+# position targets (ArticulationAction(joint_positions=...), leaving
+# joint_velocities None), so a drive's target velocity is whatever its USD
+# authored and is never cleared. Supplying damping to a joint that did not ask
+# for it hands a gain to a stale target velocity the bridge does not control,
+# and the joint rotates continuously.
+#
 # The stiffness and damping are a firm position drive for a manipulator, chosen to
 # hold a pose against gravity across the size range the bridge sees rather than
 # tuned for any one robot; the effort is a ceiling high enough not to constrain any
@@ -208,22 +217,29 @@ class SingleArticulation:
     def _backfill_missing_drive_gains(self):
         """Give driven joints whose position drive reports no gains usable ones.
 
-        Every move this device performs is a position-drive command, so a joint whose
-        drive is permitted no torque, or given no stiffness to generate any with,
-        ignores all of them: the joint never moves, its links sag under gravity, and
-        nothing reports an error. A robot the bridge imports from a URDF has its
-        drives authored by the importer and usually arrives with stiffness; one
-        already present in the stage arrives with whatever its USD was authored
-        with, which may be nothing at all.
+        Every move this device performs is a position-drive command, so the gains
+        decide both whether it works at all and whether it is stable. Two ways a
+        joint arrives unusable: no stiffness, so the drive generates no torque,
+        ignores every position command, and its links sag under gravity; or
+        stiffness with no damping, so the drive does respond but rings --
+        overshooting, returning, overshooting -- which on load, with every joint
+        doing it at once, reads as the articulation dancing.
 
         Each quantity is filled in only where the drive reports zero, so an authored
-        value is never overridden, and damping is supplied only alongside a supplied
-        stiffness -- adding damping to a drive that already has gains would change
-        how a deliberately tuned joint behaves. What was substituted is logged: the
-        values are chosen to work rather than to describe the real robot, so torque
-        readings from an affected joint do not report its true limits. Filling in
-        the URDF's effort limits, or authoring drives in the USD, is the proper fix;
-        :meth:`set_dof_gains` overrides the substituted values in the meantime.
+        value is never overridden. Damping is supplied either alongside a
+        substituted stiffness, or on its own to a drive that has stiffness and no
+        damping (the ringing case) -- but never to a drive that already reports
+        both, whose gains are a deliberate pair worth leaving alone. Overriding a
+        joint's damping wholesale is what made joints rotate continuously: damping
+        is the gain on the drive's velocity term, and since this class writes only
+        position targets, a joint's target velocity is whatever its USD authored
+        and is never cleared.
+
+        What was substituted is logged: the values are chosen to work rather than
+        to describe the real robot, so torque readings from an affected joint do
+        not report its true limits. Filling in the URDF's effort limits, or
+        authoring drives in the USD, is the proper fix; :meth:`set_dof_gains`
+        overrides the substituted values in the meantime.
         """
         substituted = {}
         for name, index, props in zip(self.dof_names, self.joint_indices, self.dof_properties()):
@@ -232,6 +248,13 @@ class SingleArticulation:
                 gains["stiffness"] = _FALLBACK_STIFFNESS
                 if props["damping"] == 0.0:
                     gains["damping"] = _FALLBACK_DAMPING
+            elif props["damping"] == 0.0:
+                # Stiffness but no damping: an undamped position drive, which
+                # overshoots its target, returns, and overshoots again. On load,
+                # every joint doing this at once reads as the articulation
+                # dancing. Damping is the only quantity supplied here -- the
+                # authored stiffness is left exactly as it is.
+                gains["damping"] = _FALLBACK_DAMPING
             if props["max_effort"] == 0.0:
                 gains["max_effort"] = _FALLBACK_MAX_EFFORT
             if gains:
