@@ -78,7 +78,6 @@ class BridgeServer:
         # Every service holding bound devices, so they are cleared together on a
         # stage change or a stop. Set by _build_app.
         self._device_services = ()
-        self._lidar_service = None  # set by _build_app; cleared by stop()
         self._app = self._build_app()
         self._server = None
         self._serve_task = None
@@ -113,8 +112,6 @@ class BridgeServer:
         """Ask uvicorn to exit and drop every bound device."""
         for service in self._device_services:
             service.clear()
-        if self._lidar_service is not None:
-            self._lidar_service.clear()
         if self._server is not None:
             self._server.should_exit = True
             self._server = None
@@ -143,7 +140,7 @@ class BridgeServer:
         surface_gripper_service = SurfaceGripperService()
         articulation_service = ArticulationService(surface_gripper_service)
         camera_service = CameraService()
-        self._lidar_service = LidarService()
+        lidar_service = LidarService()
         stage_service = StageService()
         # assemble_robot accepts either kind of gripper, so the two registries know
         # about each other: the articulation service resolves a surface gripper id,
@@ -153,11 +150,16 @@ class BridgeServer:
         app.state.articulation_service = articulation_service
         app.state.surface_gripper_service = surface_gripper_service
         app.state.camera_service = camera_service
-        app.state.lidar_service = self._lidar_service
+        app.state.lidar_service = lidar_service
         app.state.stage_service = stage_service
         app.state.prim_service = PrimService(stage_service)  # composes the stage service
         app.state.general_service = GeneralService()
-        self._device_services = (articulation_service, surface_gripper_service, camera_service)
+        self._device_services = (
+            articulation_service,
+            surface_gripper_service,
+            camera_service,
+            lidar_service,
+        )
 
         for router in ALL_ROUTERS:
             app.include_router(router)

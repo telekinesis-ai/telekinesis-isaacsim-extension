@@ -4143,6 +4143,2111 @@
         }
       }
     },
+    "/lidars": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "List Lidars",
+        "description": "Every registered lidar id mapped to its prim path.",
+        "operationId": "list_lidars_lidars_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Create Lidar",
+        "description": "Register (and bind) one lidar; returns its id, prim, and scan configuration.",
+        "operationId": "create_lidar_lidars_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLidarRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Lidar",
+        "description": "Id + static description (prim, scan configuration). 404 if unknown.",
+        "operationId": "get_lidar_lidars__lidar_id__get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Delete Lidar",
+        "description": "Unregister the lidar (the USD prim is left in the stage).",
+        "operationId": "delete_lidar_lidars__lidar_id__delete",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/capture": {
+      "post": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Capture Scan",
+        "description": "Pump one frame and return the requested outputs (all bound types if omitted).",
+        "operationId": "capture_lidar_lidars__lidar_id__capture_post",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarCaptureRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/depth": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Depth",
+        "description": "Latest quantized depth buffer (num_rows, num_cols), or null.",
+        "operationId": "get_lidar_depth_lidars__lidar_id__depth_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/linear_depth": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Linear Depth",
+        "description": "Latest linear depth buffer in meters (num_rows, num_cols), or null.",
+        "operationId": "get_lidar_linear_depth_lidars__lidar_id__linear_depth_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/intensity": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Intensity",
+        "description": "Latest return-intensity buffer (num_rows, num_cols), or null.",
+        "operationId": "get_lidar_intensity_lidars__lidar_id__intensity_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/zenith": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Zenith",
+        "description": "Per-row vertical scan angles (radians), or null.",
+        "operationId": "get_lidar_zenith_lidars__lidar_id__zenith_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/azimuth": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Azimuth",
+        "description": "Per-column horizontal scan angles (radians), or null.",
+        "operationId": "get_lidar_azimuth_lidars__lidar_id__azimuth_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/point_cloud": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Point Cloud",
+        "description": "Latest hit points in world frame (N, 3), or null.",
+        "operationId": "get_lidar_point_cloud_lidars__lidar_id__point_cloud_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/semantic": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Semantic",
+        "description": "Per-hit semantic ids, or null. Requires enable_semantics.",
+        "operationId": "get_lidar_semantic_lidars__lidar_id__semantic_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/world_pose": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get World Pose",
+        "description": "World-frame pose {position, orientation}.",
+        "operationId": "get_lidar_world_pose_lidars__lidar_id__world_pose_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set World Pose",
+        "description": "Set the world-frame pose; returns the resulting pose.",
+        "operationId": "set_lidar_world_pose_lidars__lidar_id__world_pose_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarWorldPoseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/local_pose": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Local Pose",
+        "description": "Local-frame (parent-relative) pose {translation, orientation}.",
+        "operationId": "get_lidar_local_pose_lidars__lidar_id__local_pose_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set Local Pose",
+        "description": "Set the local-frame pose; returns the resulting pose.",
+        "operationId": "set_lidar_local_pose_lidars__lidar_id__local_pose_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarLocalPoseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/min_range": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Min Range",
+        "description": "Minimum sensing range (stage units).",
+        "operationId": "get_lidar_min_range_lidars__lidar_id__min_range_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set Min Range",
+        "description": "Set the minimum sensing range (stage units).",
+        "operationId": "set_lidar_min_range_lidars__lidar_id__min_range_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarFloatValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/max_range": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Max Range",
+        "description": "Maximum sensing range (stage units).",
+        "operationId": "get_lidar_max_range_lidars__lidar_id__max_range_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set Max Range",
+        "description": "Set the maximum sensing range (stage units).",
+        "operationId": "set_lidar_max_range_lidars__lidar_id__max_range_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarFloatValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/horizontal_fov": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Horizontal Fov",
+        "description": "Horizontal field of view (degrees).",
+        "operationId": "get_lidar_horizontal_fov_lidars__lidar_id__horizontal_fov_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set Horizontal Fov",
+        "description": "Set the horizontal field of view (degrees).",
+        "operationId": "set_lidar_horizontal_fov_lidars__lidar_id__horizontal_fov_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarFloatValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/vertical_fov": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Vertical Fov",
+        "description": "Vertical field of view (degrees).",
+        "operationId": "get_lidar_vertical_fov_lidars__lidar_id__vertical_fov_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set Vertical Fov",
+        "description": "Set the vertical field of view (degrees).",
+        "operationId": "set_lidar_vertical_fov_lidars__lidar_id__vertical_fov_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarFloatValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/horizontal_resolution": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Horizontal Resolution",
+        "description": "Horizontal angular resolution (degrees per column).",
+        "operationId": "get_lidar_horizontal_resolution_lidars__lidar_id__horizontal_resolution_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set Horizontal Resolution",
+        "description": "Set the horizontal angular resolution (degrees per column).",
+        "operationId": "set_lidar_horizontal_resolution_lidars__lidar_id__horizontal_resolution_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarFloatValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/vertical_resolution": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Vertical Resolution",
+        "description": "Vertical angular resolution (degrees per row).",
+        "operationId": "get_lidar_vertical_resolution_lidars__lidar_id__vertical_resolution_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set Vertical Resolution",
+        "description": "Set the vertical angular resolution (degrees per row).",
+        "operationId": "set_lidar_vertical_resolution_lidars__lidar_id__vertical_resolution_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarFloatValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/rotation_rate": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Rotation Rate",
+        "description": "Rotation rate (Hz); 0 means an instantaneous full-sweep lidar.",
+        "operationId": "get_lidar_rotation_rate_lidars__lidar_id__rotation_rate_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set Rotation Rate",
+        "description": "Set the rotation rate (Hz).",
+        "operationId": "set_lidar_rotation_rate_lidars__lidar_id__rotation_rate_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarFloatValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/yaw_offset": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Yaw Offset",
+        "description": "Yaw offset applied to the scan pattern (degrees).",
+        "operationId": "get_lidar_yaw_offset_lidars__lidar_id__yaw_offset_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set Yaw Offset",
+        "description": "Set the yaw offset (degrees).",
+        "operationId": "set_lidar_yaw_offset_lidars__lidar_id__yaw_offset_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarFloatValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/high_lod": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get High Lod",
+        "description": "Whether the sensor renders at high level-of-detail.",
+        "operationId": "get_lidar_high_lod_lidars__lidar_id__high_lod_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set High Lod",
+        "description": "Set whether the sensor renders at high level-of-detail.",
+        "operationId": "set_lidar_high_lod_lidars__lidar_id__high_lod_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarBoolValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/draw_points": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Draw Points",
+        "description": "Whether hit points are drawn in the viewport.",
+        "operationId": "get_lidar_draw_points_lidars__lidar_id__draw_points_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set Draw Points",
+        "description": "Set whether hit points are drawn in the viewport.",
+        "operationId": "set_lidar_draw_points_lidars__lidar_id__draw_points_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarBoolValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/draw_lines": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Draw Lines",
+        "description": "Whether scan rays are drawn in the viewport.",
+        "operationId": "get_lidar_draw_lines_lidars__lidar_id__draw_lines_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set Draw Lines",
+        "description": "Set whether scan rays are drawn in the viewport.",
+        "operationId": "set_lidar_draw_lines_lidars__lidar_id__draw_lines_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarBoolValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/enable_semantics": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Enable Semantics",
+        "description": "Whether per-hit semantic labels are captured.",
+        "operationId": "get_lidar_enable_semantics_lidars__lidar_id__enable_semantics_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Set Enable Semantics",
+        "description": "Set whether per-hit semantic labels are captured.",
+        "operationId": "set_lidar_enable_semantics_lidars__lidar_id__enable_semantics_put",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LidarBoolValueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/num_rows": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Num Rows",
+        "description": "Number of scan rows (vertical channels) the sensor currently reports.",
+        "operationId": "get_lidar_num_rows_lidars__lidar_id__num_rows_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/num_cols": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Num Cols",
+        "description": "Number of scan columns (horizontal samples) a full sweep produces.",
+        "operationId": "get_lidar_num_cols_lidars__lidar_id__num_cols_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/num_cols_ticked": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Num Cols Ticked",
+        "description": "Number of scan columns completed so far this physics step.",
+        "operationId": "get_lidar_num_cols_ticked_lidars__lidar_id__num_cols_ticked_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/azimuth_range": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Azimuth Range",
+        "description": "[min, max] horizontal scan angles (radians).",
+        "operationId": "get_lidar_azimuth_range_lidars__lidar_id__azimuth_range_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/zenith_range": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Zenith Range",
+        "description": "[min, max] vertical scan angles (radians).",
+        "operationId": "get_lidar_zenith_range_lidars__lidar_id__zenith_range_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/is_lidar_sensor": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Is Lidar Sensor",
+        "description": "Whether the registered prim currently resolves to a live PhysX lidar sensor.",
+        "operationId": "get_is_lidar_sensor_lidars__lidar_id__is_lidar_sensor_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/pause": {
+      "post": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Pause Lidar",
+        "description": "Pause sensor computation.",
+        "operationId": "pause_lidar_lidars__lidar_id__pause_post",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/resume": {
+      "post": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Resume Lidar",
+        "description": "Resume sensor computation.",
+        "operationId": "resume_lidar_lidars__lidar_id__resume_post",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lidars/{lidar_id}/is_paused": {
+      "get": {
+        "tags": [
+          "lidars"
+        ],
+        "summary": "Get Is Paused",
+        "description": "Whether sensor computation is currently paused.",
+        "operationId": "is_lidar_paused_lidars__lidar_id__is_paused_get",
+        "parameters": [
+          {
+            "name": "lidar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lidar Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/status": {
       "get": {
         "tags": [
@@ -6221,6 +8326,90 @@
         "title": "CreateCameraRequest",
         "description": "Body of PUT /cameras -- register (and bind) one camera.\n\n``resolution`` is ``[width, height]`` in pixels. ``frequency`` (Hz) is optional;\n``None`` follows the render loop.\n\nA new camera produces ``rgb``/``rgba``. Other render outputs are activated the\nfirst time ``POST /cameras/{id}/capture`` asks for them, so they are not named\nhere; the response lists both what is active and what is supported."
       },
+      "CreateLidarRequest": {
+        "properties": {
+          "prim_path": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prim Path"
+          },
+          "min_range": {
+            "type": "number",
+            "title": "Min Range",
+            "default": 0.4
+          },
+          "max_range": {
+            "type": "number",
+            "title": "Max Range",
+            "default": 100.0
+          },
+          "horizontal_fov": {
+            "type": "number",
+            "title": "Horizontal Fov",
+            "default": 360.0
+          },
+          "vertical_fov": {
+            "type": "number",
+            "title": "Vertical Fov",
+            "default": 30.0
+          },
+          "horizontal_resolution": {
+            "type": "number",
+            "title": "Horizontal Resolution",
+            "default": 0.4
+          },
+          "vertical_resolution": {
+            "type": "number",
+            "title": "Vertical Resolution",
+            "default": 4.0
+          },
+          "rotation_rate": {
+            "type": "number",
+            "title": "Rotation Rate",
+            "default": 20.0
+          },
+          "high_lod": {
+            "type": "boolean",
+            "title": "High Lod",
+            "default": false
+          },
+          "draw_points": {
+            "type": "boolean",
+            "title": "Draw Points",
+            "default": false
+          },
+          "draw_lines": {
+            "type": "boolean",
+            "title": "Draw Lines",
+            "default": false
+          },
+          "yaw_offset": {
+            "type": "number",
+            "title": "Yaw Offset",
+            "default": 0.0
+          },
+          "data_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Types"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prim_path"
+        ],
+        "title": "CreateLidarRequest",
+        "description": "Body of PUT /lidars -- register (and bind) one legacy PhysX lidar.\n\nCreates the ``RangeSensorSchema.Lidar`` prim at ``prim_path`` if none\nexists yet. Angles/resolution are degrees, range is stage units,\n``rotation_rate`` is Hz (``0`` = instantaneous full-sweep lidar).\n``data_types`` is the set of outputs to produce (default\n``[\"point_cloud\"]``); each must be a supported lidar data type, and\n``\"semantic\"`` additionally requires per-hit semantics to be enabled."
+      },
       "CreateSurfaceGripperRequest": {
         "properties": {
           "prim_path": {
@@ -6514,6 +8703,125 @@
         ],
         "title": "JointVelocitiesRequest",
         "description": "Body of POST /articulations/{id}/joint_velocities -- drive joints (rad/s).\n\nThe velocity counterpart to :class:`JointPositionsRequest`, for driving joints\nat a target rate rather than to a pose (drive wheels, a spinning tool, a\nconveyor, or slewing any joint at a controlled speed). ``joint_velocities`` are\nthe target angular speeds for ``indices`` (default: the device's current\ndriven joints). Fire-and-forget: the commanded speeds hold until the next\ncall, so ``{0, ...}`` stops the joints (there is no ``asynchronous`` flag --\na velocity-driven joint never \"reaches\" a target). Any higher-level kinematics\n(e.g. twist->wheel) live in the client."
+      },
+      "LidarBoolValueRequest": {
+        "properties": {
+          "value": {
+            "type": "boolean",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "LidarBoolValueRequest",
+        "description": "Body of the single-bool lidar setters (high lod, draw points/lines,\nenable semantics)."
+      },
+      "LidarCaptureRequest": {
+        "properties": {
+          "data_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Types"
+          }
+        },
+        "type": "object",
+        "title": "LidarCaptureRequest",
+        "description": "Body of POST /lidars/{id}/capture -- pump one frame and read outputs.\n\n``data_types`` selects which of the lidar's bound outputs to return;\n``None`` returns them all."
+      },
+      "LidarFloatValueRequest": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "LidarFloatValueRequest",
+        "description": "Body of the single-float lidar setters (range, fov, resolution,\nrotation rate, yaw offset)."
+      },
+      "LidarLocalPoseRequest": {
+        "properties": {
+          "translation": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation"
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation"
+          }
+        },
+        "type": "object",
+        "title": "LidarLocalPoseRequest",
+        "description": "Body of PUT /lidars/{id}/local_pose -- parent-relative pose.\n\nLike :class:`LidarWorldPoseRequest` but with ``translation`` in place of\n``position``."
+      },
+      "LidarWorldPoseRequest": {
+        "properties": {
+          "position": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation"
+          }
+        },
+        "type": "object",
+        "title": "LidarWorldPoseRequest",
+        "description": "Body of PUT /lidars/{id}/world_pose.\n\n``position`` is ``[x, y, z]`` (stage units), ``orientation`` a\nscalar-first ``[w, x, y, z]`` quaternion; either may be null to leave it\nuntouched."
       },
       "OpenSceneRequest": {
         "properties": {
