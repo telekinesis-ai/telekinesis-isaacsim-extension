@@ -29,7 +29,9 @@ def main():
     parser.add_argument(
         "--id", required=True, dest="lidar_id", help="lidar_id from put_lidar.py"
     )
-    parser.add_argument("--value", type=float, required=True, help="horizontal resolution in degrees")
+    parser.add_argument(
+        "--value", type=float, required=True, help="horizontal resolution in degrees"
+    )
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

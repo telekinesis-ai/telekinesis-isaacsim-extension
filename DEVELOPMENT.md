@@ -8,12 +8,17 @@ This is a developer's guide to run and contribute to the extension.
   conda create -n telekinesis-isaacsim-bridge python=3.12
   ```
 
-- Install NVIDIA Isaac Sim 5.1.0 or later. The required Python version depends on the Isaac Sim release, match it before installing. Tested against **5.1.0.0** and **6.0.0.1**:
+- Install NVIDIA Isaac Sim 5.1.0 or later. The required Python version depends on the Isaac Sim release, match it before installing. Tested against **5.1.0.0** and **6.0.1.0**:
 
   | Isaac Sim | Python | Install |
   |-----------|--------|---------|
   | 5.1.0.0 | 3.11 | `pip install isaacsim[all,extscache]==5.1.0.0 --extra-index-url https://pypi.nvidia.com` |
-  | 6.0.0.1 | 3.12 | `pip install isaacsim[all,extscache]==6.0.0.1 --extra-index-url https://pypi.nvidia.com` |
+  | 6.0.1.0 | 3.12 | `pip install isaacsim[all,extscache]==6.0.1.0 --extra-index-url https://pypi.nvidia.com` |
+
+  6.0.1.0 is a bug-fix release over 6.0.0.x and is the recommended 6.x version to develop against.
+  Note that 6.0.0 deprecated `isaacsim.sensors.camera` (the module `core/camera.py` wraps) in
+  favour of `isaacsim.sensors.experimental.rtx`; it still works on 6.0.1.0 but will need migrating
+  in a future Isaac Sim release.
 
 The extension lives at:
 ```
@@ -106,26 +111,74 @@ There is currently no CI for these checks, so run them manually before each PR.
 
 #### 2.1. One-time repository setup
 
-1. The GitHub repository must be public.
-2. Add the GitHub topic in the repository:
-   ```text
-   omniverse-kit-extension
-   ```
-3. Check the metadata in `exts/telekinesis.isaacsim.bridge/config/extension.toml`:
-   - package name and version are correct;
-   - repository URL is correct;
-   - supported Kit, Python, and platform targets are declared.
+The repository must be public and carry the `omniverse-kit-extension` topic — that topic is how
+NVIDIA's nightly crawler finds the extension at all.
 
-#### 2.2. Create the release version
+```bash
+gh repo edit --visibility public --accept-visibility-change-consequences
+gh repo edit --add-topic omniverse-kit-extension
 
-1. Bump the version. Verify:
+# Verify both landed.
+gh repo view --json visibility,repositoryTopics
+```
+
+Then check the metadata in `exts/telekinesis.isaacsim.bridge/config/extension.toml`:
+
+- package name and version are correct;
+- repository URL is correct;
+- supported Kit, Python, and platform targets are declared.
+
+#### 2.2. Sync `main` and `develop`
+
+Do this before bumping anything, so the release is cut from an up-to-date branch and any
+hotfix that landed on `main` is already in `develop`.
+
+```bash
+git fetch origin
+
+git checkout main
+git pull --ff-only origin main
+
+git checkout develop
+git pull --ff-only origin develop
+
+# Bring any hotfixes/changes on main into develop first.
+git merge main
+git push origin develop
+```
+
+`--ff-only` is deliberate: it fails instead of creating a surprise merge commit when your
+local branch has drifted, so you find out before the release rather than during it.
+
+#### 2.3. Bump the version and package
+
+1. Bump `version` in `exts/telekinesis.isaacsim.bridge/config/extension.toml`, then read it
+   back so the rest of the steps can reuse it:
+
+```bash
+VERSION=$(python -c "import tomllib; print(tomllib.load(open('exts/telekinesis.isaacsim.bridge/config/extension.toml','rb'))['package']['version'])")
+echo "VERSION=$VERSION"
+```
 
 ```powershell
 $VERSION = python -c "import tomllib; print(tomllib.load(open('exts/telekinesis.isaacsim.bridge/config/extension.toml','rb'))['package']['version'])"
 Write-Host "VERSION=$VERSION"
 ```
 
-2. Package the extension from the repository root using the helper script: (Use git bash within the conda environment if powershell fails)
+2. Add a `## [$VERSION]` section to `exts/telekinesis.isaacsim.bridge/docs/CHANGELOG.md`, and
+   document any new routes in `exts/telekinesis.isaacsim.bridge/docs/README.md` (WebSocket
+   routes especially — they never appear in the generated OpenAPI spec).
+
+3. Commit the bump on `develop` and push it, so the squash below picks it up:
+
+```bash
+git add exts/telekinesis.isaacsim.bridge/config/extension.toml exts/telekinesis.isaacsim.bridge/docs
+git commit -m "Release v$VERSION"
+git push origin develop
+```
+
+4. Package the extension from the repository root using the helper script (use git bash within
+   the conda environment if PowerShell fails):
 
 ```bash
 bash -x scripts/package-extension.sh
@@ -137,27 +190,57 @@ The script creates a ZIP archive under `packages/` using the release naming conv
 telekinesis-ai-telekinesis-isaacsim-extension-windows-x86_64-v<VERSION>.zip
 ```
 
-4. Create and push the version tag:
+#### 2.4. Release `develop` into `main`, then tag
 
 ```bash
+git checkout main
+git merge --squash develop
+git commit -m "Merged develop into main"
+git push origin main
+
+# Tag the release commit that now exists ON MAIN.
 git tag -a "v$VERSION" -m "Release v$VERSION"
 git push origin "v$VERSION"
+
+# IMPORTANT: reconnect the histories.
+git checkout develop
+git merge main
+git push origin develop
 ```
 
-5. Merge from develop to main
-```
-git merge origin/main
-git checkout main
-git merge origin/develop
+Two things here are easy to get wrong:
+
+- **Tag after the squash, not before.** `git merge --squash` creates a *new* commit on `main`
+  rather than replaying develop's. A tag created on `develop` beforehand points at a commit
+  that is not the released one, and the GitHub release then attaches to the wrong revision.
+- **Reconnect the histories afterwards.** A squash merge leaves no merge commit, so git still
+  considers `develop` unmerged and the next release re-offers every commit already on `main`.
+  The closing `git checkout develop && git merge main` is what prevents that.
+
+#### 2.5. Publish the GitHub release
+
+The tag must already be pushed (previous step) — `gh` attaches the release to the existing tag.
+Requires the [GitHub CLI](https://cli.github.com/), authenticated once with `gh auth login`.
+
+```bash
+gh release create "v$VERSION" \
+  "packages/telekinesis-ai-telekinesis-isaacsim-extension-windows-x86_64-v$VERSION.zip" \
+  --title "v$VERSION" \
+  --notes-file exts/telekinesis.isaacsim.bridge/docs/CHANGELOG.md
 ```
 
-#### 2.3. Release on GitHub
+Verify the release and its asset:
 
-1. Open the repository's Releases page.
-2. Click **Draft a new release**.
-3. Create a release for `v<VERSION>`.
-4. Upload the correctly named packaged archive (`.zip`).
-5. Publish the release.
+```bash
+gh release view "v$VERSION"
+```
+
+Sanity-check that the tag exists on the remote and points where you expect:
+
+```bash
+git ls-remote --tags origin | grep "v$VERSION"
+git log -1 --oneline "v$VERSION"
+```
 
 NVIDIA's publishing pipeline runs nightly. Check the Community Registry the following day and search for:
 
@@ -165,7 +248,7 @@ NVIDIA's publishing pipeline runs nightly. Check the Community Registry the foll
 telekinesis.isaacsim.bridge
 ```
 
-### 2.4. Official NVIDIA references
+### 2.6. Official NVIDIA references
 
 - Publishing: https://docs.omniverse.nvidia.com/kit/docs/kit-extension-template-cpp/latest/index.html#publishing
 - Community Registry: https://docs.omniverse.nvidia.com/kit/docs/kit-registry-reference/latest/community/extensions.html

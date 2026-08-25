@@ -239,8 +239,11 @@ async def stream_joint_positions(websocket: WebSocket, articulation_id: str):
                 continue
             frame, latest_frame = latest_frame, None
             try:
+                # pylint can't tell the `continue` above rules out None here.
                 service.stream_joint_positions(
-                    articulation_id, frame["joint_positions"], frame.get("indices")
+                    articulation_id,
+                    frame["joint_positions"],  # pylint: disable=unsubscriptable-object
+                    frame.get("indices"),
                 )
             except (AttributeError, KeyError, TypeError, ValueError):
                 # Well-formed JSON of the wrong shape (not an object, or missing /

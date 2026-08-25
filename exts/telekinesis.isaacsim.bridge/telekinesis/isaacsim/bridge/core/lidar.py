@@ -116,7 +116,7 @@ _BOOL_CONFIG_FIELDS = frozenset({"draw_points", "draw_lines", "high_lod", "enabl
 _ENABLED_ATTR = "enabled"
 
 
-def _to_json(value):
+def _to_json(value):  # pylint: disable=too-many-return-statements
     """Convert an Isaac/numpy return value into JSON-serializable Python.
 
     Same contract as ``..core.camera._to_json`` (duplicated rather than
@@ -268,13 +268,17 @@ class Lidar:
             prim = stage.GetPrimAtPath(self.prim_path)
 
         if not prim.HasAttribute(_CONFIG_ATTRS["min_range"]):
-            raise ValueError(f"prim at {self.prim_path} is not a Lidar (missing range-sensor attributes)")
+            raise ValueError(
+                f"prim at {self.prim_path} is not a Lidar (missing range-sensor attributes)"
+            )
 
         # Re-apply every field regardless of create-vs-wrap, so a re-PUT with a
         # new config actually takes effect on an already-bound prim.
         for field, attr_name in _CONFIG_ATTRS.items():
             value = config[field]
-            prim.GetAttribute(attr_name).Set(bool(value) if field in _BOOL_CONFIG_FIELDS else float(value))
+            prim.GetAttribute(attr_name).Set(
+                bool(value) if field in _BOOL_CONFIG_FIELDS else float(value)
+            )
         return prim
 
     # -- bridge lifecycle / capture (not part of the isaacsim surface) ---------

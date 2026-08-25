@@ -165,7 +165,11 @@ def main():
     parser = argparse.ArgumentParser(description="Smoke-test every /surface_grippers route.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--prim", default='/World/defitech_modelled_surface_gripper', help="suction gripper prim path to register")
+    parser.add_argument(
+        "--prim",
+        default="/World/defitech_modelled_surface_gripper",
+        help="suction gripper prim path to register",
+    )
     parser.add_argument("--keep", action="store_true", help="don't delete the gripper at the end")
     args = parser.parse_args()
     base = f"http://{args.host}:{args.port}"

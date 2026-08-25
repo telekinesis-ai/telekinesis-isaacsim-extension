@@ -409,6 +409,8 @@ class LidarService:
         if device is None:
             raise HTTPException(
                 status_code=404,
-                detail=(f"no lidar registered with id '{lidar_id}', call PUT /lidars to create one"),
+                detail=(
+                    f"no lidar registered with id '{lidar_id}', call PUT /lidars to create one"
+                ),
             )
         return device
