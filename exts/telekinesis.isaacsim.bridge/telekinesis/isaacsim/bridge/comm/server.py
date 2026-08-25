@@ -60,6 +60,7 @@ from .services.lidars import LidarService
 from .services.general import GeneralService
 from .services.prims import PrimService
 from .services.stage import StageService
+from .services.surface_grippers import SurfaceGripperService
 from .routers import ALL_ROUTERS
 
 
@@ -74,8 +75,9 @@ class BridgeServer:
         """Build the FastAPI app (and its services); call `start()` to begin serving."""
         self._host = host
         self._port = port
-        self._articulation_service = None  # set by _build_app; cleared by stop()
-        self._camera_service = None  # set by _build_app; cleared by stop()
+        # Every service holding bound devices, so they are cleared together on a
+        # stage change or a stop. Set by _build_app.
+        self._device_services = ()
         self._lidar_service = None  # set by _build_app; cleared by stop()
         self._app = self._build_app()
         self._server = None
@@ -102,25 +104,15 @@ class BridgeServer:
         restarting uvicorn) keeps the port bound and the app alive -- clients
         just re-PUT their articulations against the new stage.
         """
-        if self._articulation_service is not None:
-            self._articulation_service.clear()
-        if self._camera_service is not None:
-            self._camera_service.clear()
-        if self._lidar_service is not None:
-            self._lidar_service.clear()
-        if (
-            self._articulation_service is not None
-            or self._camera_service is not None
-            or self._lidar_service is not None
-        ):
+        for service in self._device_services:
+            service.clear()
+        if self._device_services:
             carb.log_info("[bridge] cleared device registry (stage changed).")
 
     def stop(self):
         """Ask uvicorn to exit and drop every bound device."""
-        if self._articulation_service is not None:
-            self._articulation_service.clear()
-        if self._camera_service is not None:
-            self._camera_service.clear()
+        for service in self._device_services:
+            service.clear()
         if self._lidar_service is not None:
             self._lidar_service.clear()
         if self._server is not None:
@@ -148,16 +140,24 @@ class BridgeServer:
 
         # One shared instance of each service for the app's lifetime. The routers
         # reach them via Depends (see .dependencies), keyed by these app.state names.
-        self._articulation_service = ArticulationService()
-        self._camera_service = CameraService()
+        surface_gripper_service = SurfaceGripperService()
+        articulation_service = ArticulationService(surface_gripper_service)
+        camera_service = CameraService()
         self._lidar_service = LidarService()
         stage_service = StageService()
-        app.state.articulation_service = self._articulation_service
-        app.state.camera_service = self._camera_service
+        # assemble_robot accepts either kind of gripper, so the two registries know
+        # about each other: the articulation service resolves a surface gripper id,
+        # and a deleted surface gripper drops the assembly record naming it.
+        surface_gripper_service.on_deleted = articulation_service.forget_assembly
+
+        app.state.articulation_service = articulation_service
+        app.state.surface_gripper_service = surface_gripper_service
+        app.state.camera_service = camera_service
         app.state.lidar_service = self._lidar_service
         app.state.stage_service = stage_service
         app.state.prim_service = PrimService(stage_service)  # composes the stage service
         app.state.general_service = GeneralService()
+        self._device_services = (articulation_service, surface_gripper_service, camera_service)
 
         for router in ALL_ROUTERS:
             app.include_router(router)

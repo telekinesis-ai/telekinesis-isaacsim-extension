@@ -1,10 +1,10 @@
 """
-GET /cameras/{id} -> {camera_id, prim_path, resolution, active_data_types,
-                      supported_data_types, focal_length, ...}
+GET /surface_grippers -> {surface_gripper_id: prim_path}
 
-Requires the id to already be registered -- run put_camera.py first.
+Every suction gripper currently registered with the bridge. Empty until a
+client PUTs one, and emptied again whenever a new stage is opened.
 
-Run:  python get_camera.py --id camera1
+Run:  python get_surface_grippers_list.py
 """
 
 import argparse
@@ -24,17 +24,16 @@ def _request(base, method, path, body=None):
 
 
 def main():
-    """Fetch one camera's static description by id."""
-    parser = argparse.ArgumentParser(description="Read a camera's static description.")
+    """Print every registered surface gripper id and its prim path."""
+    parser = argparse.ArgumentParser(description="List registered surface grippers.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument(
-        "--id", required=True, dest="camera_id", help="camera_id from put_camera.py"
-    )
+
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    print(f"response: {_request(base, 'GET', f'/cameras/{args.camera_id}')}")
+    response = _request(base, "GET", "/surface_grippers")
+    print(f"registered surface grippers: {response}")
 
 
 if __name__ == "__main__":

@@ -18,7 +18,9 @@ stay one-liners. The ``..core.camera`` import pulls in isaacsim, so this module
 imports only inside Isaac Sim -- same as the articulation service.
 
 Wire units mirror the rest of the bridge: stage units (meters) for poses/apertures,
-pixels for resolution/intrinsics, plain arrays for images.
+pixels for resolution/intrinsics. Render outputs are carried as numpy arrays; the
+routers encode them into the binary frame :mod:`..comm.binary` describes, while
+every other value here is JSON.
 """
 
 import asyncio
@@ -66,13 +68,23 @@ class CameraService:
         except Exception:  # cleanup must not fail the caller (stage may be gone)
             pass
 
-    async def create_camera(self, prim_path, resolution, data_types, frequency):
+    async def create_camera(self, prim_path, resolution, frequency):
         """Register (and bind) the camera at ``prim_path`` and return its info.
 
-        One camera per *requested* prim; PUTting the same prim again keeps its id
-        but **rebuilds the device with the new config** (resolution / data_types /
-        frequency), so the response always reflects the request. Ids are 1-based:
+        One camera per *requested* prim; PUTting the same prim again keeps its id **and
+        the camera already bound to that prim**, applying the requested resolution /
+        frequency to it, so the response always reflects the request. Ids are 1-based:
         ``camera1``, ``camera2``, ...
+
+        The device is reused rather than rebuilt because Isaac Sim hands a second camera
+        over the same prim the *same* render product (replicator returns an existing one
+        for a matching prim and resolution), so freeing the first camera afterwards would
+        take the second one's annotators off the render product with it.
+
+        A newly registered camera produces ``rgb``/``rgba``; the annotators for
+        other render outputs are attached the first time :meth:`capture` asks for
+        them. The response reports both sets: ``active_data_types`` (produced now)
+        and ``supported_data_types`` (everything ``capture`` accepts).
         """
         prim_path = prim_path.rstrip("/") or "/"
 
@@ -82,52 +94,69 @@ class CameraService:
         # first. setdefault is synchronous, so concurrent callers land on one Lock.
         lock = self._create_locks.setdefault(prim_path, asyncio.Lock())
         async with lock:
-            existing_id = self._id_by_prim.get(prim_path)
-            if existing_id is None:
-                # Reserve a fresh id synchronously -- before the bind() await below,
-                # which yields the loop. The per-prim lock does NOT serialize creates
-                # of *different* prims, so deferring the increment past the await
-                # would let two of them grab the same cameraN.
-                self._count += 1
-                camera_id = f"camera{self._count}"
-            else:
-                camera_id = existing_id
+            camera_id = self._id_by_prim.get(prim_path)
+            device = None if camera_id is None else self._devices.get(camera_id)
 
-            # Build + bind the NEW device before touching any existing one, so a bad
-            # re-PUT (wrong resolution/data_types/frequency, or a prim that won't
-            # bind) leaves the currently-registered camera untouched and working.
-            try:
-                device = Camera(
-                    prim_path,
-                    name=camera_id,
-                    resolution=tuple(resolution),
-                    data_types=data_types,
-                    frequency=frequency,
-                )
-            except Exception as exc:
-                # Bad input value: unknown data_type, non-divisor frequency, or a
-                # prim that isn't a Camera -- all raised at construction. 400, not
-                # the 500 a bare Exception would otherwise become. Construction has
-                # no await, so rolling back a freshly-reserved id here is race-free.
-                if existing_id is None:
-                    self._count -= 1
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            if device is not None and device.is_bound:
+                # Reuse: the registered camera still owns its render product, so the
+                # requested configuration is applied to it in place.
+                self._configure(device, resolution, frequency)
+            else:
+                reserved_id = camera_id is None
+                if reserved_id:
+                    # Reserve a fresh id synchronously -- before the bind() await below,
+                    # which yields the loop. The per-prim lock does NOT serialize creates
+                    # of *different* prims, so deferring the increment past the await
+                    # would let two of them grab the same cameraN.
+                    self._count += 1
+                    camera_id = f"camera{self._count}"
+                try:
+                    replacement = Camera(
+                        prim_path,
+                        name=camera_id,
+                        resolution=tuple(resolution),
+                        frequency=frequency,
+                    )
+                except Exception as exc:
+                    # Bad input value: a non-divisor frequency, or a prim that isn't a
+                    # Camera -- all raised at construction. 400, not the 500 a bare
+                    # Exception would otherwise become. Construction has no await, so
+                    # rolling back a freshly reserved id here is race-free.
+                    if reserved_id:
+                        self._count -= 1
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
+                if device is not None:
+                    # An unbound device holds no render product, so freeing it here
+                    # cannot strand the replacement's annotators.
+                    self._safe_destroy(device)
+                device = replacement
+                self._devices[camera_id] = device
+                self._id_by_prim[prim_path] = camera_id
+
             try:
                 await device.bind()
             except RuntimeError as exc:
                 # 422: well-formed request, but the camera couldn't be brought up
-                # (needs --enable_cameras / RTX warmup). Free its partial resources.
-                self._safe_destroy(device)
+                # (needs --enable_cameras / RTX warmup). The device stays registered, so
+                # a retry rebinds it rather than spending an id per attempt.
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-            # Success: commit. Free any prior device for this prim so a re-PUT frees
-            # the old render product/annotators instead of leaking them to the GC.
-            previous = self._devices.get(camera_id)
-            if previous is not None and previous is not device:
-                self._safe_destroy(previous)
-            self._id_by_prim[prim_path] = camera_id  # no-op on re-PUT; commits a fresh id
-            self._devices[camera_id] = device
             return {"camera_id": camera_id, "prim_path": device.prim_path, **device.info()}
+
+    @staticmethod
+    def _configure(device, resolution, frequency):
+        """Apply a create request's resolution / frequency to an already-bound camera.
+
+        Only what the request changes is written, so a re-PUT of the same configuration
+        does not touch the render product. A value the camera rejects is a bad input
+        value, hence 400 rather than the 500 a bare ValueError would become.
+        """
+        try:
+            if tuple(resolution) != device.resolution:
+                device.set_resolution(resolution)
+            if frequency is not None and float(frequency) != device.get_frequency():
+                device.set_frequency(frequency)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     def get_camera(self, camera_id):
         """Info for one registered camera (id, prim, resolution, optics), or 404."""
@@ -156,28 +185,37 @@ class CameraService:
 
     # -- capture ---------------------------------------------------------------
 
-    async def capture(self, camera_id, data_types):
+    async def capture(self, camera_id, data_types, world_frame=False):
         """Pump one frame and return the requested outputs. ``data_types`` may be
-        None (return every bound output). See :meth:`..core.camera.Camera.capture`."""
+        None (return every output currently active). An output that is not active yet
+        is activated here, which costs a few frames of warmup on that first capture.
+        ``world_frame`` applies to the ``pointcloud`` output alone.
+        See :meth:`..core.camera.Camera.capture`."""
         try:
-            return await self.get_device(camera_id).capture(data_types)
+            return await self.get_device(camera_id).capture(data_types, world_frame=world_frame)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            # 422, mirroring a failed bind: the request named real data types, but a
+            # newly attached annotator never produced data.
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     def get_rgb(self, camera_id):
-        """Latest RGB image (H, W, 3), or null if not ready."""
+        """Latest RGB image as a (H, W, 3) uint8 array, or None if not ready."""
         return {"rgb": self.get_device(camera_id).get_rgb()}
 
     def get_rgba(self, camera_id):
-        """Latest RGBA image (H, W, 4), or null."""
+        """Latest RGBA image as a (H, W, 4) uint8 array, or None."""
         return {"rgba": self.get_device(camera_id).get_rgba()}
 
     def get_depth(self, camera_id):
-        """Latest depth image (H, W), or null."""
+        """Latest depth image as a (H, W) float32 array, or None. Pixels that hit
+        nothing are inf."""
         return {"depth": self.get_device(camera_id).get_depth()}
 
-    def get_pointcloud(self, camera_id, world_frame=True):
-        """Latest pointcloud (N, 3) in world or camera frame."""
+    def get_pointcloud(self, camera_id, world_frame=False):
+        """Latest pointcloud as an (N, 3) array in world or, by default, camera
+        frame."""
         return {"pointcloud": self.get_device(camera_id).get_pointcloud(world_frame=world_frame)}
 
     # -- pose ------------------------------------------------------------------
