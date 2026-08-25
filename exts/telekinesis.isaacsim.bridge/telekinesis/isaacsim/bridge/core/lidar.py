@@ -659,9 +659,21 @@ class Lidar:
         return int(self._lidar.get_num_cols_ticked(self.prim_path))
 
     def get_azimuth_range(self):
-        """``[min, max]`` horizontal scan angles (radians)."""
-        return list(self._lidar.get_azimuth_range(self.prim_path))
+        """``[min, max]`` horizontal scan angles (radians), or ``None`` if the
+        azimuth buffer isn't populated yet.
+
+        The ``_range_sensor`` interface has no dedicated range getter, so this
+        derives the range from :meth:`get_azimuth_data`, the per-column angles
+        it does expose.
+        """
+        azimuth = self._lidar.get_azimuth_data(self.prim_path)
+        return None if azimuth.size == 0 else [float(azimuth.min()), float(azimuth.max())]
 
     def get_zenith_range(self):
-        """``[min, max]`` vertical scan angles (radians)."""
-        return list(self._lidar.get_zenith_range(self.prim_path))
+        """``[min, max]`` vertical scan angles (radians), or ``None`` if the
+        zenith buffer isn't populated yet.
+
+        Derived from :meth:`get_zenith_data` -- see :meth:`get_azimuth_range`.
+        """
+        zenith = self._lidar.get_zenith_data(self.prim_path)
+        return None if zenith.size == 0 else [float(zenith.min()), float(zenith.max())]
