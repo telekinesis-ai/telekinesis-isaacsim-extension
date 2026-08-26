@@ -68,14 +68,48 @@ _MOTION_MAX_FRAMES = 1800
 # for it hands a gain to a stale target velocity the bridge does not control,
 # and the joint rotates continuously.
 #
-# The stiffness and damping are a firm position drive for a manipulator, chosen to
-# hold a pose against gravity across the size range the bridge sees rather than
-# tuned for any one robot; the effort is a ceiling high enough not to constrain any
-# of them (newton-metres), bounding the drive's output without shaping it. Override
-# any of the three with set_dof_gains.
+# The stiffness is a firm position drive for a manipulator, chosen to hold a pose
+# against gravity across the size range the bridge sees rather than tuned for any
+# one robot; the effort is a ceiling high enough not to constrain any of them
+# (newton-metres), bounding the drive's output without shaping it. Override any of
+# the three with set_dof_gains.
+#
+# The damping is derived from the stiffness rather than chosen separately, because
+# the two only mean something together: a position drive travels at roughly
+# (stiffness / damping) x position error, so their ratio -- not the stiffness on its
+# own -- is what decides how fast a substituted drive moves. Fixing that ratio at a
+# settling time makes a substituted drive's speed a property of this bridge instead
+# of a property of whatever velocity ceiling the joint's asset happens to declare:
+# a joint one radian from its target closes it at about 2 rad/s either way. Left
+# unrelated, a high stiffness against a low damping asks for a speed no manipulator
+# should move at, and the joint crosses its whole range within a frame or two --
+# visibly a teleport rather than a move.
 _FALLBACK_STIFFNESS = 1.0e7
-_FALLBACK_DAMPING = 1.0e5
+_FALLBACK_SETTLING_TIME_S = 0.5
+_FALLBACK_DAMPING = _FALLBACK_STIFFNESS * _FALLBACK_SETTLING_TIME_S
 _FALLBACK_MAX_EFFORT = 1.0e6
+
+
+def joint_prims(stage, prim_path):
+    """Map joint name -> prim for every UsdPhysics.Joint at or under ``prim_path``.
+
+    Keyed by name because that is what a DOF is identified by; the joints
+    themselves sit at whatever depth the asset (or the URDF importer) put them.
+    """
+    root = stage.GetPrimAtPath(prim_path)
+    if root.IsA(UsdPhysics.Joint):  # importer may return the root joint, not the container
+        root = root.GetParent()
+    return {p.GetName(): p for p in Usd.PrimRange(root) if p.IsA(UsdPhysics.Joint)}
+
+
+def is_mimic_joint(prim):
+    """Whether ``prim`` is a joint driven by a mimic constraint following another joint.
+
+    Matches both spellings the physics backends use, since the applied schema is
+    named after whichever one authored the asset: ``PhysxMimicJointAPI:rot*``
+    (PhysX) and ``NewtonMimicAPI`` (Newton).
+    """
+    return any("Mimic" in schema for schema in prim.GetAppliedSchemas())
 
 
 def find_driver_joint(stage, prim_path, dof_names):
@@ -90,15 +124,12 @@ def find_driver_joint(stage, prim_path, dof_names):
     if not dof_names:
         raise ValueError(f"articulation at {prim_path} has no driven joints to search for a driver")
 
-    root = stage.GetPrimAtPath(prim_path)
-    if root.IsA(UsdPhysics.Joint):  # importer may return the root joint, not the container
-        root = root.GetParent()
-    joints = {p.GetName(): p for p in Usd.PrimRange(root) if p.IsA(UsdPhysics.Joint)}
+    joints = joint_prims(stage, prim_path)
 
     fallback = None
     for name in dof_names:
         prim = joints.get(name)
-        if prim is None or any("MimicJoint" in s for s in prim.GetAppliedSchemas()):
+        if prim is None or is_mimic_joint(prim):
             continue
         if prim.HasAPI(UsdPhysics.DriveAPI):
             return name
@@ -133,6 +164,10 @@ class SingleArticulation:
         self._move_lock = asyncio.Lock()
         self._start_time = time.monotonic()
         self._target = None  # last commanded joint target (rad)
+        # Drive values as they stood before _backfill_missing_drive_gains substituted
+        # them, by joint name, so narrowing the driven subset can put back what the
+        # asset authored on the joints being dropped. See set_driven_joints.
+        self._pre_substitution_gains = {}
 
     async def bind(self):
         """(Re)initialize the articulation against the current physics view.
@@ -162,12 +197,13 @@ class SingleArticulation:
                     self._articulation.num_dof
                     and self._articulation.get_joint_positions() is not None
                 ):
-                    # Order matters, and all four run within this one frame: the
-                    # drive needs usable gains before it is asked to hold a pose,
-                    # and the pose it is aligned to is the one worth recording as
-                    # the reset state.
+                    # Order matters, and all of these run within this one frame: the
+                    # drive needs usable gains, and a speed it can reach them at,
+                    # before it is asked to hold a pose, and the pose it is aligned
+                    # to is the one worth recording as the reset state.
                     self._resolve_driven_joints()
                     self._backfill_missing_drive_gains()
+                    self._correct_imported_prismatic_max_velocities()
                     self._align_drive_to_current_pose()
                     self._ensure_default_state_populated()
                     carb.log_info(
@@ -225,39 +261,40 @@ class SingleArticulation:
         overshooting, returning, overshooting -- which on load, with every joint
         doing it at once, reads as the articulation dancing.
 
-        Each quantity is filled in only where the drive reports zero, so an authored
-        value is never overridden. Damping is supplied either alongside a
-        substituted stiffness, or on its own to a drive that has stiffness and no
-        damping (the ringing case) -- but never to a drive that already reports
-        both, whose gains are a deliberate pair worth leaving alone. Overriding a
-        joint's damping wholesale is what made joints rotate continuously: damping
-        is the gain on the drive's velocity term, and since this class writes only
-        position targets, a joint's target velocity is whatever its USD authored
-        and is never cleared.
+        The stiffness and the effort ceiling are filled in only where the drive
+        reports zero, so an authored value is never overridden. Damping is supplied
+        whenever the stiffness was, authored or not: the two describe one drive, and
+        a damping meant for a joint that had no position drive says nothing about how
+        one this stiff should behave. Pairing a substituted stiffness with an
+        unrelated damping is what makes a drive travel at a speed nothing chose.
 
-        What was substituted is logged: the values are chosen to work rather than
-        to describe the real robot, so torque readings from an affected joint do
-        not report its true limits. Filling in the URDF's effort limits, or
-        authoring drives in the USD, is the proper fix; :meth:`set_dof_gains`
-        overrides the substituted values in the meantime.
+        What was substituted is logged: the values are chosen to work rather than to
+        describe the real robot, so torque readings from an affected joint do not
+        report its true limits. Filling in the URDF's effort limits, or authoring the
+        USD's drives, is the proper fix; :meth:`set_dof_gains` overrides the
+        substituted values in the meantime.
+
+        Mimic joints are exempt: a mimic constraint is what moves them to follow the
+        driver joint, so drive values they leave at zero are authored that way rather
+        than missing. Substituting gains there pins each mimic joint at its current
+        pose and fights the constraint the moment the driver joint moves.
         """
+        joints = joint_prims(self._articulation.prim.GetStage(), self.prim_path)
+
         substituted = {}
+        self._pre_substitution_gains = {}
         for name, index, props in zip(self.dof_names, self.joint_indices, self.dof_properties()):
+            prim = joints.get(name)
+            if prim is not None and is_mimic_joint(prim):
+                continue
             gains = {}
             if props["stiffness"] == 0.0:
                 gains["stiffness"] = _FALLBACK_STIFFNESS
-                if props["damping"] == 0.0:
-                    gains["damping"] = _FALLBACK_DAMPING
-            elif props["damping"] == 0.0:
-                # Stiffness but no damping: an undamped position drive, which
-                # overshoots its target, returns, and overshoots again. On load,
-                # every joint doing this at once reads as the articulation
-                # dancing. Damping is the only quantity supplied here -- the
-                # authored stiffness is left exactly as it is.
                 gains["damping"] = _FALLBACK_DAMPING
             if props["max_effort"] == 0.0:
                 gains["max_effort"] = _FALLBACK_MAX_EFFORT
             if gains:
+                self._pre_substitution_gains[name] = {key: props[key] for key in gains}
                 self.set_dof_gains(indices=[index], **gains)
                 substituted[name] = gains
 
@@ -267,6 +304,52 @@ class SingleArticulation:
                 f"joint(s) that reported none: {substituted}. Without them these joints ignore "
                 "position commands and sag under gravity; fill in the URDF's effort limits or "
                 "author the USD's drives to control them with the robot's own figures."
+            )
+
+    def _correct_imported_prismatic_max_velocities(self):
+        """Undo the degree conversion the URDF importer applies to a prismatic joint's
+        velocity limit.
+
+        The importer converts each imported joint's URDF velocity limit from radians
+        per second to degrees per second. That is right for a revolute joint and wrong
+        for a prismatic one, whose limit is already a linear speed and needs no
+        conversion, so an imported prismatic joint arrives permitted to travel 180/pi
+        times faster than its URDF asked for. Since a position drive is only ever
+        commanded to a target, not at a speed, that ceiling is what a large move
+        actually travels at: a gripper finger given roughly fifty-seven times its
+        intended speed crosses its whole stroke inside a frame or two, which reads as
+        the joint teleporting rather than closing.
+
+        The importer records the URDF's own figure next to the converted one, so this
+        is a comparison rather than a guess: a prismatic joint whose limit is exactly
+        the degree conversion of its recorded ``urdf:limit:velocity`` is put back to
+        that recorded value. Any other joint is left alone -- a revolute one, a limit
+        that was authored rather than imported, an asset carrying no record to compare
+        against -- so this corrects itself out of the way once the importer is fixed.
+        """
+        joints = joint_prims(self._articulation.prim.GetStage(), self.prim_path)
+
+        corrected = {}
+        for name, index, props in zip(self.dof_names, self.joint_indices, self.dof_properties()):
+            prim = joints.get(name)
+            if prim is None or not prim.IsA(UsdPhysics.PrismaticJoint):
+                continue
+            attribute = prim.GetAttribute("urdf:limit:velocity")
+            urdf_velocity = attribute.Get() if attribute else None
+            if not urdf_velocity or urdf_velocity <= 0.0:
+                continue
+            if not np.isclose(props["max_velocity"], np.degrees(urdf_velocity), rtol=1e-3):
+                continue
+            self._articulation._articulation_view.set_max_joint_velocities(
+                np.array([[urdf_velocity]], dtype=float), joint_indices=[index]
+            )
+            corrected[name] = {"was": props["max_velocity"], "now": urdf_velocity}
+
+        if corrected:
+            carb.log_warn(
+                f"[bridge] articulation {self.prim_path}: the URDF importer converted these "
+                f"prismatic joint(s) velocity limit to degrees per second, which does not apply "
+                f"to a linear axis; restored the limit their URDF asked for: {corrected}"
             )
 
     def _ensure_default_state_populated(self):
@@ -338,9 +421,29 @@ class SingleArticulation:
         joint (``/driver_joint``) and passes ``[driver_name]`` here, after which the
         device behaves exactly like a robot with one joint. Re-resolves against the
         current handle; forgets any pending move target.
+
+        Any drive values :meth:`bind` had to substitute on a joint that is no longer
+        driven are restored to what the asset authored. Until the driven subset is
+        known, bind has to cover the whole articulation, which on a gripper includes
+        the passive joints of its linkage: those carry no drive on purpose, and a
+        substituted position drive pins each one at its current pose and locks the
+        mechanism. Narrowing is the point at which they are known not to be driven.
         """
         self.joint_names = list(joint_names)
         self._resolve_driven_joints()
+
+        all_names = list(self._articulation.dof_names)
+        dropped = [name for name in self._pre_substitution_gains if name not in self.dof_names]
+        for name in dropped:
+            self.set_dof_gains(
+                indices=[all_names.index(name)], **self._pre_substitution_gains.pop(name)
+            )
+        if dropped:
+            carb.log_info(
+                f"[bridge] articulation {self.prim_path}: restored the authored drive values "
+                f"on no-longer-driven joint(s) {dropped}"
+            )
+
         self._target = None
         carb.log_info(
             f"[bridge] articulation {self.prim_path} drives "
@@ -359,6 +462,11 @@ class SingleArticulation:
         self.joint_names = list(joint_names)
         self._resolve_driven_joints()
         self._target = None
+        # The substitution record describes the handle held before assembly, and the
+        # shared one was never backfilled by this device. Dropping it keeps a later
+        # narrowing from "restoring" a joint of the device this articulation is now
+        # shared with.
+        self._pre_substitution_gains = {}
         carb.log_info(
             f"[bridge] articulation {self.prim_path} on shared articulation: "
             f"drives {self.dof_names} at {self.joint_indices}"
