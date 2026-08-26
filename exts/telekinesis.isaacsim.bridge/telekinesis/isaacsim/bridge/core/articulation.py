@@ -81,15 +81,11 @@ _MOTION_MAX_FRAMES = 1800
 # them with set_dof_gains.
 #
 # The frequency is squared because a position drive behaves as a second-order system
-# in the load it moves: stiffness = inertia x frequency^2. Its value trades holding a
-# pose against staying gentle, and it is the one number to change if a substituted
-# drive is too soft or too harsh. A joint sags by its gravity torque divided by its
-# stiffness, and the joint that sags most is the lightest one still carrying
-# something -- a UR10e's wrist under a gripper, about a degree here, against a fifth
-# of that at the shoulder. Raising the frequency buys that back at the cost of asking
-# more torque of everything, which is what has to stay small at the gripper end: a
-# full stroke of an RG2 finger asks under four newton-metres of the wrist carrying
-# it, which is rated for fifty-six.
+# in the load it moves: stiffness = inertia x frequency^2. It sets how briskly a joint
+# answers a command, and raising it asks more torque of everything -- which is what has
+# to stay small at the gripper end, where a full stroke of an RG2 finger should ask a
+# few newton-metres of a wrist rated for fifty-six, not the thousand its own asset
+# declares itself good for.
 #
 # The damping is derived from the stiffness rather than chosen separately, because
 # the two only mean something together: a position drive travels at roughly
@@ -102,10 +98,19 @@ _MOTION_MAX_FRAMES = 1800
 # should move at, and the joint crosses its whole range within a frame or two --
 # visibly a teleport rather than a move.
 #
-# _FALLBACK_STIFFNESS is used only when the physics backend reports no mass matrix
-# and there is nothing to size the drive against. It suits a manipulator, which is
-# the case where getting it wrong means an arm on the floor.
+# Inertia alone is not the whole demand on a stiffness: it says how hard a joint is to
+# accelerate, not how hard it is to hold up. A joint carrying a load hangs below the pose
+# it was told to hold by its gravity torque divided by its stiffness, so the stiffness
+# also has a floor -- the one that keeps that droop within _FALLBACK_SAG_RAD. The two
+# demands pick out different joints: gravity governs a wrist carrying a gripper, inertia
+# governs the gripper's own fingers, which carry almost nothing and only need to not
+# shove what they are bolted to.
+#
+# _FALLBACK_STIFFNESS is used only when the physics backend reports neither figure and
+# there is nothing to size the drive against. It suits a manipulator, which is the case
+# where getting it wrong means an arm on the floor.
 _FALLBACK_FREQUENCY_RAD_S = 60.0
+_FALLBACK_SAG_RAD = 8.7e-3  # ~0.5 deg of droop allowed under the joint's own gravity load
 _FALLBACK_STIFFNESS = 1.0e7
 _FALLBACK_SETTLING_TIME_S = 0.5
 _FALLBACK_MAX_EFFORT = 1.0e6
@@ -310,6 +315,41 @@ class SingleArticulation:
             return None
         return np.diag(matrix)
 
+    def _effective_joint_gravity_torques(self):
+        """Gravity torque on every DOF of the underlying handle, or ``None``.
+
+        What each joint's drive has to supply just to keep the rig where it is, in the
+        handle's own DOF order: newton-metres for a revolute joint, newtons for a
+        prismatic one. Used to give a substituted position drive enough stiffness that
+        the joint does not hang below the pose it was told to hold.
+
+        Pose-dependent in the same way as :meth:`_effective_joint_inertias`, and read in
+        the same pose: an outstretched arm's shoulder carries far more than a folded
+        one's.
+
+        ``None`` when the physics backend offers no gravity forces, or offers a row whose
+        length does not match the DOF count. The caller then falls back on sizing the
+        drive from inertia alone.
+        """
+        # Broad for the same reason as the mass matrix: a better-sized drive is an
+        # improvement, never a precondition for the bind succeeding.
+        try:
+            forces = self._articulation._articulation_view.get_generalized_gravity_forces()
+            if forces is None:
+                return None
+            torques = np.asarray(forces[0], dtype=float)
+        except Exception as exc:
+            carb.log_warn(
+                f"[bridge] articulation {self.prim_path}: no usable gravity forces from the "
+                f"physics backend ({exc!r}); substituted drives are sized from inertia alone, so "
+                "a joint carrying a load may hang below the pose it is given"
+            )
+            return None
+
+        if torques.shape != (len(self._articulation.dof_names),):
+            return None
+        return np.abs(torques)
+
     def _backfill_missing_drive_gains(self):
         """Give driven joints whose position drive reports no gains usable ones.
 
@@ -328,11 +368,17 @@ class SingleArticulation:
         one this stiff should behave. Pairing a substituted stiffness with an
         unrelated damping is what makes a drive travel at a speed nothing chose.
 
-        A substituted stiffness is sized from the joint's own effective inertia, so
-        the torque a command asks for is proportional to the load being moved. The
-        joint's authored effort ceiling cannot serve as that scale: an asset is free
-        to declare a figure that bears no relation to what the joint carries, and the
-        grippers the bridge loads declare larger ceilings for a finger than a UR10e
+        A substituted stiffness is sized from two demands, whichever is larger. Its
+        effective inertia keeps the torque a command asks for proportional to the load
+        being moved, so a light joint does not shove whatever it is bolted to; its
+        gravity torque sets a floor stiff enough that the joint does not hang below the
+        pose it was told to hold. Neither covers both cases on its own -- gravity is
+        what governs a wrist carrying a gripper, inertia what governs the gripper's own
+        fingers, which hold up nothing.
+
+        The joint's authored effort ceiling cannot serve as either scale: an asset is
+        free to declare a figure that bears no relation to what the joint carries, and
+        the grippers the bridge loads declare larger ceilings for a finger than a UR10e
         declares for its shoulder.
 
         What was substituted is logged: the values are chosen to work rather than to
@@ -355,6 +401,7 @@ class SingleArticulation:
         """
         joints = joint_prims(self._articulation.prim.GetStage(), self.prim_path)
         inertias = self._effective_joint_inertias()
+        gravity_torques = self._effective_joint_gravity_torques()
 
         substituted = {}
         self._pre_substitution_gains = {}
@@ -364,12 +411,12 @@ class SingleArticulation:
                 continue
             gains = {}
             if props["stiffness"] == 0.0:
-                inertia = None if inertias is None else inertias[index]
-                gains["stiffness"] = (
-                    inertia * _FALLBACK_FREQUENCY_RAD_S**2
-                    if inertia and inertia > 0.0
-                    else _FALLBACK_STIFFNESS
-                )
+                demands = []
+                if inertias is not None and inertias[index] > 0.0:
+                    demands.append(inertias[index] * _FALLBACK_FREQUENCY_RAD_S**2)
+                if gravity_torques is not None and gravity_torques[index] > 0.0:
+                    demands.append(gravity_torques[index] / _FALLBACK_SAG_RAD)
+                gains["stiffness"] = max(demands) if demands else _FALLBACK_STIFFNESS
                 gains["damping"] = gains["stiffness"] * _FALLBACK_SETTLING_TIME_S
             if props["max_effort"] == 0.0:
                 gains["max_effort"] = _FALLBACK_MAX_EFFORT
