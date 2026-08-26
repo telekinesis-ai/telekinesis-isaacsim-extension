@@ -40,6 +40,11 @@ def get_camera_service(request: Request):
     return request.app.state.camera_service
 
 
+def get_lidar_service(request: Request):
+    """The shared :class:`..services.lidars.LidarService`."""
+    return request.app.state.lidar_service
+
+
 def get_surface_gripper_service(request: Request):
     """The shared :class:`..services.surface_grippers.SurfaceGripperService`."""
     return request.app.state.surface_gripper_service

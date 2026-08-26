@@ -124,7 +124,7 @@ _POSSIBLY_EMPTY_DATA_TYPES = frozenset(
 )
 
 
-def _to_json(value):
+def _to_json(value):  # pylint: disable=too-many-return-statements
     """Convert an Isaac return value into JSON-serializable Python.
 
     Handles the numpy/warp/torch arrays, tuples, and nested dicts the camera API

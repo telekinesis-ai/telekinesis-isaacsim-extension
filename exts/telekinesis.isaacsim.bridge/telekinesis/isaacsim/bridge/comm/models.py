@@ -522,3 +522,79 @@ class AttachmentPointPropertiesRequest(BaseModel):
     translation_limits: AxisLimits | None = None
     clearance_offset: float | None = None
     forward_axis: str | None = None
+
+
+# -- Lidars (device registry, analogous to cameras) --------------------------
+
+
+class CreateLidarRequest(BaseModel):
+    """Body of PUT /lidars -- register (and bind) one legacy PhysX lidar.
+
+    Creates the ``RangeSensorSchema.Lidar`` prim at ``prim_path`` if none
+    exists yet. Angles/resolution are degrees, range is stage units,
+    ``rotation_rate`` is Hz (``0`` = instantaneous full-sweep lidar).
+    ``data_types`` is the set of outputs to produce (default
+    ``["point_cloud"]``); each must be a supported lidar data type, and
+    ``"semantic"`` additionally requires per-hit semantics to be enabled.
+    """
+
+    prim_path: str = Field(min_length=1)
+    min_range: float = 0.4
+    max_range: float = 100.0
+    horizontal_fov: float = 360.0
+    vertical_fov: float = 30.0
+    horizontal_resolution: float = 0.4
+    vertical_resolution: float = 4.0
+    rotation_rate: float = 20.0
+    high_lod: bool = False
+    draw_points: bool = False
+    draw_lines: bool = False
+    yaw_offset: float = 0.0
+    data_types: list[str] | None = None
+
+
+class LidarCaptureRequest(BaseModel):
+    """Body of POST /lidars/{id}/capture -- pump one frame and read outputs.
+
+    ``data_types`` selects which of the lidar's bound outputs to return;
+    ``None`` returns them all.
+    """
+
+    data_types: list[str] | None = None
+
+
+class LidarWorldPoseRequest(BaseModel):
+    """Body of PUT /lidars/{id}/world_pose.
+
+    ``position`` is ``[x, y, z]`` (stage units), ``orientation`` a
+    scalar-first ``[w, x, y, z]`` quaternion; either may be null to leave it
+    untouched.
+    """
+
+    position: list[float] | None = None
+    orientation: list[float] | None = None
+
+
+class LidarLocalPoseRequest(BaseModel):
+    """Body of PUT /lidars/{id}/local_pose -- parent-relative pose.
+
+    Like :class:`LidarWorldPoseRequest` but with ``translation`` in place of
+    ``position``.
+    """
+
+    translation: list[float] | None = None
+    orientation: list[float] | None = None
+
+
+class LidarFloatValueRequest(BaseModel):
+    """Body of the single-float lidar setters (range, fov, resolution,
+    rotation rate, yaw offset)."""
+
+    value: float
+
+
+class LidarBoolValueRequest(BaseModel):
+    """Body of the single-bool lidar setters (high lod, draw points/lines,
+    enable semantics)."""
+
+    value: bool

@@ -56,6 +56,7 @@ import carb
 
 from .services.articulations import ArticulationService
 from .services.cameras import CameraService
+from .services.lidars import LidarService
 from .services.general import GeneralService
 from .services.prims import PrimService
 from .services.stage import StageService
@@ -139,6 +140,7 @@ class BridgeServer:
         surface_gripper_service = SurfaceGripperService()
         articulation_service = ArticulationService(surface_gripper_service)
         camera_service = CameraService()
+        lidar_service = LidarService()
         stage_service = StageService()
         # assemble_robot accepts either kind of gripper, so the two registries know
         # about each other: the articulation service resolves a surface gripper id,
@@ -148,10 +150,16 @@ class BridgeServer:
         app.state.articulation_service = articulation_service
         app.state.surface_gripper_service = surface_gripper_service
         app.state.camera_service = camera_service
+        app.state.lidar_service = lidar_service
         app.state.stage_service = stage_service
         app.state.prim_service = PrimService(stage_service)  # composes the stage service
         app.state.general_service = GeneralService()
-        self._device_services = (articulation_service, surface_gripper_service, camera_service)
+        self._device_services = (
+            articulation_service,
+            surface_gripper_service,
+            camera_service,
+            lidar_service,
+        )
 
         for router in ALL_ROUTERS:
             app.include_router(router)

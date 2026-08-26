@@ -52,13 +52,22 @@ _MOTION_MAX_FRAMES = 1800
 
 # Position-drive values substituted for a driven joint that reports none, so that
 # every robot the bridge is asked to position-control can actually be positioned.
-# Two ways a joint arrives without them: a URDF that leaves its joint effort limit
+# Three ways a joint arrives unusable: a URDF that leaves its joint effort limit
 # at zero (a great many do), which carries through to a drive permitted no torque;
-# and a USD authored with no drive gains, which the bridge uses as it finds it
-# rather than re-authoring, unlike a URDF it imports itself. Either way the joint
-# ignores every position command and its links fall under gravity.
+# a USD authored with no drive gains, which the bridge uses as it finds it rather
+# than re-authoring, unlike a URDF it imports itself; and a drive given stiffness
+# but no damping, which does respond to commands but rings.
 #
 # Zero is a missing value here rather than a deliberate one, so it is filled in.
+# Each quantity is filled in only where the drive reports zero -- an authored
+# value is never overridden. That restraint matters beyond tidiness: the drive's
+# damping is the gain on its *velocity* term, and this class only ever writes
+# position targets (ArticulationAction(joint_positions=...), leaving
+# joint_velocities None), so a drive's target velocity is whatever its USD
+# authored and is never cleared. Supplying damping to a joint that did not ask
+# for it hands a gain to a stale target velocity the bridge does not control,
+# and the joint rotates continuously.
+#
 # The stiffness is a firm position drive for a manipulator, chosen to hold a pose
 # against gravity across the size range the bridge sees rather than tuned for any
 # one robot; the effort is a ceiling high enough not to constrain any of them
@@ -244,13 +253,13 @@ class SingleArticulation:
     def _backfill_missing_drive_gains(self):
         """Give driven joints whose position drive reports no gains usable ones.
 
-        Every move this device performs is a position-drive command, so a joint whose
-        drive is permitted no torque, or given no stiffness to generate any with,
-        ignores all of them: the joint never moves, its links sag under gravity, and
-        nothing reports an error. A robot the bridge imports from a URDF has its
-        drives authored by the importer and usually arrives with stiffness; one
-        already present in the stage arrives with whatever its USD was authored
-        with, which may be nothing at all.
+        Every move this device performs is a position-drive command, so the gains
+        decide both whether it works at all and whether it is stable. Two ways a
+        joint arrives unusable: no stiffness, so the drive generates no torque,
+        ignores every position command, and its links sag under gravity; or
+        stiffness with no damping, so the drive does respond but rings --
+        overshooting, returning, overshooting -- which on load, with every joint
+        doing it at once, reads as the articulation dancing.
 
         The stiffness and the effort ceiling are filled in only where the drive
         reports zero, so an authored value is never overridden. Damping is supplied
