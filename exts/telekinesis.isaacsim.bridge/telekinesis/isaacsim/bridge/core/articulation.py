@@ -32,7 +32,7 @@ import omni.timeline
 from isaacsim.core import prims
 from isaacsim.core.utils.types import ArticulationAction
 import carb
-from pxr import PhysxSchema, Usd, UsdPhysics
+from pxr import Gf, PhysxSchema, Usd, UsdGeom, UsdPhysics
 
 from .robot_assembler import get_articulation_base_link_name
 
@@ -99,21 +99,25 @@ _MOTION_MAX_FRAMES = 1800
 # visibly a teleport rather than a move.
 #
 # Inertia alone is not the whole demand on a stiffness: it says how hard a joint is to
-# accelerate, not how hard it is to hold up. A joint carrying a load hangs below the pose
-# it was told to hold by its gravity torque divided by its stiffness, so the stiffness
-# also has a floor -- the one that keeps that droop within _FALLBACK_SAG_RAD. The two
-# demands pick out different joints: gravity governs a wrist carrying a gripper, inertia
-# governs the gripper's own fingers, which carry almost nothing and only need to not
-# shove what they are bolted to.
+# accelerate, not how hard it is to hold up. Sizing from inertia fixes the joint's natural
+# frequency, and a joint with almost no inertia of its own therefore gets almost no
+# stiffness -- a UR10e wrist_3 sized this way came out at 0.7 N.m/rad, too soft to hold the
+# 0.01 N.m it was actually carrying. So the stiffness also has a floor: the one that keeps
+# the joint within _FALLBACK_SAG_RAD of the pose it was told to hold, under the heaviest
+# gravity load that joint can be asked to carry.
+#
+# _FALLBACK_SAG_RAD has to stay comfortably tighter than the tracking error a caller
+# accepts, because a joint sized to the allowance sits AT the allowance in the worst pose.
 #
 # _FALLBACK_STIFFNESS is used only when the physics backend reports neither figure and
 # there is nothing to size the drive against. It suits a manipulator, which is the case
 # where getting it wrong means an arm on the floor.
 _FALLBACK_FREQUENCY_RAD_S = 60.0
-_FALLBACK_SAG_RAD = 8.7e-3  # ~0.5 deg of droop allowed under the joint's own gravity load
+_FALLBACK_SAG_RAD = 3.5e-3  # ~0.2 deg of droop allowed under the joint's heaviest load
 _FALLBACK_STIFFNESS = 1.0e7
 _FALLBACK_SETTLING_TIME_S = 0.5
 _FALLBACK_MAX_EFFORT = 1.0e6
+_GRAVITY_M_S2 = 9.81
 
 
 def joint_prims(stage, prim_path):
@@ -341,14 +345,100 @@ class SingleArticulation:
         except Exception as exc:
             carb.log_warn(
                 f"[bridge] articulation {self.prim_path}: no usable gravity forces from the "
-                f"physics backend ({exc!r}); substituted drives are sized from inertia alone, so "
-                "a joint carrying a load may hang below the pose it is given"
+                f"physics backend ({exc!r}); substituted drives fall back on the load bounded "
+                "from the mass hanging below each joint, which misses whatever is not held on "
+                "by a joint"
             )
             return None
 
         if torques.shape != (len(self._articulation.dof_names),):
             return None
         return np.abs(torques)
+
+    def _gravity_torque_bounds(self, joints):
+        """Heaviest gravity torque each joint in ``joints`` can be asked to hold, by name.
+
+        ``get_generalized_gravity_forces`` reports the load a joint carries in the pose the
+        robot is standing in, which is the wrong quantity to size a drive against: the gains
+        are fixed for the session while the load is not, so a joint whose axis carries little
+        in that one pose is sized for the lighter case and sags once the arm turns. This
+        bounds the load instead, from quantities that do not depend on the pose -- the mass
+        hanging below the joint and how far from its axis that mass can reach.
+
+        The bound is ``mass * g * lever``, with the mass summed over the rigid bodies below
+        the joint and the lever taken as the furthest the bounding box of those bodies gets
+        from the joint. Not projected onto the joint's axis, so it is an over-estimate rather
+        than an under-estimate: sizing a drive slightly too stiff costs tracking crispness,
+        sizing it too soft leaves the joint somewhere other than where it was sent.
+
+        "Below the joint" follows the joints rather than the USD hierarchy: every body
+        reachable from the joint's second body by walking joints in the parent-to-child
+        direction. That is what makes a welded-on tool count. A gripper assembled onto a
+        flange is a sibling prim held there by a fixed joint, so reading the arm's own USD
+        subtree would size its wrist for the wrist alone and leave it far too soft for what
+        the gripper does to it -- which is how a gripper opening came to throw the arm.
+        Walking joints also terminates on a closed linkage, such as the mimic-driven loop in
+        a two-finger gripper, because each body is counted once.
+
+        The whole stage is scanned for joints, once, because the tool that welds itself to
+        this articulation is not under its prim path. A joint whose bound cannot be worked
+        out is left out, and falls back on the load sampled at the current pose.
+        """
+        stage = self._articulation.prim.GetStage()
+        cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
+
+        children = {}
+        for prim in Usd.PrimRange(stage.GetPseudoRoot()):
+            joint = UsdPhysics.Joint(prim)
+            if not joint:
+                continue
+            parents = joint.GetBody0Rel().GetTargets()
+            offspring = joint.GetBody1Rel().GetTargets()
+            if parents and offspring:
+                children.setdefault(parents[0], []).append(offspring[0])
+
+        bounds = {}
+        for name, prim in joints.items():
+            targets = UsdPhysics.Joint(prim).GetBody1Rel().GetTargets()
+            if not targets:
+                continue
+            root = stage.GetPrimAtPath(targets[0])
+            if not root.IsValid():
+                continue
+
+            reached = {targets[0]}
+            frontier = [targets[0]]
+            while frontier:
+                for path in children.get(frontier.pop(), []):
+                    if path not in reached:
+                        reached.add(path)
+                        frontier.append(path)
+
+            mass = 0.0
+            box = Gf.Range3d()
+            for path in reached:
+                body = stage.GetPrimAtPath(path)
+                if not body.IsValid():
+                    continue
+                if body.HasAPI(UsdPhysics.MassAPI):
+                    reported = UsdPhysics.MassAPI(body).GetMassAttr().Get()
+                    mass += float(reported) if reported else 0.0
+                box = Gf.Range3d.GetUnion(
+                    box, cache.ComputeWorldBound(body).ComputeAlignedRange()
+                )
+            if mass <= 0.0 or box.IsEmpty():
+                continue
+
+            origin = UsdGeom.Xformable(root).ComputeLocalToWorldTransform(
+                Usd.TimeCode.Default()
+            ).ExtractTranslation()
+            lever = max((box.GetCorner(corner) - origin).GetLength() for corner in range(8))
+            if lever <= 0.0:
+                continue
+
+            bounds[name] = mass * _GRAVITY_M_S2 * lever
+
+        return bounds
 
     def _backfill_missing_drive_gains(self):
         """Give driven joints whose position drive reports no gains usable ones.
@@ -370,11 +460,23 @@ class SingleArticulation:
 
         A substituted stiffness is sized from two demands, whichever is larger. Its
         effective inertia keeps the torque a command asks for proportional to the load
-        being moved, so a light joint does not shove whatever it is bolted to; its
-        gravity torque sets a floor stiff enough that the joint does not hang below the
-        pose it was told to hold. Neither covers both cases on its own -- gravity is
-        what governs a wrist carrying a gripper, inertia what governs the gripper's own
-        fingers, which hold up nothing.
+        being moved, so a light joint does not shove whatever it is bolted to; the gravity
+        load it carries sets a floor stiff enough that the joint does not hang below the
+        pose it was told to hold. Neither covers both cases on its own, and the inertia
+        term cannot cover the second one at all: it fixes the joint's natural frequency,
+        which says nothing about how hard the joint resists being pushed off its target,
+        so a joint with almost no inertia gets almost no stiffness however much it carries.
+
+        The gravity load is taken as the larger of what the joint carries right now and
+        what it could ever carry -- see :meth:`_gravity_torque_bounds`. The first figure
+        alone is what the robot is standing in when this runs and changes as it moves, so
+        a joint unloaded in that one pose would be sized for the lighter case and would sag
+        once the arm turned. Sizing once, against the heavier case, is what keeps the gains
+        fixed for the whole session, which is what makes a motion repeatable.
+
+        A joint that still stops short of its target wants its real figures through
+        :meth:`set_dof_gains`; the substituted ones are chosen to work, not to describe the
+        robot.
 
         The joint's authored effort ceiling cannot serve as either scale: an asset is
         free to declare a figure that bears no relation to what the joint carries, and
@@ -402,8 +504,10 @@ class SingleArticulation:
         joints = joint_prims(self._articulation.prim.GetStage(), self.prim_path)
         inertias = self._effective_joint_inertias()
         gravity_torques = self._effective_joint_gravity_torques()
+        gravity_bounds = self._gravity_torque_bounds(joints)
 
         substituted = {}
+        sizing = {}
         self._pre_substitution_gains = {}
         for name, index, props in zip(self.dof_names, self.joint_indices, self.dof_properties()):
             prim = joints.get(name)
@@ -411,13 +515,30 @@ class SingleArticulation:
                 continue
             gains = {}
             if props["stiffness"] == 0.0:
-                demands = []
+                inertia_demand = 0.0
                 if inertias is not None and inertias[index] > 0.0:
-                    demands.append(inertias[index] * _FALLBACK_FREQUENCY_RAD_S**2)
-                if gravity_torques is not None and gravity_torques[index] > 0.0:
-                    demands.append(gravity_torques[index] / _FALLBACK_SAG_RAD)
-                gains["stiffness"] = max(demands) if demands else _FALLBACK_STIFFNESS
+                    inertia_demand = inertias[index] * _FALLBACK_FREQUENCY_RAD_S**2
+                # The sampled load and the bound are both lower bounds on what the joint
+                # will be asked to hold -- the sample because it describes one pose, the
+                # bound because it counts only what hangs off a joint. Whichever is larger
+                # is the better figure to size against.
+                load = 0.0
+                if gravity_torques is not None:
+                    load = gravity_torques[index]
+                load = max(load, gravity_bounds.get(name, 0.0))
+                gravity_demand = load / _FALLBACK_SAG_RAD if load > 0.0 else 0.0
+                demand = max(inertia_demand, gravity_demand)
+                gains["stiffness"] = demand if demand > 0.0 else _FALLBACK_STIFFNESS
                 gains["damping"] = gains["stiffness"] * _FALLBACK_SETTLING_TIME_S
+                # Which demand won, and by how much, is what tells a joint that stops
+                # short of its target apart from one that was never sized for the load
+                # it turned out to carry.
+                sizing[name] = {
+                    "inertia": round(inertia_demand, 1),
+                    "gravity": round(gravity_demand, 1),
+                    "load_n_m": round(load, 3),
+                    "chose": "gravity" if gravity_demand > inertia_demand else "inertia",
+                }
             if props["max_effort"] == 0.0:
                 gains["max_effort"] = _FALLBACK_MAX_EFFORT
             if gains:
@@ -430,7 +551,9 @@ class SingleArticulation:
                 f"[bridge] articulation {self.prim_path}: substituted position-drive values for "
                 f"joint(s) that reported none: {substituted}. Without them these joints ignore "
                 "position commands and sag under gravity; fill in the URDF's effort limits or "
-                "author the USD's drives to control them with the robot's own figures."
+                "author the USD's drives to control them with the robot's own figures. Each "
+                f"substituted stiffness was sized from {sizing}, where the gravity figure is the "
+                "load the joint carries in the pose the robot is standing in now."
             )
 
     def _correct_imported_prismatic_max_velocities(self):
