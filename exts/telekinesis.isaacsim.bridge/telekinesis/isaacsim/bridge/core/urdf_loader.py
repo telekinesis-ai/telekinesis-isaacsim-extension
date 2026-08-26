@@ -57,6 +57,7 @@ async def import_urdf_at(stage, urdf_path, dest_prim_path):
     omni.timeline.get_timeline_interface().stop()
 
     asset_path = _import_asset(urdf_path, _asset_directory_for(urdf_path))
+    _author_missing_drives(asset_path)
 
     parent = Sdf.Path(dest_prim_path).GetParentPath()
     if parent.pathString not in ("", "/") and not stage.GetPrimAtPath(parent).IsValid():
@@ -126,6 +127,105 @@ def _park_clear_of_existing_robots(stage, dest_prim_path):
         f"[bridge] parked {dest_prim_path} {shift:.3f} m along +X, clear of the robot(s) "
         "already on the stage"
     )
+
+
+def _author_missing_drives(asset_path):
+    """Author position-drive values into the asset for joints that arrived without any.
+
+    A joint moves only through its position drive, and the drive works only when the
+    asset authors its stiffness, damping and effort limit. URDF has no notion of drive
+    stiffness, so the importer cannot fill it in from the file, and what it does author
+    varies: a URDF with a ``<dynamics damping="...">`` tag yields a drive with damping
+    and no stiffness, one without the tag yields no drive values at all. This completes
+    such joints in the asset itself, where the values are part of the robot: they
+    survive every timeline stop, re-import into any stage, and need no code to
+    re-apply them.
+
+    The values follow NVIDIA's published robot assets. Stiffness defaults to their
+    manipulator scale, and damping is authored at 0.004 of the stiffness whenever the
+    stiffness was, replacing any authored damping -- the two describe one drive, and a
+    damping written for a drive that had no stiffness describes nothing. The ratio is
+    the drive's slew: damping this small lets a joint snap to a new target and turns an
+    effort-limit saturation into a transient instead of a sustained shove. The effort
+    limit is taken from the URDF's own effort limit where the importer preserved it and
+    the drive arrived without one; torque clamping is what keeps a drive with these
+    gains from overpowering the joint, so a URDF with a wrong effort limit shows up as
+    misbehaviour of that joint rather than being compensated here.
+
+    A robot whose joints drive a mimic linkage -- a parallel gripper, where one driver
+    joint moves the whole finger mechanism through mimic constraints -- gets a far
+    smaller stiffness. A gripper is commanded in steps, not trajectories, so its driver
+    sees its entire stroke as one error; at manipulator stiffness that demands hundreds
+    of thousands of newton-metres, the drive rides its effort limit for the whole
+    stroke, and the reaction through the flange is violent enough to blow up the
+    simulation of whatever the gripper is bolted to. The gripper scale is taken from a
+    working NVIDIA-style asset (OnRobot RG6: 3.75), some eight hundred times softer.
+    The mimic joints are what mark the asset as such a mechanism.
+
+    Only joints whose composed stiffness is zero or absent are touched, so an asset
+    that authors real drives keeps them. Mimic joints are skipped: the mimic constraint
+    moves them, and a drive would fight it. Written as overs on the asset's root layer,
+    which outweighs the importer's internal layers regardless of the asset's variant
+    structure.
+    """
+    damping_ratio = 0.004
+
+    stage = Usd.Stage.Open(asset_path.as_posix())
+    if stage is None:
+        raise RuntimeError(f"cannot open the urdf asset at '{asset_path}'")
+
+    if any(_is_mimic(prim) for prim in stage.Traverse()):
+        # A mimic linkage: gram-scale links behind one driver commanded in steps.
+        angular_stiffness = 3.75  # USD degrees; the OnRobot RG6's authored figure
+        linear_stiffness = 1.0e4  # per metre
+    else:
+        angular_stiffness = 3000.0  # NVIDIA's manipulator scale, USD degrees
+        linear_stiffness = 1.0e5  # per metre
+
+    completed = []
+    for prim in stage.Traverse():
+        if prim.IsA(UsdPhysics.RevoluteJoint):
+            kind, stiffness = "angular", angular_stiffness
+        elif prim.IsA(UsdPhysics.PrismaticJoint):
+            kind, stiffness = "linear", linear_stiffness
+        else:
+            continue
+        if _is_mimic(prim):
+            continue
+
+        drive = UsdPhysics.DriveAPI.Get(prim, kind)
+        authored = drive.GetStiffnessAttr().Get() if drive else None
+        if authored:
+            continue
+
+        drive = UsdPhysics.DriveAPI.Apply(prim, kind)
+        drive.CreateStiffnessAttr(stiffness)
+        drive.CreateDampingAttr(stiffness * damping_ratio)
+
+        max_force = drive.GetMaxForceAttr().Get()
+        effort = prim.GetAttribute("urdf:limit:effort").Get()
+        if (max_force is None or not max_force < 1.0e37) and effort and effort > 0.0:
+            drive.CreateMaxForceAttr(float(effort))
+        completed.append(prim.GetName())
+
+    if completed:
+        stage.GetRootLayer().Save()
+        carb.log_warn(
+            f"[bridge] asset {asset_path}: authored position-drive values for joint(s) the "
+            f"import left without any: {completed}. The drives clamp at the URDF's effort "
+            "limits, so a joint that misbehaves under these gains has a wrong effort limit "
+            "in its URDF."
+        )
+
+
+def _is_mimic(prim):
+    """Whether ``prim`` carries a mimic schema, read from the raw metadata.
+
+    Raw metadata rather than ``GetAppliedSchemas()``, which silently drops schema names
+    whose plugin is not loaded -- and the mimic schema is the physics backend's own.
+    """
+    schemas = prim.GetMetadata("apiSchemas")
+    return bool(schemas) and any("Mimic" in name for name in schemas.GetAddedOrExplicitItems())
 
 
 def _asset_directory_for(urdf_path):

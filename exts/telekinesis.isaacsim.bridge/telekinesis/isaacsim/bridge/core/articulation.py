@@ -32,7 +32,7 @@ import omni.timeline
 from isaacsim.core import prims
 from isaacsim.core.utils.types import ArticulationAction
 import carb
-from pxr import Gf, PhysxSchema, Usd, UsdGeom, UsdPhysics
+from pxr import PhysxSchema, Usd, UsdPhysics
 
 from .robot_assembler import get_articulation_base_link_name
 
@@ -49,75 +49,6 @@ _SETTLED_VELOCITY_RAD_S = 5e-3  # joints no longer moving
 _SETTLED_FRAMES = 5  # consecutive low-velocity frames => stalled
 _BIND_RETRIES = 60
 _MOTION_MAX_FRAMES = 1800
-
-# Position-drive values substituted for a driven joint that reports none, so that
-# every robot the bridge is asked to position-control can actually be positioned.
-# Three ways a joint arrives unusable: a URDF that leaves its joint effort limit
-# at zero (a great many do), which carries through to a drive permitted no torque;
-# a USD authored with no drive gains, which the bridge uses as it finds it rather
-# than re-authoring, unlike a URDF it imports itself; and a drive given stiffness
-# but no damping, which does respond to commands but rings.
-#
-# Zero is a missing value here rather than a deliberate one, so it is filled in.
-# Each quantity is filled in only where the drive reports zero -- an authored
-# value is never overridden. That restraint matters beyond tidiness: the drive's
-# damping is the gain on its *velocity* term, and this class only ever writes
-# position targets (ArticulationAction(joint_positions=...), leaving
-# joint_velocities None), so a drive's target velocity is whatever its USD
-# authored and is never cleared. Supplying damping to a joint that did not ask
-# for it hands a gain to a stale target velocity the bridge does not control,
-# and the joint rotates continuously.
-#
-# The stiffness is sized from the load the joint actually moves -- its effective
-# inertia times a fixed square frequency -- because no single stiffness serves the
-# whole size range the bridge sees. One firm enough to keep a thirty-kilogram arm
-# from sagging asks a fifty-gram gripper finger for thousands of newton-metres,
-# which the drive happily supplies up to its effort ceiling; the reaction then
-# throws whatever the gripper is bolted to. Scaling with inertia makes the torque a
-# command asks for proportional to what is being moved, so the same rule gives an
-# arm's shoulder a drive that holds it up and a finger one that does not shove the
-# arm. The effort is a ceiling high enough not to constrain any of them
-# (newton-metres), bounding the drive's output without shaping it. Override any of
-# them with set_dof_gains.
-#
-# The frequency is squared because a position drive behaves as a second-order system
-# in the load it moves: stiffness = inertia x frequency^2. It sets how briskly a joint
-# answers a command, and raising it asks more torque of everything -- which is what has
-# to stay small at the gripper end, where a full stroke of an RG2 finger should ask a
-# few newton-metres of a wrist rated for fifty-six, not the thousand its own asset
-# declares itself good for.
-#
-# The damping is derived from the stiffness rather than chosen separately, because
-# the two only mean something together: a position drive travels at roughly
-# (stiffness / damping) x position error, so their ratio -- not the stiffness on its
-# own -- is what decides how fast a substituted drive moves. Fixing that ratio at a
-# settling time makes a substituted drive's speed a property of this bridge instead
-# of a property of whatever velocity ceiling the joint's asset happens to declare:
-# a joint one radian from its target closes it at about 2 rad/s either way. Left
-# unrelated, a high stiffness against a low damping asks for a speed no manipulator
-# should move at, and the joint crosses its whole range within a frame or two --
-# visibly a teleport rather than a move.
-#
-# Inertia alone is not the whole demand on a stiffness: it says how hard a joint is to
-# accelerate, not how hard it is to hold up. Sizing from inertia fixes the joint's natural
-# frequency, and a joint with almost no inertia of its own therefore gets almost no
-# stiffness -- a UR10e wrist_3 sized this way came out at 0.7 N.m/rad, too soft to hold the
-# 0.01 N.m it was actually carrying. So the stiffness also has a floor: the one that keeps
-# the joint within _FALLBACK_SAG_RAD of the pose it was told to hold, under the heaviest
-# gravity load that joint can be asked to carry.
-#
-# _FALLBACK_SAG_RAD has to stay comfortably tighter than the tracking error a caller
-# accepts, because a joint sized to the allowance sits AT the allowance in the worst pose.
-#
-# _FALLBACK_STIFFNESS is used only when the physics backend reports neither figure and
-# there is nothing to size the drive against. It suits a manipulator, which is the case
-# where getting it wrong means an arm on the floor.
-_FALLBACK_FREQUENCY_RAD_S = 60.0
-_FALLBACK_SAG_RAD = 3.5e-3  # ~0.2 deg of droop allowed under the joint's heaviest load
-_FALLBACK_STIFFNESS = 1.0e7
-_FALLBACK_SETTLING_TIME_S = 0.5
-_FALLBACK_MAX_EFFORT = 1.0e6
-_GRAVITY_M_S2 = 9.81
 
 
 def joint_prims(stage, prim_path):
@@ -137,9 +68,12 @@ def is_mimic_joint(prim):
 
     Matches both spellings the physics backends use, since the applied schema is
     named after whichever one authored the asset: ``PhysxMimicJointAPI:rot*``
-    (PhysX) and ``NewtonMimicAPI`` (Newton).
+    (PhysX) and ``NewtonMimicAPI`` (Newton). Read from the raw metadata rather than
+    ``GetAppliedSchemas()``, which silently drops schema names whose plugin is not
+    loaded -- and the mimic schema belongs to whichever backend is not running.
     """
-    return any("Mimic" in schema for schema in prim.GetAppliedSchemas())
+    schemas = prim.GetMetadata("apiSchemas")
+    return bool(schemas) and any("Mimic" in name for name in schemas.GetAddedOrExplicitItems())
 
 
 def find_driver_joint(stage, prim_path, dof_names):
@@ -194,10 +128,6 @@ class SingleArticulation:
         self._move_lock = asyncio.Lock()
         self._start_time = time.monotonic()
         self._target = None  # last commanded joint target (rad)
-        # Drive values as they stood before _backfill_missing_drive_gains substituted
-        # them, by joint name, so narrowing the driven subset can put back what the
-        # asset authored on the joints being dropped. See set_driven_joints.
-        self._pre_substitution_gains = {}
 
     async def bind(self):
         """(Re)initialize the articulation against the current physics view.
@@ -227,12 +157,11 @@ class SingleArticulation:
                     self._articulation.num_dof
                     and self._articulation.get_joint_positions() is not None
                 ):
-                    # Order matters, and all of these run within this one frame: the
-                    # drive needs usable gains, and a speed it can reach them at,
-                    # before it is asked to hold a pose, and the pose it is aligned
-                    # to is the one worth recording as the reset state.
+                    # Order matters, and all of these run within this one frame:
+                    # the drive needs a speed it can reach a pose at before it is
+                    # asked to hold one, and the pose it is aligned to is the one
+                    # worth recording as the reset state.
                     self._resolve_driven_joints()
-                    self._backfill_missing_drive_gains()
                     self._correct_imported_prismatic_max_velocities()
                     self._align_drive_to_current_pose()
                     self._ensure_default_state_populated()
@@ -279,282 +208,6 @@ class SingleArticulation:
         self._articulation.set_joint_positions(positions)
         self._articulation.set_joint_velocities(np.zeros_like(positions))
         self._articulation.apply_action(ArticulationAction(joint_positions=positions))
-
-    def _effective_joint_inertias(self):
-        """Effective inertia of every DOF of the underlying handle, or ``None``.
-
-        The diagonal of the articulation's generalized mass matrix, in the handle's own
-        DOF order: how much inertia each joint has to move on its own, with the rest of
-        the rig held still. Kilogram metres squared for a revolute joint, kilograms for
-        a prismatic one. Used to size a substituted position drive to its load.
-
-        The figure depends on the pose it is read in -- an outstretched arm's shoulder
-        carries more than a folded one's -- so it describes the articulation as the
-        bridge found it, which is the pose a substituted drive is first asked to hold.
-
-        ``None`` when the physics backend offers no mass matrix, or offers one whose
-        shape does not line up with the DOF order (a floating-base rig's carries six
-        root rows and columns ahead of the joints). The caller then falls back on fixed
-        gains.
-        """
-        # Broad on purpose: a backend that cannot supply a mass matrix, or supplies it
-        # as a tensor type this does not convert, must not take the bind down with it --
-        # sizing the drive is an improvement on fixed gains, not a precondition for
-        # having any.
-        try:
-            matrices = self._articulation._articulation_view.get_mass_matrices()
-            if matrices is None:
-                return None
-            matrix = np.asarray(matrices[0], dtype=float)
-        except Exception as exc:
-            carb.log_warn(
-                f"[bridge] articulation {self.prim_path}: no usable mass matrix from the physics "
-                f"backend ({exc!r}); substituted drives fall back on fixed gains, which suit a "
-                "manipulator and are far too strong for a gripper"
-            )
-            return None
-
-        total = len(self._articulation.dof_names)
-        if matrix.shape != (total, total):
-            return None
-        return np.diag(matrix)
-
-    def _effective_joint_gravity_torques(self):
-        """Gravity torque on every DOF of the underlying handle, or ``None``.
-
-        What each joint's drive has to supply just to keep the rig where it is, in the
-        handle's own DOF order: newton-metres for a revolute joint, newtons for a
-        prismatic one. Used to give a substituted position drive enough stiffness that
-        the joint does not hang below the pose it was told to hold.
-
-        Pose-dependent in the same way as :meth:`_effective_joint_inertias`, and read in
-        the same pose: an outstretched arm's shoulder carries far more than a folded
-        one's.
-
-        ``None`` when the physics backend offers no gravity forces, or offers a row whose
-        length does not match the DOF count. The caller then falls back on sizing the
-        drive from inertia alone.
-        """
-        # Broad for the same reason as the mass matrix: a better-sized drive is an
-        # improvement, never a precondition for the bind succeeding.
-        try:
-            forces = self._articulation._articulation_view.get_generalized_gravity_forces()
-            if forces is None:
-                return None
-            torques = np.asarray(forces[0], dtype=float)
-        except Exception as exc:
-            carb.log_warn(
-                f"[bridge] articulation {self.prim_path}: no usable gravity forces from the "
-                f"physics backend ({exc!r}); substituted drives fall back on the load bounded "
-                "from the mass hanging below each joint, which misses whatever is not held on "
-                "by a joint"
-            )
-            return None
-
-        if torques.shape != (len(self._articulation.dof_names),):
-            return None
-        return np.abs(torques)
-
-    def _gravity_torque_bounds(self, joints):
-        """Heaviest gravity torque each joint in ``joints`` can be asked to hold, by name.
-
-        ``get_generalized_gravity_forces`` reports the load a joint carries in the pose the
-        robot is standing in, which is the wrong quantity to size a drive against: the gains
-        are fixed for the session while the load is not, so a joint whose axis carries little
-        in that one pose is sized for the lighter case and sags once the arm turns. This
-        bounds the load instead, from quantities that do not depend on the pose -- the mass
-        hanging below the joint and how far from its axis that mass can reach.
-
-        The bound is ``mass * g * lever``, with the mass summed over the rigid bodies below
-        the joint and the lever taken as the furthest the bounding box of those bodies gets
-        from the joint. Not projected onto the joint's axis, so it is an over-estimate rather
-        than an under-estimate: sizing a drive slightly too stiff costs tracking crispness,
-        sizing it too soft leaves the joint somewhere other than where it was sent.
-
-        "Below the joint" follows the joints rather than the USD hierarchy: every body
-        reachable from the joint's second body by walking joints in the parent-to-child
-        direction. That is what makes a welded-on tool count. A gripper assembled onto a
-        flange is a sibling prim held there by a fixed joint, so reading the arm's own USD
-        subtree would size its wrist for the wrist alone and leave it far too soft for what
-        the gripper does to it -- which is how a gripper opening came to throw the arm.
-        Walking joints also terminates on a closed linkage, such as the mimic-driven loop in
-        a two-finger gripper, because each body is counted once.
-
-        The whole stage is scanned for joints, once, because the tool that welds itself to
-        this articulation is not under its prim path. A joint whose bound cannot be worked
-        out is left out, and falls back on the load sampled at the current pose.
-        """
-        stage = self._articulation.prim.GetStage()
-        cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
-
-        children = {}
-        for prim in Usd.PrimRange(stage.GetPseudoRoot()):
-            joint = UsdPhysics.Joint(prim)
-            if not joint:
-                continue
-            parents = joint.GetBody0Rel().GetTargets()
-            offspring = joint.GetBody1Rel().GetTargets()
-            if parents and offspring:
-                children.setdefault(parents[0], []).append(offspring[0])
-
-        bounds = {}
-        for name, prim in joints.items():
-            targets = UsdPhysics.Joint(prim).GetBody1Rel().GetTargets()
-            if not targets:
-                continue
-            root = stage.GetPrimAtPath(targets[0])
-            if not root.IsValid():
-                continue
-
-            reached = {targets[0]}
-            frontier = [targets[0]]
-            while frontier:
-                for path in children.get(frontier.pop(), []):
-                    if path not in reached:
-                        reached.add(path)
-                        frontier.append(path)
-
-            mass = 0.0
-            box = Gf.Range3d()
-            for path in reached:
-                body = stage.GetPrimAtPath(path)
-                if not body.IsValid():
-                    continue
-                if body.HasAPI(UsdPhysics.MassAPI):
-                    reported = UsdPhysics.MassAPI(body).GetMassAttr().Get()
-                    mass += float(reported) if reported else 0.0
-                box = Gf.Range3d.GetUnion(
-                    box, cache.ComputeWorldBound(body).ComputeAlignedRange()
-                )
-            if mass <= 0.0 or box.IsEmpty():
-                continue
-
-            origin = UsdGeom.Xformable(root).ComputeLocalToWorldTransform(
-                Usd.TimeCode.Default()
-            ).ExtractTranslation()
-            lever = max((box.GetCorner(corner) - origin).GetLength() for corner in range(8))
-            if lever <= 0.0:
-                continue
-
-            bounds[name] = mass * _GRAVITY_M_S2 * lever
-
-        return bounds
-
-    def _backfill_missing_drive_gains(self):
-        """Give driven joints whose position drive reports no gains usable ones.
-
-        Every move this device performs is a position-drive command, so the gains
-        decide both whether it works at all and whether it is stable. Two ways a
-        joint arrives unusable: no stiffness, so the drive generates no torque,
-        ignores every position command, and its links sag under gravity; or
-        stiffness with no damping, so the drive does respond but rings --
-        overshooting, returning, overshooting -- which on load, with every joint
-        doing it at once, reads as the articulation dancing.
-
-        The stiffness and the effort ceiling are filled in only where the drive
-        reports zero, so an authored value is never overridden. Damping is supplied
-        whenever the stiffness was, authored or not: the two describe one drive, and
-        a damping meant for a joint that had no position drive says nothing about how
-        one this stiff should behave. Pairing a substituted stiffness with an
-        unrelated damping is what makes a drive travel at a speed nothing chose.
-
-        A substituted stiffness is sized from two demands, whichever is larger. Its
-        effective inertia keeps the torque a command asks for proportional to the load
-        being moved, so a light joint does not shove whatever it is bolted to; the gravity
-        load it carries sets a floor stiff enough that the joint does not hang below the
-        pose it was told to hold. Neither covers both cases on its own, and the inertia
-        term cannot cover the second one at all: it fixes the joint's natural frequency,
-        which says nothing about how hard the joint resists being pushed off its target,
-        so a joint with almost no inertia gets almost no stiffness however much it carries.
-
-        The gravity load is taken as the larger of what the joint carries right now and
-        what it could ever carry -- see :meth:`_gravity_torque_bounds`. The first figure
-        alone is what the robot is standing in when this runs and changes as it moves, so
-        a joint unloaded in that one pose would be sized for the lighter case and would sag
-        once the arm turned. Sizing once, against the heavier case, is what keeps the gains
-        fixed for the whole session, which is what makes a motion repeatable.
-
-        A joint that still stops short of its target wants its real figures through
-        :meth:`set_dof_gains`; the substituted ones are chosen to work, not to describe the
-        robot.
-
-        The joint's authored effort ceiling cannot serve as either scale: an asset is
-        free to declare a figure that bears no relation to what the joint carries, and
-        the grippers the bridge loads declare larger ceilings for a finger than a UR10e
-        declares for its shoulder.
-
-        What was substituted is logged: the values are chosen to work rather than to
-        describe the real robot, so torque readings from an affected joint do not
-        report its true limits. Filling in the URDF's effort limits, or authoring the
-        USD's drives, is the proper fix; :meth:`set_dof_gains` overrides the
-        substituted values in the meantime.
-
-        Mimic joints are exempt: a mimic constraint is what moves them to follow the
-        driver joint, so drive values they leave at zero are authored that way rather
-        than missing. Substituting gains there pins each mimic joint at its current
-        pose and fights the constraint the moment the driver joint moves.
-
-        So are joints that belong to another device. On a merged rig every DOF of the
-        assembled arm-and-gripper is visible here, and a device that drives all of
-        them -- an arm bound to an already-assembled prim -- would otherwise reach
-        across and substitute gains on the gripper's mimic and linkage joints, which
-        is the pinning above by another route. A joint outside this device's own prim
-        path is not this device's to correct.
-        """
-        joints = joint_prims(self._articulation.prim.GetStage(), self.prim_path)
-        inertias = self._effective_joint_inertias()
-        gravity_torques = self._effective_joint_gravity_torques()
-        gravity_bounds = self._gravity_torque_bounds(joints)
-
-        substituted = {}
-        sizing = {}
-        self._pre_substitution_gains = {}
-        for name, index, props in zip(self.dof_names, self.joint_indices, self.dof_properties()):
-            prim = joints.get(name)
-            if prim is None or is_mimic_joint(prim):
-                continue
-            gains = {}
-            if props["stiffness"] == 0.0:
-                inertia_demand = 0.0
-                if inertias is not None and inertias[index] > 0.0:
-                    inertia_demand = inertias[index] * _FALLBACK_FREQUENCY_RAD_S**2
-                # The sampled load and the bound are both lower bounds on what the joint
-                # will be asked to hold -- the sample because it describes one pose, the
-                # bound because it counts only what hangs off a joint. Whichever is larger
-                # is the better figure to size against.
-                load = 0.0
-                if gravity_torques is not None:
-                    load = gravity_torques[index]
-                load = max(load, gravity_bounds.get(name, 0.0))
-                gravity_demand = load / _FALLBACK_SAG_RAD if load > 0.0 else 0.0
-                demand = max(inertia_demand, gravity_demand)
-                gains["stiffness"] = (demand if demand > 0.0 else _FALLBACK_STIFFNESS) + 50
-                gains["damping"] = (gains["stiffness"] * _FALLBACK_SETTLING_TIME_S) + 50
-                # Which demand won, and by how much, is what tells a joint that stops
-                # short of its target apart from one that was never sized for the load
-                # it turned out to carry.
-                sizing[name] = {
-                    "inertia": round(inertia_demand, 1),
-                    "gravity": round(gravity_demand, 1),
-                    "load_n_m": round(load, 3),
-                    "chose": "gravity" if gravity_demand > inertia_demand else "inertia",
-                }
-            if props["max_effort"] < 200:
-                gains["max_effort"] = _FALLBACK_MAX_EFFORT
-            if gains:
-                self._pre_substitution_gains[name] = {key: props[key] for key in gains}
-                self.set_dof_gains(indices=[index], **gains)
-                substituted[name] = gains
-
-        if substituted:
-            carb.log_warn(
-                f"[bridge] articulation {self.prim_path}: substituted position-drive values for "
-                f"joint(s) that reported none: {substituted}. Without them these joints ignore "
-                "position commands and sag under gravity; fill in the URDF's effort limits or "
-                "author the USD's drives to control them with the robot's own figures. Each "
-                f"substituted stiffness was sized from {sizing}, where the gravity figure is the "
-                "load the joint carries in the pose the robot is standing in now."
-            )
 
     def _correct_imported_prismatic_max_velocities(self):
         """Undo the degree conversion the URDF importer applies to a prismatic joint's
@@ -672,28 +325,9 @@ class SingleArticulation:
         device behaves exactly like a robot with one joint. Re-resolves against the
         current handle; forgets any pending move target.
 
-        Any drive values :meth:`bind` had to substitute on a joint that is no longer
-        driven are restored to what the asset authored. Until the driven subset is
-        known, bind has to cover the whole articulation, which on a gripper includes
-        the passive joints of its linkage: those carry no drive on purpose, and a
-        substituted position drive pins each one at its current pose and locks the
-        mechanism. Narrowing is the point at which they are known not to be driven.
         """
         self.joint_names = list(joint_names)
         self._resolve_driven_joints()
-
-        all_names = list(self._articulation.dof_names)
-        dropped = [name for name in self._pre_substitution_gains if name not in self.dof_names]
-        for name in dropped:
-            self.set_dof_gains(
-                indices=[all_names.index(name)], **self._pre_substitution_gains.pop(name)
-            )
-        if dropped:
-            carb.log_info(
-                f"[bridge] articulation {self.prim_path}: restored the authored drive values "
-                f"on no-longer-driven joint(s) {dropped}"
-            )
-
         self._target = None
         carb.log_info(
             f"[bridge] articulation {self.prim_path} drives "
@@ -710,17 +344,14 @@ class SingleArticulation:
 
         The drive setup :meth:`bind` performs is redone here, over this device's own
         joints. Assembly edits USD, which means stopping and replaying the timeline,
-        and physics rebuilds itself from the stage across that: the gains, effort
-        ceilings, velocity limits and drive targets the bridge wrote when it first
-        bound are all gone by the time the merged articulation arrives. A robot whose
-        asset authors no drive stiffness -- as an imported URDF's does not -- comes
-        out of an assembly with damping and no position drive otherwise, ignoring
-        every target and sagging under gravity, and its gripper stops closing.
+        and physics rebuilds itself from the stage across that: anything the bridge
+        wrote through the physics view -- velocity limits, drive targets -- is gone by
+        the time the merged articulation arrives and is applied again here. Drive
+        gains survive on their own, because they are authored in the asset's USD.
         """
         self._articulation = articulation
         self.joint_names = list(joint_names)
         self._resolve_driven_joints()
-        self._backfill_missing_drive_gains()
         self._correct_imported_prismatic_max_velocities()
         self._align_drive_to_current_pose()
         self._ensure_default_state_populated()
@@ -1055,8 +686,7 @@ class SingleArticulation:
         joint in ``indices`` order. Omitted quantities are left untouched.
 
         Use this to retune how a robot tracks a commanded pose without re-importing
-        it, and to replace any value :meth:`bind` had to substitute because the
-        drive reported none, with the figures the real robot's drives use. Higher
+        it, or to give a robot whose asset authors no drive values usable ones. Higher
         stiffness tracks a commanded pose more closely at the cost of stiffer, less
         stable contacts; damping suppresses the resulting overshoot.
 
