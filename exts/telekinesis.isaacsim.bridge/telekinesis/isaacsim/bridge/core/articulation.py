@@ -68,11 +68,28 @@ _MOTION_MAX_FRAMES = 1800
 # for it hands a gain to a stale target velocity the bridge does not control,
 # and the joint rotates continuously.
 #
-# The stiffness is a firm position drive for a manipulator, chosen to hold a pose
-# against gravity across the size range the bridge sees rather than tuned for any
-# one robot; the effort is a ceiling high enough not to constrain any of them
+# The stiffness is sized from the load the joint actually moves -- its effective
+# inertia times a fixed square frequency -- because no single stiffness serves the
+# whole size range the bridge sees. One firm enough to keep a thirty-kilogram arm
+# from sagging asks a fifty-gram gripper finger for thousands of newton-metres,
+# which the drive happily supplies up to its effort ceiling; the reaction then
+# throws whatever the gripper is bolted to. Scaling with inertia makes the torque a
+# command asks for proportional to what is being moved, so the same rule gives an
+# arm's shoulder a drive that holds it up and a finger one that does not shove the
+# arm. The effort is a ceiling high enough not to constrain any of them
 # (newton-metres), bounding the drive's output without shaping it. Override any of
-# the three with set_dof_gains.
+# them with set_dof_gains.
+#
+# The frequency is squared because a position drive behaves as a second-order system
+# in the load it moves: stiffness = inertia x frequency^2. Its value trades holding a
+# pose against staying gentle, and it is the one number to change if a substituted
+# drive is too soft or too harsh. A joint sags by its gravity torque divided by its
+# stiffness, and the joint that sags most is the lightest one still carrying
+# something -- a UR10e's wrist under a gripper, about a degree here, against a fifth
+# of that at the shoulder. Raising the frequency buys that back at the cost of asking
+# more torque of everything, which is what has to stay small at the gripper end: a
+# full stroke of an RG2 finger asks under four newton-metres of the wrist carrying
+# it, which is rated for fifty-six.
 #
 # The damping is derived from the stiffness rather than chosen separately, because
 # the two only mean something together: a position drive travels at roughly
@@ -84,9 +101,13 @@ _MOTION_MAX_FRAMES = 1800
 # unrelated, a high stiffness against a low damping asks for a speed no manipulator
 # should move at, and the joint crosses its whole range within a frame or two --
 # visibly a teleport rather than a move.
+#
+# _FALLBACK_STIFFNESS is used only when the physics backend reports no mass matrix
+# and there is nothing to size the drive against. It suits a manipulator, which is
+# the case where getting it wrong means an arm on the floor.
+_FALLBACK_FREQUENCY_RAD_S = 60.0
 _FALLBACK_STIFFNESS = 1.0e7
 _FALLBACK_SETTLING_TIME_S = 0.5
-_FALLBACK_DAMPING = _FALLBACK_STIFFNESS * _FALLBACK_SETTLING_TIME_S
 _FALLBACK_MAX_EFFORT = 1.0e6
 
 
@@ -250,6 +271,45 @@ class SingleArticulation:
         self._articulation.set_joint_velocities(np.zeros_like(positions))
         self._articulation.apply_action(ArticulationAction(joint_positions=positions))
 
+    def _effective_joint_inertias(self):
+        """Effective inertia of every DOF of the underlying handle, or ``None``.
+
+        The diagonal of the articulation's generalized mass matrix, in the handle's own
+        DOF order: how much inertia each joint has to move on its own, with the rest of
+        the rig held still. Kilogram metres squared for a revolute joint, kilograms for
+        a prismatic one. Used to size a substituted position drive to its load.
+
+        The figure depends on the pose it is read in -- an outstretched arm's shoulder
+        carries more than a folded one's -- so it describes the articulation as the
+        bridge found it, which is the pose a substituted drive is first asked to hold.
+
+        ``None`` when the physics backend offers no mass matrix, or offers one whose
+        shape does not line up with the DOF order (a floating-base rig's carries six
+        root rows and columns ahead of the joints). The caller then falls back on fixed
+        gains.
+        """
+        # Broad on purpose: a backend that cannot supply a mass matrix, or supplies it
+        # as a tensor type this does not convert, must not take the bind down with it --
+        # sizing the drive is an improvement on fixed gains, not a precondition for
+        # having any.
+        try:
+            matrices = self._articulation._articulation_view.get_mass_matrices()
+            if matrices is None:
+                return None
+            matrix = np.asarray(matrices[0], dtype=float)
+        except Exception as exc:
+            carb.log_warn(
+                f"[bridge] articulation {self.prim_path}: no usable mass matrix from the physics "
+                f"backend ({exc!r}); substituted drives fall back on fixed gains, which suit a "
+                "manipulator and are far too strong for a gripper"
+            )
+            return None
+
+        total = len(self._articulation.dof_names)
+        if matrix.shape != (total, total):
+            return None
+        return np.diag(matrix)
+
     def _backfill_missing_drive_gains(self):
         """Give driven joints whose position drive reports no gains usable ones.
 
@@ -268,6 +328,13 @@ class SingleArticulation:
         one this stiff should behave. Pairing a substituted stiffness with an
         unrelated damping is what makes a drive travel at a speed nothing chose.
 
+        A substituted stiffness is sized from the joint's own effective inertia, so
+        the torque a command asks for is proportional to the load being moved. The
+        joint's authored effort ceiling cannot serve as that scale: an asset is free
+        to declare a figure that bears no relation to what the joint carries, and the
+        grippers the bridge loads declare larger ceilings for a finger than a UR10e
+        declares for its shoulder.
+
         What was substituted is logged: the values are chosen to work rather than to
         describe the real robot, so torque readings from an affected joint do not
         report its true limits. Filling in the URDF's effort limits, or authoring the
@@ -278,19 +345,32 @@ class SingleArticulation:
         driver joint, so drive values they leave at zero are authored that way rather
         than missing. Substituting gains there pins each mimic joint at its current
         pose and fights the constraint the moment the driver joint moves.
+
+        So are joints that belong to another device. On a merged rig every DOF of the
+        assembled arm-and-gripper is visible here, and a device that drives all of
+        them -- an arm bound to an already-assembled prim -- would otherwise reach
+        across and substitute gains on the gripper's mimic and linkage joints, which
+        is the pinning above by another route. A joint outside this device's own prim
+        path is not this device's to correct.
         """
         joints = joint_prims(self._articulation.prim.GetStage(), self.prim_path)
+        inertias = self._effective_joint_inertias()
 
         substituted = {}
         self._pre_substitution_gains = {}
         for name, index, props in zip(self.dof_names, self.joint_indices, self.dof_properties()):
             prim = joints.get(name)
-            if prim is not None and is_mimic_joint(prim):
+            if prim is None or is_mimic_joint(prim):
                 continue
             gains = {}
             if props["stiffness"] == 0.0:
-                gains["stiffness"] = _FALLBACK_STIFFNESS
-                gains["damping"] = _FALLBACK_DAMPING
+                inertia = None if inertias is None else inertias[index]
+                gains["stiffness"] = (
+                    inertia * _FALLBACK_FREQUENCY_RAD_S**2
+                    if inertia and inertia > 0.0
+                    else _FALLBACK_STIFFNESS
+                )
+                gains["damping"] = gains["stiffness"] * _FALLBACK_SETTLING_TIME_S
             if props["max_effort"] == 0.0:
                 gains["max_effort"] = _FALLBACK_MAX_EFFORT
             if gains:
@@ -457,16 +537,24 @@ class SingleArticulation:
         devices hold this same handle. Each keeps driving only its own joints
         (``joint_names``), resolved into the merged DOF order. No rebind needed --
         the handle is already initialized; a later reconnect re-resolves by name.
+
+        The drive setup :meth:`bind` performs is redone here, over this device's own
+        joints. Assembly edits USD, which means stopping and replaying the timeline,
+        and physics rebuilds itself from the stage across that: the gains, effort
+        ceilings, velocity limits and drive targets the bridge wrote when it first
+        bound are all gone by the time the merged articulation arrives. A robot whose
+        asset authors no drive stiffness -- as an imported URDF's does not -- comes
+        out of an assembly with damping and no position drive otherwise, ignoring
+        every target and sagging under gravity, and its gripper stops closing.
         """
         self._articulation = articulation
         self.joint_names = list(joint_names)
         self._resolve_driven_joints()
+        self._backfill_missing_drive_gains()
+        self._correct_imported_prismatic_max_velocities()
+        self._align_drive_to_current_pose()
+        self._ensure_default_state_populated()
         self._target = None
-        # The substitution record describes the handle held before assembly, and the
-        # shared one was never backfilled by this device. Dropping it keeps a later
-        # narrowing from "restoring" a joint of the device this articulation is now
-        # shared with.
-        self._pre_substitution_gains = {}
         carb.log_info(
             f"[bridge] articulation {self.prim_path} on shared articulation: "
             f"drives {self.dof_names} at {self.joint_indices}"

@@ -13,7 +13,7 @@ import omni.kit.app
 import omni.kit.commands
 import omni.timeline
 from isaacsim.asset.importer import urdf as urdf_importer
-from pxr import Sdf, UsdGeom
+from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
 
 # Where imported robots are written. One directory per URDF, so the layers the
 # importer writes alongside the asset cannot collide with another robot's.
@@ -27,6 +27,10 @@ async def import_urdf_at(stage, urdf_path, dest_prim_path):
     asset is referenced onto ``dest_prim_path``, so the robot arrives as one prim with
     everything it owns below it. Every call re-imports, so an edited URDF or an edited
     mesh always reaches the stage.
+
+    The robot arrives at the world origin unless another robot is already standing
+    there, in which case it is parked beside that one instead (see
+    :func:`_park_clear_of_existing_robots`).
 
     Importing straight into the open stage is the other way to do this, and it is the
     wrong way whenever the stage has never been saved: the importer then has nowhere
@@ -66,11 +70,62 @@ async def import_urdf_at(stage, urdf_path, dest_prim_path):
         reference=Sdf.Reference(asset_path.as_posix(), _asset_root_prim_path(asset_path)),
     )
 
-    # Let the stage recompose before the caller plays the timeline and binds.
+    # Let the stage recompose before the robot is measured against what is already
+    # there, and before the caller plays the timeline and binds.
     await app.next_update_async()
     await app.next_update_async()
 
+    _park_clear_of_existing_robots(stage, dest_prim_path)
+
     return dest_prim_path
+
+
+def _park_clear_of_existing_robots(stage, dest_prim_path):
+    """Offset a freshly referenced robot so it does not arrive inside another one.
+
+    An import carries no pose of its own, so it lands at the world origin -- which is
+    where the last import landed too. Two robots sharing that space are each held
+    there by their own fixed base, so physics cannot separate them and resolves the
+    overlap with forces large enough to throw either of them across the stage.
+    Offsetting the new robot along +X until it clears the robots already beside it
+    keeps an import from disturbing them, and a robot later assembled onto an arm is
+    moved to its mount anyway, so the parking spot lasts only until it is given a
+    real one.
+
+    Only a robot counts as an occupant. A ground plane or a stage prop shares the
+    origin with every robot by design, and counting those would push the first import
+    off the origin for no reason.
+    """
+    gap_metres = 0.1
+
+    prim = stage.GetPrimAtPath(dest_prim_path)
+    cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
+    bounds = cache.ComputeWorldBound(prim).ComputeAlignedRange()
+
+    occupied = Gf.Range3d()
+    for sibling in stage.GetPrimAtPath(prim.GetPath().GetParentPath()).GetChildren():
+        # Measured whole rather than from the articulation root down: which prim of a
+        # robot carries the root API is up to whoever authored it, and on an asset
+        # that puts it on the root joint that prim bounds nothing.
+        if sibling == prim or not any(
+            p.HasAPI(UsdPhysics.ArticulationRootAPI) for p in Usd.PrimRange(sibling)
+        ):
+            continue
+        occupied = Gf.Range3d.GetUnion(
+            occupied, cache.ComputeWorldBound(sibling).ComputeAlignedRange()
+        )
+
+    if bounds.IsEmpty() or occupied.IsEmpty():
+        return
+    if Gf.Range3d.GetIntersection(bounds, occupied).IsEmpty():
+        return
+
+    shift = occupied.GetMax()[0] - bounds.GetMin()[0] + gap_metres
+    UsdGeom.Xformable(prim).AddTranslateOp().Set(Gf.Vec3d(shift, 0.0, 0.0))
+    carb.log_info(
+        f"[bridge] parked {dest_prim_path} {shift:.3f} m along +X, clear of the robot(s) "
+        "already on the stage"
+    )
 
 
 def _asset_directory_for(urdf_path):

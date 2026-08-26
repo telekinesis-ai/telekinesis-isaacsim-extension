@@ -127,8 +127,10 @@ async def assemble_tool(
     the gripper at the mount; ``assemble`` creates the fixed joint and removes the
     gripper's own articulation root (so the merged tree has ONE root at the arm).
     ``offset`` (a ``models.Transformation`` or ``None``) is baked in between the
-    two; ``None`` => flush attach. Pumps a couple of frames so the stage recomposes
-    before the caller plays the timeline and binds the merged articulation.
+    two; ``None`` => flush attach. Any weld still grounding the gripper is then
+    released (see :func:`_disable_world_welds`), so the mount joint is the only thing
+    holding it. Pumps a couple of frames so the stage recomposes before the caller
+    plays the timeline and binds the merged articulation.
     """
     # RobotAssembler is packaged as an extension; enable it before importing.
     ext_manager = omni.kit.app.get_app().get_extension_manager()
@@ -159,11 +161,42 @@ async def assemble_tool(
     apply_attach_offset(gripper_prim, offset)
 
     assembler.assemble()
+    _disable_world_welds(stage, gripper_prim)
     assembler.finish_assemble()
 
     app = omni.kit.app.get_app()
     await app.next_update_async()
     await app.next_update_async()
+
+
+def _disable_world_welds(stage, gripper_prim):
+    """Disable whatever still holds the gripper to the world after assembly.
+
+    ``RobotAssembler`` disables the joint a fixed-base asset is grounded by, but it
+    recognises only a joint written with one of its two body relationships left
+    empty. The URDF importer fills both in and points the far end at the asset's own
+    root prim, which carries no rigid body and so is the static world just the same.
+    Left enabled, that weld chains the arm to the world origin through the gripper:
+    the arm's drives then push against ground and it barely moves, while the
+    gripper's own joints go on working normally.
+
+    A joint between two rigid bodies is left alone. That is every joint inside the
+    gripper, and it is also the mount joint the assembly just created -- the arm's
+    mount link and the gripper's base are both bodies.
+    """
+    for prim in Usd.PrimRange(stage.GetPrimAtPath(gripper_prim)):
+        joint = UsdPhysics.Joint(prim)
+        if not joint:
+            continue
+        bodies = list(joint.GetBody0Rel().GetTargets()) + list(joint.GetBody1Rel().GetTargets())
+        if len(bodies) == 2 and all(
+            stage.GetPrimAtPath(body).HasAPI(UsdPhysics.RigidBodyAPI) for body in bodies
+        ):
+            continue
+        joint.CreateJointEnabledAttr(False)
+        carb.log_info(
+            f"[bridge] disabled {prim.GetPath()}, which still held {gripper_prim} to the world"
+        )
 
 
 async def attach_surface_gripper(
