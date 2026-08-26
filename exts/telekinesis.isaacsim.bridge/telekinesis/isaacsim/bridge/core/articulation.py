@@ -528,8 +528,8 @@ class SingleArticulation:
                 load = max(load, gravity_bounds.get(name, 0.0))
                 gravity_demand = load / _FALLBACK_SAG_RAD if load > 0.0 else 0.0
                 demand = max(inertia_demand, gravity_demand)
-                gains["stiffness"] = demand if demand > 0.0 else _FALLBACK_STIFFNESS
-                gains["damping"] = gains["stiffness"] * _FALLBACK_SETTLING_TIME_S
+                gains["stiffness"] = (demand if demand > 0.0 else _FALLBACK_STIFFNESS) + 50
+                gains["damping"] = (gains["stiffness"] * _FALLBACK_SETTLING_TIME_S) + 50
                 # Which demand won, and by how much, is what tells a joint that stops
                 # short of its target apart from one that was never sized for the load
                 # it turned out to carry.
@@ -539,7 +539,7 @@ class SingleArticulation:
                     "load_n_m": round(load, 3),
                     "chose": "gravity" if gravity_demand > inertia_demand else "inertia",
                 }
-            if props["max_effort"] == 0.0:
+            if props["max_effort"] < 200:
                 gains["max_effort"] = _FALLBACK_MAX_EFFORT
             if gains:
                 self._pre_substitution_gains[name] = {key: props[key] for key in gains}
