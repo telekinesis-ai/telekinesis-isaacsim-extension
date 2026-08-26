@@ -102,12 +102,62 @@ class ArticulationService:
                 # 422: the request was well-formed but the prim couldn't actually
                 # be bound (semantic/runtime failure, not a bad input value).
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
+            await self._rebind_stale_devices()
             return {
                 "articulation_id": articulation_id,
                 "prim_path": resolved,
                 "prim_source": prim_source,
                 **device.info(),
             }
+
+    async def _rebind_stale_devices(self):
+        """Rebind every device whose physics handle a timeline stop invalidated.
+
+        Importing a robot and assembling a gripper both stop the timeline, and a
+        stopped timeline kills the physics handle of every device bound before it.
+        The flow that stopped the timeline gives a fresh handle only to its own
+        device; the others would stay dead until their next client rebind, unable
+        to be read or driven and warning on every frame in between. They are
+        repaired here, in the same request that broke them, once that request has
+        the timeline running again.
+
+        Devices merged by an assembly share one handle, so each such pair is
+        rebound through its shared articulation, the same way assembly established
+        it. A device that cannot be rebound (say its prim is gone from the stage)
+        is logged and skipped rather than failing the request that merely revealed
+        it.
+        """
+        import carb
+
+        merged = {}  # device_id -> arm_id, for pairs sharing one merged handle
+        for arm_id, record in self._assemblies.items():
+            if record["gripper_id"] in self._devices:
+                merged[arm_id] = arm_id
+                merged[record["gripper_id"]] = arm_id
+
+        repaired_assemblies = set()
+        for device_id, device in list(self._devices.items()):
+            if device.handles_initialized():
+                continue
+            arm_id = merged.get(device_id)
+            try:
+                if arm_id is None:
+                    await device.bind()
+                elif arm_id not in repaired_assemblies:
+                    repaired_assemblies.add(arm_id)
+                    arm = self._devices[arm_id]
+                    arm_leaf = arm.prim_path.rstrip("/").rsplit("/", 1)[-1]
+                    shared = await bind_shared_articulation(
+                        arm.prim_path, name=f"{arm_leaf}_with_tool"
+                    )
+                    arm.adopt_shared_articulation(shared, list(arm.joint_names))
+                    gripper = self._devices[self._assemblies[arm_id]["gripper_id"]]
+                    gripper.adopt_shared_articulation(shared, list(gripper.joint_names))
+            except RuntimeError as exc:
+                carb.log_warn(
+                    f"[bridge] could not rebind {device_id} after the timeline stop "
+                    f"that invalidated it: {exc}"
+                )
 
     def get_articulation(self, articulation_id):
         """Info for one registered articulation (id, prim, dof, state), or 404."""
@@ -482,6 +532,7 @@ class ArticulationService:
                     arm_id, gripper_id, arm_mount_link, gripper_mount_link, offset
                 )
             self._assemblies[arm_id] = record
+            await self._rebind_stale_devices()
             return self._assembly_info(arm_id, record, already_assembled=False)
 
     async def _merge_articulated_gripper(

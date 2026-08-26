@@ -13,7 +13,7 @@ import omni.kit.app
 import omni.kit.commands
 import omni.timeline
 from isaacsim.asset.importer import urdf as urdf_importer
-from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
+from pxr import Gf, PhysxSchema, Sdf, Usd, UsdGeom, UsdPhysics
 
 # Where imported robots are written. One directory per URDF, so the layers the
 # importer writes alongside the asset cannot collide with another robot's.
@@ -154,13 +154,39 @@ def _author_missing_drives(asset_path):
 
     A robot whose joints drive a mimic linkage -- a parallel gripper, where one driver
     joint moves the whole finger mechanism through mimic constraints -- gets a far
-    smaller stiffness. A gripper is commanded in steps, not trajectories, so its driver
-    sees its entire stroke as one error; at manipulator stiffness that demands hundreds
-    of thousands of newton-metres, the drive rides its effort limit for the whole
-    stroke, and the reaction through the flange is violent enough to blow up the
-    simulation of whatever the gripper is bolted to. The gripper scale is taken from a
-    working NVIDIA-style asset (OnRobot RG6: 3.75), some eight hundred times softer.
-    The mimic joints are what mark the asset as such a mechanism.
+    smaller stiffness and a far heavier damping. A gripper is commanded in steps, not
+    trajectories, so its driver sees its entire stroke as one error; at manipulator
+    stiffness that demands hundreds of thousands of newton-metres, the drive rides its
+    effort limit for the whole stroke, and the reaction through the flange is violent
+    enough to blow up the simulation of whatever the gripper is bolted to. The gripper
+    stiffness is taken from a working NVIDIA-style asset (OnRobot RG6: 3.75), some
+    eight hundred times softer. The mimic joints are what mark the asset as such a
+    mechanism.
+
+    The gripper's damping ratio is not NVIDIA's. At their ratio the driver is close to
+    undamped, and an undamped drive on gram-scale links inside a closed mimic loop
+    diverges -- oscillation the loop cannot absorb, growing until the state is NaN and
+    the simulation is gone. The 0.5 ratio caps the finger's approach speed at twice its
+    remaining error per second, which is the behaviour every working close in this
+    bridge has had; an arm needs no such cap because it is fed a trajectory whose error
+    is always small.
+
+    A gripper driver's stiffness is additionally capped so that its whole stroke, seen
+    as one error, demands no more torque than the joint's effort limit allows. A drive
+    pushed past its limit saturates, and a saturated drive in a closed mimic loop is
+    the other way the loop diverges -- an open() across the full stroke NaN'd the
+    simulation this way while a shorter close() survived. Below the cap the drive is
+    linear everywhere: motion speed is set by the damping ratio alone, and the force on
+    a gripped object stays within the effort limit the URDF declares.
+
+    A gripper's joints also get their velocity limits lifted, to the 10000 degrees per
+    second NVIDIA's own gripper assets author. The physics enforces the URDF's velocity
+    limit on every joint, mimic followers included, and a linkage whose followers must
+    track the driver exactly but are pinned to a velocity wall tears the solve apart:
+    an open() whose commanded speed crossed the limit NaN'd this way while a slower
+    close() stayed under it and survived. The damping ratio still bounds the real
+    motion, at twice the remaining error per second, so lifting the wall changes what
+    the solver is allowed to correct, not how fast the gripper moves.
 
     Only joints whose composed stiffness is zero or absent are touched, so an asset
     that authors real drives keeps them. Mimic joints are skipped: the mimic constraint
@@ -168,8 +194,6 @@ def _author_missing_drives(asset_path):
     which outweighs the importer's internal layers regardless of the asset's variant
     structure.
     """
-    damping_ratio = 0.004
-
     stage = Usd.Stage.Open(asset_path.as_posix())
     if stage is None:
         raise RuntimeError(f"cannot open the urdf asset at '{asset_path}'")
@@ -178,9 +202,11 @@ def _author_missing_drives(asset_path):
         # A mimic linkage: gram-scale links behind one driver commanded in steps.
         angular_stiffness = 3.75  # USD degrees; the OnRobot RG6's authored figure
         linear_stiffness = 1.0e4  # per metre
+        damping_ratio = 0.5  # heavy: caps the step response a closed loop must absorb
     else:
         angular_stiffness = 3000.0  # NVIDIA's manipulator scale, USD degrees
         linear_stiffness = 1.0e5  # per metre
+        damping_ratio = 0.004  # NVIDIA's ratio: snappy tracking of a streamed trajectory
 
     completed = []
     for prim in stage.Traverse():
@@ -190,6 +216,14 @@ def _author_missing_drives(asset_path):
             kind, stiffness = "linear", linear_stiffness
         else:
             continue
+
+        if damping_ratio == 0.5:
+            # A gripper joint must never hit a velocity wall (see the docstring).
+            PhysxSchema.PhysxJointAPI.Apply(prim)
+            prim.CreateAttribute("physxJoint:maxJointVelocity", Sdf.ValueTypeNames.Float).Set(
+                10000.0
+            )
+
         if _is_mimic(prim):
             continue
 
@@ -199,13 +233,31 @@ def _author_missing_drives(asset_path):
             continue
 
         drive = UsdPhysics.DriveAPI.Apply(prim, kind)
-        drive.CreateStiffnessAttr(stiffness)
-        drive.CreateDampingAttr(stiffness * damping_ratio)
 
         max_force = drive.GetMaxForceAttr().Get()
-        effort = prim.GetAttribute("urdf:limit:effort").Get()
-        if (max_force is None or not max_force < 1.0e37) and effort and effort > 0.0:
-            drive.CreateMaxForceAttr(float(effort))
+        if max_force is None or not max_force < 1.0e37:
+            effort = prim.GetAttribute("urdf:limit:effort").Get()
+            if effort and effort > 0.0:
+                max_force = float(effort)
+                drive.CreateMaxForceAttr(max_force)
+            else:
+                max_force = None
+
+        if damping_ratio == 0.5 and max_force is not None:
+            # A gripper driver: keep the full-stroke demand inside the effort limit,
+            # so the drive never saturates (see the docstring).
+            joint = (
+                UsdPhysics.RevoluteJoint(prim)
+                if kind == "angular"
+                else UsdPhysics.PrismaticJoint(prim)
+            )
+            lower = joint.GetLowerLimitAttr().Get()
+            upper = joint.GetUpperLimitAttr().Get()
+            if lower is not None and upper is not None and upper > lower:
+                stiffness = min(stiffness, max_force / float(upper - lower))
+
+        drive.CreateStiffnessAttr(stiffness)
+        drive.CreateDampingAttr(stiffness * damping_ratio)
         completed.append(prim.GetName())
 
     if completed:
