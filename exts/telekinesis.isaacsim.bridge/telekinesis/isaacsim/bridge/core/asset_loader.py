@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """
-Import a URDF as a self-contained USD asset and reference that asset into the open
-stage at an exact prim path. Shared by the robot and gripper connect paths.
+Bring a robot or tool into the open stage at an exact prim path, from either of the
+two descriptions a client can hand the bridge: a URDF, which is imported to a
+self-contained USD asset first (:func:`import_urdf_at`), or a USD asset that is
+already prepared (:func:`reference_usd_at`). Both end up referencing one asset onto
+one prim path, so the device arrives as a single prim with everything it owns below
+it. Shared by the robot and gripper connect paths.
 """
 
 import hashlib
@@ -53,11 +57,46 @@ async def import_urdf_at(stage, urdf_path, dest_prim_path):
     bind in the live extension. The timeline must be stopped while importing (PhysX
     requirement) and is left stopped for the caller.
     """
-    app = omni.kit.app.get_app()
-    omni.timeline.get_timeline_interface().stop()
-
     asset_path = _import_asset(urdf_path, _asset_directory_for(urdf_path))
     _author_missing_drives(asset_path)
+    return await _reference_asset_at(stage, asset_path, dest_prim_path)
+
+
+async def reference_usd_at(stage, usd_path, dest_prim_path):
+    """Reference the prepared USD asset at ``usd_path`` onto ``dest_prim_path``.
+
+    The USD counterpart of :func:`import_urdf_at`, for a robot or tool that is
+    modelled as a USD asset instead of described by a URDF -- a welding gun, a
+    surface gripper. The asset is referenced where it lies rather than copied: a
+    client fetches its bundle into a stable cache directory, and the layers the asset
+    references resolve relative to it from there.
+
+    Nothing in the asset is edited on the way in. Unlike a URDF import there is no
+    drive to complete: a modelled asset authors its own drives, and rewriting them
+    would override what its author chose.
+
+    Returns ``dest_prim_path``, and shares every other property with
+    :func:`import_urdf_at`: the asset arrives as one prim, parked clear of the robots
+    already in the stage, with the timeline stopped and the stage recomposed.
+    """
+    usd_path = Path(usd_path)
+    if not usd_path.is_file():
+        raise RuntimeError(f"cannot find the usd asset '{usd_path}'")
+
+    return await _reference_asset_at(stage, usd_path, dest_prim_path)
+
+
+async def _reference_asset_at(stage, asset_path, dest_prim_path):
+    """Reference one USD asset onto ``dest_prim_path`` and park it clear of the robots.
+
+    The step both loaders end in, whether the asset was built from a URDF a moment ago
+    or shipped as USD. Stops the timeline (a PhysX requirement while the stage is
+    rebuilt) and leaves it stopped, defines the destination and any missing parent, adds
+    the reference, then pumps the app so the stage recomposes before the caller measures,
+    plays or binds anything.
+    """
+    app = omni.kit.app.get_app()
+    omni.timeline.get_timeline_interface().stop()
 
     parent = Sdf.Path(dest_prim_path).GetParentPath()
     if parent.pathString not in ("", "/") and not stage.GetPrimAtPath(parent).IsValid():
@@ -293,16 +332,16 @@ def _asset_directory_for(urdf_path):
 
 
 def _asset_root_prim_path(asset_path):
-    """Path of the robot prim inside the asset at ``asset_path``.
+    """Path of the device prim inside the asset at ``asset_path``.
 
     The reference has to name that prim, because a reference with no prim path
-    resolves to the asset's default prim and not every URDF importer sets one. When
-    the asset names a default prim that is the robot; otherwise the asset holds exactly
-    one root prim, which is the robot.
+    resolves to the asset's default prim and neither every URDF importer nor every
+    hand-modelled asset sets one. When the asset names a default prim that is the
+    device; otherwise the asset holds exactly one root prim, which is the device.
     """
     layer = Sdf.Layer.FindOrOpen(asset_path.as_posix())
     if layer is None:
-        raise RuntimeError(f"cannot open the urdf asset at '{asset_path}'")
+        raise RuntimeError(f"cannot open the usd asset at '{asset_path}'")
 
     if layer.defaultPrim:
         return Sdf.Path.absoluteRootPath.AppendChild(layer.defaultPrim)
@@ -310,7 +349,7 @@ def _asset_root_prim_path(asset_path):
     root_names = [prim.name for prim in layer.rootPrims]
     if len(root_names) != 1:
         raise RuntimeError(
-            f"expected one root prim in the urdf asset '{asset_path}', found {root_names}"
+            f"expected one root prim in the usd asset '{asset_path}', found {root_names}"
         )
     return Sdf.Path.absoluteRootPath.AppendChild(root_names[0])
 

@@ -16,10 +16,17 @@ from pydantic import BaseModel, Field
 
 
 class CreateArticulationRequest(BaseModel):
-    """Body of PUT /articulations -- register (and bind) one articulation."""
+    """Body of PUT /articulations -- register (and bind) one articulation.
+
+    ``urdf_path`` and ``usd_path`` are the two descriptions the articulation can be
+    loaded from when no prim is at ``prim_path`` yet: a URDF, which is imported, or a
+    prepared USD asset, which is referenced. Either may be given, not both; a prim
+    that is already in the stage is used as it is and both are ignored.
+    """
 
     prim_path: str = Field(min_length=1)
     urdf_path: str | None = None
+    usd_path: str | None = None
 
 
 class JointPositionsRequest(BaseModel):
@@ -417,12 +424,16 @@ class CreateSurfaceGripperRequest(BaseModel):
 
     ``prim_path`` is the gripper prim itself or any ancestor of it -- usually the
     gripper asset's root, which is also the prim assemble_robot attaches to an arm.
-    The ``IsaacSurfaceGripper`` prim is found by searching that subtree. There is no
-    ``urdf_path`` counterpart to the articulation route: a suction gripper has no
-    URDF representation, so it must be a prepared USD asset already in the stage.
+    The ``IsaacSurfaceGripper`` prim is found by searching that subtree.
+
+    A suction gripper has no URDF representation, so there is no ``urdf_path``
+    counterpart to the articulation route. ``usd_path`` is a prepared USD asset that
+    is referenced onto ``prim_path`` when no prim is there yet; a prim that is already
+    in the stage is used as it is and ``usd_path`` is ignored.
     """
 
     prim_path: str = Field(min_length=1)
+    usd_path: str | None = None
 
 
 class GripperActionRequest(BaseModel):

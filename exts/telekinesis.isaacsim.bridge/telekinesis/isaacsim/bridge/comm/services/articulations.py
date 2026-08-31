@@ -26,8 +26,8 @@ import asyncio
 from fastapi import HTTPException
 
 from ...core.articulation import SingleArticulation, find_driver_joint
+from ...core.asset_loader import import_urdf_at, reference_usd_at
 from ...core.robot_assembler import assemble_tool, attach_surface_gripper, bind_shared_articulation
-from ...core.urdf_loader import import_urdf_at
 
 
 class ArticulationService:
@@ -64,13 +64,14 @@ class ArticulationService:
         self._create_locks = {}
         self._assembly_locks = {}
 
-    async def create_articulation(self, prim_path, urdf_path):
+    async def create_articulation(self, prim_path, urdf_path, usd_path=None):
         """Register (and bind) the articulation at ``prim_path`` and return its info.
 
         One articulation per *requested* prim; PUTting the same prim again returns
         the same id (and rebinds). We key on the requested path, so a client that
-        passes ``urdf_path`` defensively gets the same id whether the robot had to
-        be imported or was already in the stage. Ids are 1-based: ``articulation1``,
+        passes ``urdf_path``/``usd_path`` defensively gets the same id whether the
+        robot had to be loaded or was already in the stage. Ids are 1-based:
+        ``articulation1``,
         ``articulation2``, ... The bind runs every time: a new client session may
         follow a timeline stop/replay, which invalidates the cached articulation
         handle.
@@ -86,7 +87,7 @@ class ArticulationService:
         # concurrent callers for the same prim_path always land on the same Lock.
         lock = self._create_locks.setdefault(prim_path, asyncio.Lock())
         async with lock:
-            resolved, prim_source = await self._resolve_prim(prim_path, urdf_path)
+            resolved, prim_source = await self._resolve_prim(prim_path, urdf_path, usd_path)
 
             articulation_id = self._id_by_prim.get(prim_path)
             if articulation_id is None:
@@ -102,7 +103,7 @@ class ArticulationService:
                 # 422: the request was well-formed but the prim couldn't actually
                 # be bound (semantic/runtime failure, not a bad input value).
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
-            await self._rebind_stale_devices()
+            await self.rebind_stale_devices()
             return {
                 "articulation_id": articulation_id,
                 "prim_path": resolved,
@@ -110,7 +111,7 @@ class ArticulationService:
                 **device.info(),
             }
 
-    async def _rebind_stale_devices(self):
+    async def rebind_stale_devices(self):
         """Rebind every device whose physics handle a timeline stop invalidated.
 
         Importing a robot and assembling a gripper both stop the timeline, and a
@@ -532,7 +533,7 @@ class ArticulationService:
                     arm_id, gripper_id, arm_mount_link, gripper_mount_link, offset
                 )
             self._assemblies[arm_id] = record
-            await self._rebind_stale_devices()
+            await self.rebind_stale_devices()
             return self._assembly_info(arm_id, record, already_assembled=False)
 
     async def _merge_articulated_gripper(
@@ -735,32 +736,43 @@ class ArticulationService:
             raise HTTPException(status_code=409, detail="no USD stage is open")
         return stage
 
-    async def _resolve_prim(self, requested_prim_path, urdf_path):
-        """Use the prim if it's already in the stage, else import the URDF at it.
+    async def _resolve_prim(self, requested_prim_path, urdf_path, usd_path):
+        """Use the prim if it's already in the stage, else load it there from a file.
 
         Returns ``(resolved_path, prim_source)``. ``prim_source`` reports which of
-        the two actually happened -- ``"isaac_usd"`` if the prim was already in
-        the stage (any ``urdf_path`` given had no effect), or ``"imported_urdf"``
-        if it was imported from that URDF file just now. Without this, a client
-        that passes ``urdf_path`` defensively (import if missing, reuse if not)
-        has no way to tell which one actually happened.
+        the three actually happened -- ``"isaac_usd"`` if the prim was already in
+        the stage (any ``urdf_path``/``usd_path`` given had no effect),
+        ``"imported_urdf"`` if it was imported from that URDF file just now, or
+        ``"referenced_usd"`` if that USD asset was referenced onto it just now.
+        Without this, a client that passes a path defensively (load if missing,
+        reuse if not) has no way to tell which one actually happened.
         """
         import omni.usd
+
+        if urdf_path and usd_path:
+            raise HTTPException(
+                status_code=400,
+                detail="give either urdf_path or usd_path, not both",
+            )
 
         stage = omni.usd.get_context().get_stage()
         existing = stage.GetPrimAtPath(requested_prim_path)
         if existing and existing.IsValid():
             return requested_prim_path, "isaac_usd"
-        if urdf_path:
-            try:
+        if not (urdf_path or usd_path):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"'{requested_prim_path}' is not in the stage and no urdf_path or usd_path "
+                    "was given to load it"
+                ),
+            )
+        try:
+            if urdf_path:
                 resolved = await import_urdf_at(stage, urdf_path, requested_prim_path)
-            except RuntimeError as exc:
-                # 422: well-formed request, but the URDF import itself failed.
-                raise HTTPException(status_code=422, detail=str(exc)) from exc
-            return resolved, "imported_urdf"
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"'{requested_prim_path}' is not in the stage and no urdf_path was given to load it"
-            ),
-        )
+                return resolved, "imported_urdf"
+            resolved = await reference_usd_at(stage, usd_path, requested_prim_path)
+            return resolved, "referenced_usd"
+        except RuntimeError as exc:
+            # 422: well-formed request, but loading the file itself failed.
+            raise HTTPException(status_code=422, detail=str(exc)) from exc

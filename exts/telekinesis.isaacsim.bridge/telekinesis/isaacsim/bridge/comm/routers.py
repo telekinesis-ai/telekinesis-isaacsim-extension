@@ -136,7 +136,9 @@ async def create_articulation(
     req: CreateArticulationRequest, articulation_service=Depends(get_articulation_service)
 ):
     """Register (and bind) one articulation; returns its id, prim, dof and state."""
-    return await articulation_service.create_articulation(req.prim_path, req.urdf_path)
+    return await articulation_service.create_articulation(
+        req.prim_path, req.urdf_path, req.usd_path
+    )
 
 
 @articulations.get("/articulations", summary="List Articulations")
@@ -1747,7 +1749,7 @@ async def create_surface_gripper(
     surface_gripper_service=Depends(get_surface_gripper_service),
 ):
     """Register (and bind) one suction gripper; returns its id, prims and state."""
-    return await surface_gripper_service.create_surface_gripper(req.prim_path)
+    return await surface_gripper_service.create_surface_gripper(req.prim_path, req.usd_path)
 
 
 @surface_grippers.get("/surface_grippers", summary="List Surface Grippers")
