@@ -227,6 +227,19 @@ class OpenSceneRequest(BaseModel):
     uri: str  # USD stage to open
 
 
+class AddToSceneRequest(BaseModel):
+    """Body of POST /stage/scene/reference.
+
+    ``uri`` is a USD asset on the machine running Isaac Sim, not a URL: a client
+    fetches the asset's bundle itself and hands over the extracted asset. It is
+    referenced onto ``prim_path``, so it arrives as one prim with everything it owns
+    below it, beside whatever is already in the stage.
+    """
+
+    uri: str = Field(min_length=1)
+    prim_path: str = Field(min_length=1)  # where the asset arrives, e.g. "/World/belt"
+
+
 class StageUnits(BaseModel):
     """Body/response of the stage-units routes."""
 
@@ -609,3 +622,73 @@ class LidarBoolValueRequest(BaseModel):
     enable semantics)."""
 
     value: bool
+
+
+# -- Conveyors (device registry, analogous to articulations) -----------------
+
+
+class CreateConveyorRequest(BaseModel):
+    """Body of PUT /conveyors -- register (and bind) one conveyor belt.
+
+    ``prim_path`` is the conveyor asset's root, the belt rigid body itself, or any
+    prim in between; the belt is found by walking up to the nearest rigid body and,
+    failing that, down to the first one. The belt has to be provisioned in the stage
+    already -- carrying a ``PhysxSurfaceVelocityAPI`` with a non-zero velocity, or
+    driven by an ``IsaacConveyor`` node -- because its travel direction is read from
+    the scene rather than sent here.
+
+    ``cargo_root`` is the prim whose rigid bodies are woken when the belt starts.
+    PhysX leaves sleeping bodies out of the contact solve, so a belt cannot pick up
+    cargo that came to rest while it was stopped. Null wakes nothing; narrow it to
+    the prims the belt actually carries, since waking a whole warehouse costs a pass
+    over every prim in it.
+    """
+
+    prim_path: str = Field(min_length=1)
+    cargo_root: str | None = None
+
+
+class ConveyorVelocityRequest(BaseModel):
+    """Body of POST /conveyors/{id}/start -- run the belt.
+
+    ``velocity`` is a signed speed along the belt's authored travel direction, in
+    meters per second (radians per second for a curved belt). A negative value
+    reverses the belt. Null runs it at the speed its scene authored.
+    """
+
+    velocity: float | None = None
+
+
+# -- Lightbeam sensors (device registry, analogous to lidars) ---------------
+
+
+class CreateLightBeamRequest(BaseModel):
+    """Body of PUT /lightbeams -- register (and bind) one lightbeam sensor.
+
+    ``prim_path`` has to name an existing ``IsaacLightBeamSensor`` prim: a
+    lightbeam's placement and aim are the whole sensor, so unlike a lidar the bridge
+    does not create one. Registering it enables the sensor if the scene left it
+    disabled, because a disabled sensor never reports a hit; POST .../pause switches
+    it off again.
+    """
+
+    prim_path: str = Field(min_length=1)
+
+
+class LightBeamConfigurationRequest(BaseModel):
+    """Body of PATCH /lightbeams/{id}/configuration -- set the beam layout and range.
+
+    Fields left null are untouched. ``num_rays`` above one spreads the beams evenly
+    over ``curtain_length`` meters along the curtain axis, which is what lets the
+    sensor detect an object of unknown height. The axes are XYZ vectors in the
+    sensor's own frame. ``min_range`` is a blind zone the beams start beyond, so an
+    object closer than it is not seen; ``max_range`` is both the furthest an object
+    is seen and the distance an unbroken beam reports.
+    """
+
+    num_rays: int | None = None
+    curtain_length: float | None = None
+    forward_axis: list[float] | None = None
+    curtain_axis: list[float] | None = None
+    min_range: float | None = None
+    max_range: float | None = None

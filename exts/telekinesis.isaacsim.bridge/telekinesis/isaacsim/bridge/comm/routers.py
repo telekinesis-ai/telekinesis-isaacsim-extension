@@ -36,13 +36,16 @@ from . import binary
 from .dependencies import (
     get_articulation_service,
     get_camera_service,
+    get_conveyor_service,
     get_general_service,
     get_lidar_service,
+    get_lightbeam_service,
     get_prim_service,
     get_stage_service,
     get_surface_gripper_service,
 )
 from .models import (
+    AddToSceneRequest,
     ApplyRelativePoseRequest,
     AssembleRobotRequest,
     AttachmentPointPropertiesRequest,
@@ -54,9 +57,12 @@ from .models import (
     CameraStringValueRequest,
     CameraWorldPoseRequest,
     CaptureRequest,
+    ConveyorVelocityRequest,
     CreateArticulationRequest,
     CreateCameraRequest,
+    CreateConveyorRequest,
     CreateLidarRequest,
+    CreateLightBeamRequest,
     CreateSurfaceGripperRequest,
     DefaultJointStateRequest,
     DofGainsRequest,
@@ -69,6 +75,7 @@ from .models import (
     LidarFloatValueRequest,
     LidarLocalPoseRequest,
     LidarWorldPoseRequest,
+    LightBeamConfigurationRequest,
     OpenSceneRequest,
     PrimPathRequest,
     SetDrivenJointsRequest,
@@ -746,6 +753,12 @@ async def get_active_scene(stage_service=Depends(get_stage_service)):
 async def open_scene(req: OpenSceneRequest, stage_service=Depends(get_stage_service)):
     """Open the USD stage at ``uri`` (replaces the current stage)."""
     await stage_service.open_scene(req.uri)
+
+
+@stage.post("/scene/reference", summary="Add To Scene")
+async def add_to_scene(req: AddToSceneRequest, stage_service=Depends(get_stage_service)):
+    """Reference a USD asset into the open stage at ``prim_path`` (keeps the stage)."""
+    return await stage_service.add_to_scene(req.uri, req.prim_path)
 
 
 @stage.get("/motion-groups", summary="List Stage Motion Groups")
@@ -1729,6 +1742,170 @@ async def is_lidar_paused(lidar_id: str, lidar_service=Depends(get_lidar_service
     return lidar_service.is_paused(lidar_id)
 
 
+# -- conveyors (device registry, analogous to surface grippers) -------------
+#
+# A conveyor is a registered device with an id, exactly like a camera or a
+# gripper: PUT /conveyors hands back a conveyor_id, then every other route
+# addresses that id.
+#
+# It is neither an articulation nor a sensor: there is nothing to drive and
+# nothing to read, so instead of move_j or capture it has start and stop. A belt
+# runs at a signed speed along the travel direction its scene authored, so
+# reversing one means starting it with a negative velocity.
+
+conveyors = APIRouter(tags=["conveyors"])
+
+
+@conveyors.put("/conveyors", summary="Create Conveyor")
+async def create_conveyor(
+    req: CreateConveyorRequest, conveyor_service=Depends(get_conveyor_service)
+):
+    """Register (and bind) one conveyor belt; returns its id, prims, drive and speed.
+
+    Binding plays the timeline, because a belt only carries cargo while physics steps.
+    """
+    return await conveyor_service.create_conveyor(req.prim_path, req.cargo_root)
+
+
+@conveyors.get("/conveyors", summary="List Conveyors")
+async def list_conveyors(conveyor_service=Depends(get_conveyor_service)):
+    """Every registered conveyor id mapped to its prim path."""
+    return conveyor_service.list_conveyors()
+
+
+@conveyors.get("/conveyors/{conveyor_id}", summary="Get Conveyor")
+async def get_conveyor(conveyor_id: str, conveyor_service=Depends(get_conveyor_service)):
+    """Id + description (prims, drive, authored direction and speed, current speed,
+    whether it is running). 404 if unknown."""
+    return conveyor_service.get_conveyor(conveyor_id)
+
+
+@conveyors.delete("/conveyors/{conveyor_id}", summary="Delete Conveyor")
+async def delete_conveyor(conveyor_id: str, conveyor_service=Depends(get_conveyor_service)):
+    """Unregister the conveyor (the USD prim is left in the stage, and a running belt
+    keeps running -- stop it first)."""
+    return conveyor_service.delete_conveyor(conveyor_id)
+
+
+@conveyors.post("/conveyors/{conveyor_id}/start", summary="Start Conveyor")
+async def start_conveyor(
+    conveyor_id: str,
+    req: ConveyorVelocityRequest,
+    conveyor_service=Depends(get_conveyor_service),
+):
+    """Run the belt at a signed speed (its authored speed if omitted) and wake its cargo.
+
+    Requires the timeline to be playing to have any effect: a surface velocity only
+    moves anything while physics steps, and sleeping cargo can only be woken while the
+    simulation is running.
+    """
+    return conveyor_service.start(conveyor_id, req.velocity)
+
+
+@conveyors.post("/conveyors/{conveyor_id}/stop", summary="Stop Conveyor")
+async def stop_conveyor(conveyor_id: str, conveyor_service=Depends(get_conveyor_service)):
+    """Stop the belt, leaving the running velocity its scene authored on the stage."""
+    return conveyor_service.stop(conveyor_id)
+
+
+# -- lightbeams (device registry, analogous to lidars) ----------------------
+#
+# A lightbeam sensor is a registered device with an id, exactly like a lidar:
+# PUT /lightbeams hands back a lightbeam_id, then every other route addresses
+# that id. Wraps the other legacy PhysX range sensor
+# (isaacsim.sensors.physx._range_sensor), so it reads like a lidar with a handful
+# of rays instead of a sweep.
+
+lightbeams = APIRouter(tags=["lightbeams"])
+
+
+@lightbeams.put("/lightbeams", summary="Create Lightbeam")
+async def create_lightbeam(
+    req: CreateLightBeamRequest, lightbeam_service=Depends(get_lightbeam_service)
+):
+    """Register (and bind) one lightbeam sensor; returns its id, prim, layout and range."""
+    return await lightbeam_service.create_lightbeam(req.prim_path)
+
+
+@lightbeams.get("/lightbeams", summary="List Lightbeams")
+async def list_lightbeams(lightbeam_service=Depends(get_lightbeam_service)):
+    """Every registered lightbeam id mapped to its prim path."""
+    return lightbeam_service.list_lightbeams()
+
+
+@lightbeams.get("/lightbeams/{lightbeam_id}", summary="Get Lightbeam")
+async def get_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
+    """Id + static description (prim, beam layout, range). 404 if unknown."""
+    return lightbeam_service.get_lightbeam(lightbeam_id)
+
+
+@lightbeams.delete("/lightbeams/{lightbeam_id}", summary="Delete Lightbeam")
+async def delete_lightbeam(
+    lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)
+):
+    """Unregister the sensor (the USD prim is left in the stage)."""
+    return lightbeam_service.delete_lightbeam(lightbeam_id)
+
+
+@lightbeams.get("/lightbeams/{lightbeam_id}/reading", summary="Read Lightbeam")
+async def read_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
+    """The beams as of the last physics step: num_rays, broken, beam_hit, linear_depth
+    and hit_pos.
+
+    ``broken`` is true when any beam is broken -- the whole output of the photoelectric
+    switch this sensor stands in for. ``linear_depth`` is in meters and reads back as
+    the sensor's max_range for a beam that is not broken; ``hit_pos`` is in the sensor's
+    own frame. Every per-beam field is null until the sensor has produced its first
+    reading. 409 while the timeline is stopped, since the buffers then hold a stale
+    reading that looks like a clear beam.
+    """
+    return lightbeam_service.read(lightbeam_id)
+
+
+@lightbeams.patch("/lightbeams/{lightbeam_id}/configuration", summary="Set Configuration")
+async def set_lightbeam_configuration(
+    lightbeam_id: str,
+    req: LightBeamConfigurationRequest,
+    lightbeam_service=Depends(get_lightbeam_service),
+):
+    """Set the beam layout and range (fields left null are untouched); returns them.
+
+    Takes effect on the next physics step, including while the timeline plays: the
+    sensor's component re-reads all of it on change.
+    """
+    return lightbeam_service.set_configuration(
+        lightbeam_id,
+        req.num_rays,
+        req.curtain_length,
+        req.forward_axis,
+        req.curtain_axis,
+        req.min_range,
+        req.max_range,
+    )
+
+
+@lightbeams.post("/lightbeams/{lightbeam_id}/pause", summary="Pause Lightbeam")
+async def pause_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
+    """Pause sensor computation."""
+    return lightbeam_service.pause(lightbeam_id)
+
+
+@lightbeams.post("/lightbeams/{lightbeam_id}/resume", summary="Resume Lightbeam")
+async def resume_lightbeam(
+    lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)
+):
+    """Resume sensor computation."""
+    return lightbeam_service.resume(lightbeam_id)
+
+
+@lightbeams.get("/lightbeams/{lightbeam_id}/is_paused", summary="Get Is Paused")
+async def is_lightbeam_paused(
+    lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)
+):
+    """Whether sensor computation is currently paused."""
+    return lightbeam_service.is_paused(lightbeam_id)
+
+
 # -- surface (suction) grippers ---------------------------------------------
 #
 # A suction gripper is a registered device with an id, exactly like an articulation
@@ -1991,6 +2168,8 @@ ALL_ROUTERS = (
     surface_grippers,
     cameras,
     lidars,
+    conveyors,
+    lightbeams,
     general,
     stage,
     prims,

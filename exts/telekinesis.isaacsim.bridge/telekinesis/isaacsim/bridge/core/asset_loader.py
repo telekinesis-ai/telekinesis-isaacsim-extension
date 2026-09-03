@@ -161,7 +161,24 @@ def _park_clear_of_existing_robots(stage, dest_prim_path):
         return
 
     shift = occupied.GetMax()[0] - bounds.GetMin()[0] + gap_metres
-    UsdGeom.Xformable(prim).AddTranslateOp().Set(Gf.Vec3d(shift, 0.0, 0.0))
+
+    # Added to whatever translation the asset authors rather than authored fresh: a
+    # modelled asset arrives with its own xform ops, and adding a second translate op
+    # to a prim that already has one is an error.
+    xformable = UsdGeom.Xformable(prim)
+    translate = next(
+        (
+            op
+            for op in xformable.GetOrderedXformOps()
+            if op.GetOpType() == UsdGeom.XformOp.TypeTranslate
+        ),
+        None,
+    ) or xformable.AddTranslateOp()
+    authored = translate.Get()
+    if authored is None:
+        translate.Set(Gf.Vec3d(shift, 0.0, 0.0))
+    else:
+        translate.Set(type(authored)(authored[0] + shift, authored[1], authored[2]))
     carb.log_info(
         f"[bridge] parked {dest_prim_path} {shift:.3f} m along +X, clear of the robot(s) "
         "already on the stage"

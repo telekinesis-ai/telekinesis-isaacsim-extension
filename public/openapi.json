@@ -6248,6 +6248,589 @@
         }
       }
     },
+    "/conveyors": {
+      "get": {
+        "tags": [
+          "conveyors"
+        ],
+        "summary": "List Conveyors",
+        "description": "Every registered conveyor id mapped to its prim path.",
+        "operationId": "list_conveyors_conveyors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "conveyors"
+        ],
+        "summary": "Create Conveyor",
+        "description": "Register (and bind) one conveyor belt; returns its id, prims, drive and speed.\n\nBinding plays the timeline, because a belt only carries cargo while physics steps.",
+        "operationId": "create_conveyor_conveyors_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConveyorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/conveyors/{conveyor_id}": {
+      "get": {
+        "tags": [
+          "conveyors"
+        ],
+        "summary": "Get Conveyor",
+        "description": "Id + description (prims, drive, authored direction and speed, current speed,\nwhether it is running). 404 if unknown.",
+        "operationId": "get_conveyor_conveyors__conveyor_id__get",
+        "parameters": [
+          {
+            "name": "conveyor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conveyor Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "conveyors"
+        ],
+        "summary": "Delete Conveyor",
+        "description": "Unregister the conveyor (the USD prim is left in the stage, and a running belt\nkeeps running -- stop it first).",
+        "operationId": "delete_conveyor_conveyors__conveyor_id__delete",
+        "parameters": [
+          {
+            "name": "conveyor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conveyor Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/conveyors/{conveyor_id}/start": {
+      "post": {
+        "tags": [
+          "conveyors"
+        ],
+        "summary": "Start Conveyor",
+        "description": "Run the belt at a signed speed (its authored speed if omitted) and wake its cargo.\n\nRequires the timeline to be playing to have any effect: a surface velocity only\nmoves anything while physics steps, and sleeping cargo can only be woken while the\nsimulation is running.",
+        "operationId": "start_conveyor_conveyors__conveyor_id__start_post",
+        "parameters": [
+          {
+            "name": "conveyor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conveyor Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConveyorVelocityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/conveyors/{conveyor_id}/stop": {
+      "post": {
+        "tags": [
+          "conveyors"
+        ],
+        "summary": "Stop Conveyor",
+        "description": "Stop the belt, leaving the running velocity its scene authored on the stage.",
+        "operationId": "stop_conveyor_conveyors__conveyor_id__stop_post",
+        "parameters": [
+          {
+            "name": "conveyor_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conveyor Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lightbeams": {
+      "get": {
+        "tags": [
+          "lightbeams"
+        ],
+        "summary": "List Lightbeams",
+        "description": "Every registered lightbeam id mapped to its prim path.",
+        "operationId": "list_lightbeams_lightbeams_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "lightbeams"
+        ],
+        "summary": "Create Lightbeam",
+        "description": "Register (and bind) one lightbeam sensor; returns its id, prim, layout and range.",
+        "operationId": "create_lightbeam_lightbeams_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLightBeamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lightbeams/{lightbeam_id}": {
+      "get": {
+        "tags": [
+          "lightbeams"
+        ],
+        "summary": "Get Lightbeam",
+        "description": "Id + static description (prim, beam layout, range). 404 if unknown.",
+        "operationId": "get_lightbeam_lightbeams__lightbeam_id__get",
+        "parameters": [
+          {
+            "name": "lightbeam_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lightbeam Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "lightbeams"
+        ],
+        "summary": "Delete Lightbeam",
+        "description": "Unregister the sensor (the USD prim is left in the stage).",
+        "operationId": "delete_lightbeam_lightbeams__lightbeam_id__delete",
+        "parameters": [
+          {
+            "name": "lightbeam_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lightbeam Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lightbeams/{lightbeam_id}/reading": {
+      "get": {
+        "tags": [
+          "lightbeams"
+        ],
+        "summary": "Read Lightbeam",
+        "description": "The beams as of the last physics step: num_rays, broken, beam_hit, linear_depth\nand hit_pos.\n\n``broken`` is true when any beam is broken -- the whole output of the photoelectric\nswitch this sensor stands in for. ``linear_depth`` is in meters and reads back as\nthe sensor's max_range for a beam that is not broken; ``hit_pos`` is in the sensor's\nown frame. Every per-beam field is null until the sensor has produced its first\nreading. 409 while the timeline is stopped, since the buffers then hold a stale\nreading that looks like a clear beam.",
+        "operationId": "read_lightbeam_lightbeams__lightbeam_id__reading_get",
+        "parameters": [
+          {
+            "name": "lightbeam_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lightbeam Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lightbeams/{lightbeam_id}/configuration": {
+      "patch": {
+        "tags": [
+          "lightbeams"
+        ],
+        "summary": "Set Configuration",
+        "description": "Set the beam layout and range (fields left null are untouched); returns them.\n\nTakes effect on the next physics step, including while the timeline plays: the\nsensor's component re-reads all of it on change.",
+        "operationId": "set_lightbeam_configuration_lightbeams__lightbeam_id__configuration_patch",
+        "parameters": [
+          {
+            "name": "lightbeam_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lightbeam Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LightBeamConfigurationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lightbeams/{lightbeam_id}/pause": {
+      "post": {
+        "tags": [
+          "lightbeams"
+        ],
+        "summary": "Pause Lightbeam",
+        "description": "Pause sensor computation.",
+        "operationId": "pause_lightbeam_lightbeams__lightbeam_id__pause_post",
+        "parameters": [
+          {
+            "name": "lightbeam_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lightbeam Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lightbeams/{lightbeam_id}/resume": {
+      "post": {
+        "tags": [
+          "lightbeams"
+        ],
+        "summary": "Resume Lightbeam",
+        "description": "Resume sensor computation.",
+        "operationId": "resume_lightbeam_lightbeams__lightbeam_id__resume_post",
+        "parameters": [
+          {
+            "name": "lightbeam_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lightbeam Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lightbeams/{lightbeam_id}/is_paused": {
+      "get": {
+        "tags": [
+          "lightbeams"
+        ],
+        "summary": "Get Is Paused",
+        "description": "Whether sensor computation is currently paused.",
+        "operationId": "is_lightbeam_paused_lightbeams__lightbeam_id__is_paused_get",
+        "parameters": [
+          {
+            "name": "lightbeam_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lightbeam Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/status": {
       "get": {
         "tags": [
@@ -6319,6 +6902,46 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/OpenSceneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stage/scene/reference": {
+      "post": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Add To Scene",
+        "description": "Reference a USD asset into the open stage at ``prim_path`` (keeps the stage).",
+        "operationId": "add_to_scene_stage_scene_reference_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddToSceneRequest"
               }
             }
           },
@@ -7833,6 +8456,27 @@
   },
   "components": {
     "schemas": {
+      "AddToSceneRequest": {
+        "properties": {
+          "uri": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Uri"
+          },
+          "prim_path": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prim Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uri",
+          "prim_path"
+        ],
+        "title": "AddToSceneRequest",
+        "description": "Body of POST /stage/scene/reference.\n\n``uri`` is a USD asset on the machine running Isaac Sim, not a URL: a client\nfetches the asset's bundle itself and hands over the extracted asset. It is\nreferenced onto ``prim_path``, so it arrives as one prim with everything it owns\nbelow it, beside whatever is already in the stage."
+      },
       "ApplyRelativePoseRequest": {
         "properties": {
           "relative_pose": {
@@ -8263,6 +8907,24 @@
         "title": "CaptureRequest",
         "description": "Body of POST /cameras/{id}/capture -- pump one frame and read outputs.\n\n``data_types`` selects which render outputs to return; ``None`` returns every\noutput currently active, which is ``rgb``/``rgba`` on a new camera. Requesting a\nsupported output that is not active yet activates it, costing a few frames of\nwarmup on that first capture. ``GET /cameras/{id}`` reports both the active and\nthe supported sets.\n\n``world_frame`` selects the coordinate frame of the ``pointcloud`` output and is\nignored by every other one. Points come back relative to the camera unless it is\nset, matching the frame a physical depth camera reports in."
       },
+      "ConveyorVelocityRequest": {
+        "properties": {
+          "velocity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Velocity"
+          }
+        },
+        "type": "object",
+        "title": "ConveyorVelocityRequest",
+        "description": "Body of POST /conveyors/{id}/start -- run the belt.\n\n``velocity`` is a signed speed along the belt's authored travel direction, in\nmeters per second (radians per second for a curved belt). A negative value\nreverses the belt. Null runs it at the speed its scene authored."
+      },
       "CreateArticulationRequest": {
         "properties": {
           "prim_path": {
@@ -8280,6 +8942,17 @@
               }
             ],
             "title": "Urdf Path"
+          },
+          "usd_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usd Path"
           }
         },
         "type": "object",
@@ -8287,7 +8960,7 @@
           "prim_path"
         ],
         "title": "CreateArticulationRequest",
-        "description": "Body of PUT /articulations -- register (and bind) one articulation."
+        "description": "Body of PUT /articulations -- register (and bind) one articulation.\n\n``urdf_path`` and ``usd_path`` are the two descriptions the articulation can be\nloaded from when no prim is at ``prim_path`` yet: a URDF, which is imported, or a\nprepared USD asset, which is referenced. Either may be given, not both; a prim\nthat is already in the stage is used as it is and both are ignored."
       },
       "CreateCameraRequest": {
         "properties": {
@@ -8325,6 +8998,32 @@
         ],
         "title": "CreateCameraRequest",
         "description": "Body of PUT /cameras -- register (and bind) one camera.\n\n``resolution`` is ``[width, height]`` in pixels. ``frequency`` (Hz) is optional;\n``None`` follows the render loop.\n\nA new camera produces ``rgb``/``rgba``. Other render outputs are activated the\nfirst time ``POST /cameras/{id}/capture`` asks for them, so they are not named\nhere; the response lists both what is active and what is supported."
+      },
+      "CreateConveyorRequest": {
+        "properties": {
+          "prim_path": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prim Path"
+          },
+          "cargo_root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cargo Root"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prim_path"
+        ],
+        "title": "CreateConveyorRequest",
+        "description": "Body of PUT /conveyors -- register (and bind) one conveyor belt.\n\n``prim_path`` is the conveyor asset's root, the belt rigid body itself, or any\nprim in between; the belt is found by walking up to the nearest rigid body and,\nfailing that, down to the first one. The belt has to be provisioned in the stage\nalready -- carrying a ``PhysxSurfaceVelocityAPI`` with a non-zero velocity, or\ndriven by an ``IsaacConveyor`` node -- because its travel direction is read from\nthe scene rather than sent here.\n\n``cargo_root`` is the prim whose rigid bodies are woken when the belt starts.\nPhysX leaves sleeping bodies out of the contact solve, so a belt cannot pick up\ncargo that came to rest while it was stopped. Null wakes nothing; narrow it to\nthe prims the belt actually carries, since waking a whole warehouse costs a pass\nover every prim in it."
       },
       "CreateLidarRequest": {
         "properties": {
@@ -8410,7 +9109,7 @@
         "title": "CreateLidarRequest",
         "description": "Body of PUT /lidars -- register (and bind) one legacy PhysX lidar.\n\nCreates the ``RangeSensorSchema.Lidar`` prim at ``prim_path`` if none\nexists yet. Angles/resolution are degrees, range is stage units,\n``rotation_rate`` is Hz (``0`` = instantaneous full-sweep lidar).\n``data_types`` is the set of outputs to produce (default\n``[\"point_cloud\"]``); each must be a supported lidar data type, and\n``\"semantic\"`` additionally requires per-hit semantics to be enabled."
       },
-      "CreateSurfaceGripperRequest": {
+      "CreateLightBeamRequest": {
         "properties": {
           "prim_path": {
             "type": "string",
@@ -8422,8 +9121,34 @@
         "required": [
           "prim_path"
         ],
+        "title": "CreateLightBeamRequest",
+        "description": "Body of PUT /lightbeams -- register (and bind) one lightbeam sensor.\n\n``prim_path`` has to name an existing ``IsaacLightBeamSensor`` prim: a\nlightbeam's placement and aim are the whole sensor, so unlike a lidar the bridge\ndoes not create one. Registering it enables the sensor if the scene left it\ndisabled, because a disabled sensor never reports a hit; POST .../pause switches\nit off again."
+      },
+      "CreateSurfaceGripperRequest": {
+        "properties": {
+          "prim_path": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prim Path"
+          },
+          "usd_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usd Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prim_path"
+        ],
         "title": "CreateSurfaceGripperRequest",
-        "description": "Body of PUT /surface_grippers -- register (and bind) one suction gripper.\n\n``prim_path`` is the gripper prim itself or any ancestor of it -- usually the\ngripper asset's root, which is also the prim assemble_robot attaches to an arm.\nThe ``IsaacSurfaceGripper`` prim is found by searching that subtree. There is no\n``urdf_path`` counterpart to the articulation route: a suction gripper has no\nURDF representation, so it must be a prepared USD asset already in the stage."
+        "description": "Body of PUT /surface_grippers -- register (and bind) one suction gripper.\n\n``prim_path`` is the gripper prim itself or any ancestor of it -- usually the\ngripper asset's root, which is also the prim assemble_robot attaches to an arm.\nThe ``IsaacSurfaceGripper`` prim is found by searching that subtree.\n\nA suction gripper has no URDF representation, so there is no ``urdf_path``\ncounterpart to the articulation route. ``usd_path`` is a prepared USD asset that\nis referenced onto ``prim_path`` when no prim is there yet; a prim that is already\nin the stage is used as it is and ``usd_path`` is ignored."
       },
       "DefaultJointStateRequest": {
         "properties": {
@@ -8822,6 +9547,85 @@
         "type": "object",
         "title": "LidarWorldPoseRequest",
         "description": "Body of PUT /lidars/{id}/world_pose.\n\n``position`` is ``[x, y, z]`` (stage units), ``orientation`` a\nscalar-first ``[w, x, y, z]`` quaternion; either may be null to leave it\nuntouched."
+      },
+      "LightBeamConfigurationRequest": {
+        "properties": {
+          "num_rays": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Rays"
+          },
+          "curtain_length": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Curtain Length"
+          },
+          "forward_axis": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forward Axis"
+          },
+          "curtain_axis": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Curtain Axis"
+          },
+          "min_range": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Range"
+          },
+          "max_range": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Range"
+          }
+        },
+        "type": "object",
+        "title": "LightBeamConfigurationRequest",
+        "description": "Body of PATCH /lightbeams/{id}/configuration -- set the beam layout and range.\n\nFields left null are untouched. ``num_rays`` above one spreads the beams evenly\nover ``curtain_length`` meters along the curtain axis, which is what lets the\nsensor detect an object of unknown height. The axes are XYZ vectors in the\nsensor's own frame. ``min_range`` is a blind zone the beams start beyond, so an\nobject closer than it is not seen; ``max_range`` is both the furthest an object\nis seen and the distance an unbroken beam reports."
       },
       "OpenSceneRequest": {
         "properties": {

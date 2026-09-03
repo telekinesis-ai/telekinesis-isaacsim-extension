@@ -6,6 +6,7 @@ Telekinesis Isaac Sim Bridge lets you connect NVIDIA Isaac Sim to local applicat
 
 - Register and interact with any Isaac Sim articulation
 - Register and actuate suction (surface) grippers
+- Start and stop conveyor belts, and read lightbeam sensors
 - Attach a gripper to an arm, articulated or suction
 - Send motion commands and read articulation state
 - Stream updates in real time over WebSocket
@@ -136,6 +137,70 @@ has no URDF representation.
   re-parked onto the arm's mount link as part of the attach, which is what lets it grip at all.
 
 The response's `gripper_kind` reports which happened.
+
+### Conveyors
+
+A conveyor is a registered device with an id, like an articulation or a camera:
+`PUT /conveyors {prim_path, cargo_root?}` hands back a `conveyor_id` that every other
+`/conveyors/...` route addresses. The prim path may be the conveyor asset's root, the belt rigid
+body itself, or any prim in between.
+
+It is neither an articulation nor a sensor, so there is nothing to drive with `move_j` and nothing
+to `capture`. Instead:
+
+- `POST /conveyors/{id}/start` runs the belt and `.../stop` stops it. A belt runs at a **signed
+  speed along the travel direction its scene authored**, so no direction is ever sent — reverse a
+  belt by starting it with a negative `velocity`, and omit `velocity` to run it at the speed the
+  scene authored. A stop switches the belt's drive off rather than zeroing it, so that authored
+  speed stays on the stage and the belt can be restarted without it being sent again.
+- `GET /conveyors/{id}` reports the belt's current speed and whether it is running.
+
+The belt has to be provisioned in the stage already, because its travel direction is the one thing
+that cannot be guessed. Either authoring works: a `PhysxSurfaceVelocityAPI` with a non-zero
+velocity on the belt, or an `IsaacConveyor` OmniGraph node driving it (the bridge then writes the
+graph's velocity variable, since the node overwrites the belt's own attribute every tick).
+
+Registering a conveyor plays the timeline, the same way registering an articulation or a sensor
+does: a stopped simulation is the one state in which a belt silently does nothing, because the
+velocity reaches cargo through a contact-modify callback. For the same reason it only works under
+**CPU physics** — the GPU pipeline does not run that callback, and the bridge will report the belt
+running regardless. And PhysX leaves sleeping
+bodies out of the contact solve, so a belt cannot pick up a box that came to rest while it was
+stopped: name a `cargo_root` on create and every start wakes the rigid bodies under it. Narrow it
+to the prims the belt actually carries; waking a whole warehouse costs a pass over every prim in
+it.
+
+Deleting a conveyor leaves the prim in the stage and does **not** stop the belt.
+
+### Lightbeam sensors
+
+A lightbeam sensor is a registered device with an id, like a lidar: `PUT /lightbeams {prim_path}`
+hands back a `lightbeam_id`. It wraps the other legacy PhysX range sensor, so it reads like a lidar
+with a handful of rays instead of a sweep.
+
+- `GET /lightbeams/{id}/reading` answers `{num_rays, broken, beam_hit, linear_depth, hit_pos}`.
+  `broken` is true when any one beam is broken, which is the whole output of the photoelectric
+  switch the sensor stands in for. `linear_depth` is per beam in meters and reads back as
+  `max_range` for a beam that is **not** broken; `hit_pos` is per beam in the sensor's own frame,
+  not the stage's.
+- `PATCH /lightbeams/{id}/configuration` sets the beam layout and range. More than one beam spreads
+  the beams evenly over `curtain_length` along the curtain axis, which is what lets the sensor
+  detect an object of unknown height. `min_range` is a blind zone the beams start beyond, so an
+  object closer than it is not seen at all. This takes effect on the next physics step, including
+  while the timeline plays.
+- `POST /lightbeams/{id}/pause` and `.../resume` switch PhysX's computation of the sensor off and
+  on, which is what a registered sensor costs while nothing is reading it.
+
+The prim has to exist and be an `IsaacLightBeamSensor`: a lightbeam's placement and aim are the
+whole sensor, so unlike a lidar the bridge does not create one. Registering it enables the sensor
+if the scene left it disabled, because a disabled sensor never reports a hit.
+
+The sensor is sampled rather than queried — a reading is whatever the last physics step left behind
+— so the reading route answers **409 while the timeline is stopped** rather than a beam that looks
+unbroken. Only prims with a collider break the beam; purely visual geometry is invisible to it.
+
+`linear_depth` is a raycast distance rather than something a physical light barrier measures. It is
+useful as simulation ground truth, and wrong to build a controller on that has to run on hardware.
 
 ### WebSocket routes
 

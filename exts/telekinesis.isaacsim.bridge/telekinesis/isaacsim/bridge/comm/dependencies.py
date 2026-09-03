@@ -48,3 +48,13 @@ def get_lidar_service(request: Request):
 def get_surface_gripper_service(request: Request):
     """The shared :class:`..services.surface_grippers.SurfaceGripperService`."""
     return request.app.state.surface_gripper_service
+
+
+def get_conveyor_service(request: Request):
+    """The shared :class:`..services.conveyors.ConveyorService`."""
+    return request.app.state.conveyor_service
+
+
+def get_lightbeam_service(request: Request):
+    """The shared :class:`..services.lightbeams.LightBeamService`."""
+    return request.app.state.lightbeam_service
