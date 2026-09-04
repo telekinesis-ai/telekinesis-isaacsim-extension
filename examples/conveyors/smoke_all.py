@@ -87,6 +87,30 @@ def _exercise_routes(base, args):
     _record(f"POST {root}/stop", *_call(base, "POST", f"{root}/stop"))
     _record(f"GET {root} (stopped)", *_call(base, "GET", root))
 
+    # The reversed start above wrote a negated vector to the belt's velocity
+    # attribute, which is the one its travel direction was read from, so a
+    # re-register has to reuse the capture rather than read it again.
+    ok, status, rebound = _call(
+        base, "PUT", "/conveyors", {"prim_path": args.prim, "cargo_root": args.cargo_root}
+    )
+    _record("PUT /conveyors (re-register)", ok, status, rebound)
+    if ok:
+        kept = (
+            rebound["direction"] == created["direction"]
+            and rebound["nominal_speed"] == created["nominal_speed"]
+        )
+        _record(
+            "re-register keeps the authored direction",
+            kept,
+            status,
+            f"{created['direction']} at {created['nominal_speed']} m/s"
+            if kept
+            else (
+                f"was {created['direction']} at {created['nominal_speed']}, "
+                f"now {rebound['direction']} at {rebound['nominal_speed']}"
+            ),
+        )
+
     if args.keep:
         _skip(f"DELETE {root}", "--keep set")
     else:

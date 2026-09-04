@@ -15,9 +15,10 @@ belt cannot pick up a box that came to rest while it was stopped. Narrow it to
 the prims the belt actually carries; waking a whole warehouse costs a pass over
 every prim in it.
 
-Registering the same prim again keeps its id and re-reads the belt's authored
-velocity, so register belts at rest rather than ones something has already
-overwritten.
+Registering the same prim again keeps its id and reuses the travel direction and
+authored speed captured the first time, rather than re-reading an attribute
+``start`` has since written a command into. So register a belt at rest the first
+time; after that a reversed run cannot flip its direction.
 
 Registering plays the timeline: a belt carries nothing while physics is stopped.
 

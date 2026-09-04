@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.5.1] - 2026-09-04
+### Fixed
+- Registering a conveyor that was already registered re-read the belt's velocity attribute,
+  which is the same attribute `POST /conveyors/{id}/start` writes to. A belt that had been
+  started in reverse therefore came back with its travel direction flipped, and one whose
+  velocity had been overwritten with zero could not be registered again at all. The travel
+  direction and authored speed are now captured on a belt's first registration in the open
+  stage and reused, so only `DELETE /conveyors/{id}` or a stage change reads the belt again.
+
+### Added
+- A belt whose velocity reads zero is now registered anyway when a weaker USD layer still
+  holds the velocity the scene authored, which is what a zeroing `over` or a session-layer
+  edit leaves behind. The layer it was recovered from is logged.
+- The refusal for a belt that is not provisioned as a conveyor says how to provision it --
+  which attribute to author on which prim, and the Conveyor Belt Utility documentation --
+  because a travel direction cannot be inferred: a belt has no natural speed, one end of it
+  is not distinguishable from the other, and a curved belt has no single travel axis.
+
 ## [0.5.0] - 2026-09-02
 ### Added
 - Conveyor belts are a device registry of their own: `PUT /conveyors {prim_path, cargo_root?}`

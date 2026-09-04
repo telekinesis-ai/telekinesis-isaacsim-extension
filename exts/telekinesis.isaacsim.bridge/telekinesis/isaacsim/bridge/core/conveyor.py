@@ -45,6 +45,21 @@ CONVEYOR_NODE_TYPE = "isaacsim.asset.gen.conveyor.IsaacConveyor"
 SURFACE_VELOCITY_DRIVE = "surface_velocity"
 CONVEYOR_NODE_DRIVE = "conveyor_node"
 
+# Where the Conveyor Belt Utility is documented, named by the refusals below so
+# that a belt which is not provisioned as a conveyor says how to provision it.
+CONVEYOR_DOC_URL = (
+    "https://docs.isaacsim.omniverse.nvidia.com/6.0.1/digital_twin/"
+    "warehouse_logistics/ext_isaacsim_asset_gen_conveyor.html"
+)
+
+# How to author a belt's running velocity by hand, for the same refusals.
+AUTHOR_VELOCITY_HINT = (
+    "set physxSurfaceVelocity:surfaceVelocity on the belt to a vector pointing along its "
+    "travel whose length is its running speed in meters per second (Property > Physics on "
+    "the selected belt prim), or rebuild the belt with the Conveyor Belt Utility: "
+    f"{CONVEYOR_DOC_URL}"
+)
+
 
 class Conveyor:
     """Binds one conveyor belt at ``prim_path`` and starts/stops it.
@@ -52,13 +67,19 @@ class Conveyor:
     The path may point at the conveyor asset's root, at the belt rigid body itself,
     or at any prim in between, so a path taken straight from the stage tree works.
 
-    Construction captures the velocity the scene authored as the belt's travel
-    direction and its default running speed, so bind against a belt that is at rest
-    (or at its authored speed) rather than one somebody has already overwritten.
+    The belt's first binding in the open stage captures the velocity the scene
+    authored as its travel direction and its default running speed, so bind against a
+    belt that is at rest (or at its authored speed). Binding it again reuses that
+    capture rather than re-reading an attribute this bridge has since written a
+    command into, which is what ``authored`` carries.
     """
 
-    def __init__(self, prim_path, name="conveyor", cargo_root=None):
+    def __init__(self, prim_path, name="conveyor", cargo_root=None, authored=None):
         """Resolve the belt and capture the running velocity its scene authored.
+
+        ``authored`` is the capture a previous binding of the same belt produced (see
+        the :attr:`authored` property), reused instead of reading the stage again;
+        ``None`` reads the stage, which is what a belt's first binding does.
 
         ``cargo_root`` is the prim whose rigid bodies are woken when the belt starts;
         ``None`` wakes nothing. PhysX leaves sleeping bodies out of the contact solve,
@@ -68,12 +89,13 @@ class Conveyor:
 
         Raises ``ValueError`` if no stage is open, the path does not resolve, no rigid
         body is found at or below it, the belt has neither a surface velocity nor a
-        conveyor node driving it, or its authored velocity is zero and its travel
-        direction is therefore unknown.
+        conveyor node driving it, or its velocity is zero with no weaker layer holding
+        the one the scene authored, so its travel direction is unknown.
         """
         self.prim_path = prim_path
         self.cargo_root = cargo_root
         self._name = name
+        self._remembered = authored
 
         stage = omni.usd.get_context().get_stage()
         if stage is None:
@@ -91,6 +113,22 @@ class Conveyor:
             f"[bridge] bound conveyor {self.prim_path} ({self.drive}) at "
             f"{self._nominal_speed} m/s"
         )
+
+    @property
+    def authored(self):
+        """What this belt's travel direction and running speed were captured as.
+
+        The registry hands this back when the same belt is bound again, so that a
+        re-registration reuses the capture instead of re-reading an attribute this
+        bridge has since written a command into: a belt started in reverse would
+        otherwise come back with its travel direction flipped.
+        """
+        return {
+            "drive": self.drive,
+            "attribute": self._velocity_attribute.GetName(),
+            "direction": None if self._direction is None else tuple(self._direction),
+            "nominal_speed": self._nominal_speed,
+        }
 
     # -- bridge lifecycle (not part of the isaacsim surface) --------------------
 
@@ -251,24 +289,47 @@ class Conveyor:
         if not surface_velocity:
             raise ValueError(
                 f"the belt at {self._belt_prim.GetPath()} has no surface velocity and no "
-                "conveyor node driving it, so it is not provisioned as a conveyor; apply "
-                "PhysxSurfaceVelocityAPI to the belt or build it with the Conveyor Belt Utility"
+                "conveyor node driving it, so it is not provisioned as a conveyor: apply "
+                f"PhysxSurfaceVelocityAPI to it, then {AUTHOR_VELOCITY_HINT}"
             )
 
+        if self._adopt_remembered():
+            self._enabled_attribute = surface_velocity.CreateSurfaceVelocityEnabledAttr()
+            return
+
         attribute = surface_velocity.GetSurfaceVelocityAttr()
+        angular_attribute = surface_velocity.GetSurfaceAngularVelocityAttr()
         authored = Gf.Vec3f(attribute.Get() or Gf.Vec3f(0.0))
         if authored.GetLength() == 0.0:
-            angular_attribute = surface_velocity.GetSurfaceAngularVelocityAttr()
             angular_authored = Gf.Vec3f(angular_attribute.Get() or Gf.Vec3f(0.0))
             if angular_authored.GetLength() > 0.0:
                 attribute = angular_attribute
                 authored = angular_authored
 
+        # A belt reading zero may still be authored in a weaker layer: what zeroes one
+        # is usually a stronger `over` or a session-layer edit, which leaves the scene's
+        # own opinion underneath. Recovering it beats refusing a belt whose direction is
+        # still on the stage, and beats guessing one that is not.
+        if authored.GetLength() == 0.0:
+            for candidate in (attribute, angular_attribute):
+                recovered, layer = self._weaker_opinion(candidate)
+                if recovered is None:
+                    continue
+                attribute = candidate
+                authored = recovered
+                carb.log_warn(
+                    f"[bridge] the belt at {self._belt_prim.GetPath()} reads a zero "
+                    f"{candidate.GetName()}, so its travel direction was taken from the "
+                    f"{tuple(recovered)} authored in {layer.identifier}"
+                )
+                break
+
         if authored.GetLength() == 0.0:
             raise ValueError(
-                f"the belt at {self._belt_prim.GetPath()} has a zero surface velocity, so "
-                "its travel direction is unknown; author the belt's running velocity in the "
-                "scene before registering it"
+                f"the belt at {self._belt_prim.GetPath()} has a zero "
+                f"{attribute.GetName()} and no weaker layer holds the velocity it was "
+                "authored with, so its travel direction is unknown -- an earlier run may "
+                f"have overwritten it. To provision the belt, {AUTHOR_VELOCITY_HINT}"
             )
 
         self._velocity_attribute = attribute
@@ -311,7 +372,54 @@ class Conveyor:
         # the API must not be switched from outside.
         self._enabled_attribute = None
         self._direction = None
-        self._nominal_speed = float(attribute.Get() or 0.0)
+        # The graph variable read here is the one start() writes to, so a re-binding
+        # reads back a commanded speed rather than the authored one unless the capture
+        # from the first binding is reused.
+        remembered = self._remembered
+        if remembered is not None and remembered["drive"] == CONVEYOR_NODE_DRIVE:
+            self._nominal_speed = remembered["nominal_speed"]
+        else:
+            self._nominal_speed = float(attribute.Get() or 0.0)
+
+    def _adopt_remembered(self):
+        """Take direction and speed from a previous binding's capture, if it still fits.
+
+        For a belt driven by its own surface velocity; a node-driven belt adopts its
+        speed where it resolves the graph variable, which is not the belt's attribute.
+        Answers whether the capture was used. It is only reused for an attribute the
+        belt still has, so a stage re-authored under the same prim path falls through
+        to a fresh read rather than keeping a stale capture.
+        """
+        remembered = self._remembered
+        if remembered is None or remembered["drive"] != SURFACE_VELOCITY_DRIVE:
+            return False
+
+        attribute = self._belt_prim.GetAttribute(remembered["attribute"])
+        if not attribute.IsValid():
+            return False
+
+        self._velocity_attribute = attribute
+        self._direction = Gf.Vec3f(*remembered["direction"])
+        self._nominal_speed = remembered["nominal_speed"]
+        return True
+
+    @staticmethod
+    def _weaker_opinion(attribute):
+        """Return the strongest non-zero opinion on ``attribute``, with its layer.
+
+        ``(None, None)`` when every layer holding the attribute holds a zero. The
+        strongest opinion is the zero that sent us here, so it drops out on its own.
+        """
+        if not attribute.IsValid():
+            return None, None
+
+        for spec in attribute.GetPropertyStack(Usd.TimeCode.Default()):
+            if spec.default is None:
+                continue
+            vector = Gf.Vec3f(spec.default)
+            if vector.GetLength() > 0.0:
+                return vector, spec.layer
+        return None, None
 
     def _write_velocity(self, velocity):
         """Write a signed speed to the belt, defaulting to its authored running speed."""

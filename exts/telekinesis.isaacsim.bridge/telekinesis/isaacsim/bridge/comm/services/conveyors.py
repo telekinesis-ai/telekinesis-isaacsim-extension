@@ -37,6 +37,7 @@ class ConveyorService:
     def __init__(self):
         self._devices = {}  # conveyor_id -> Conveyor
         self._id_by_prim = {}  # requested prim_path -> conveyor_id (stable on re-create)
+        self._authored_by_prim = {}  # requested prim_path -> the belt's first capture
         self._count = 0  # for ids like conveyor1, conveyor2
         # prim_path -> asyncio.Lock, serializes concurrent creates of the same prim
         self._create_locks = {}
@@ -51,6 +52,9 @@ class ConveyorService:
             self._safe_destroy(device)
         self._devices = {}
         self._id_by_prim = {}
+        # The captures go with the devices: a new stage may author a belt's travel
+        # direction differently under the same prim path, so it is read fresh.
+        self._authored_by_prim = {}
         self._count = 0
         self._create_locks = {}
 
@@ -67,11 +71,11 @@ class ConveyorService:
         """Register (and bind) the conveyor at ``prim_path`` and return its info.
 
         One conveyor per *requested* prim; PUTting the same prim again keeps its id but
-        **rebuilds the device**, re-reading the belt's authored velocity from the stage,
-        so the response always reflects the request. A belt that is currently running
-        is not stopped by that, but its authored running speed is then read back from a
-        belt somebody has already overwritten -- register belts at rest. Ids are
-        1-based: ``conveyor1``, ``conveyor2``, ...
+        **rebuilds the device**, so the response always reflects the request. A belt
+        that is currently running is not stopped by that, and its travel direction and
+        authored speed are reused from its first binding rather than re-read, because
+        by then the attribute they were read from holds whatever speed was last
+        commanded. Ids are 1-based: ``conveyor1``, ``conveyor2``, ...
 
         Binding plays the timeline: a stopped simulation is the one state in which a
         belt silently does nothing (see :meth:`..core.conveyor.Conveyor.bind`).
@@ -98,7 +102,12 @@ class ConveyorService:
             # Build + bind the NEW device before touching any existing one, so a bad
             # re-PUT leaves the currently-registered conveyor untouched and working.
             try:
-                device = Conveyor(prim_path, name=conveyor_id, cargo_root=cargo_root)
+                device = Conveyor(
+                    prim_path,
+                    name=conveyor_id,
+                    cargo_root=cargo_root,
+                    authored=self._authored_by_prim.get(prim_path),
+                )
             except ValueError as exc:
                 # Bad input value: a prim that is not a conveyor, or one whose travel
                 # direction cannot be read. 400, not the 500 a bare Exception would
@@ -120,6 +129,7 @@ class ConveyorService:
             if previous is not None and previous is not device:
                 self._safe_destroy(previous)
             self._id_by_prim[prim_path] = conveyor_id  # no-op on re-PUT; commits an id
+            self._authored_by_prim[prim_path] = device.authored
             self._devices[conveyor_id] = device
             return {"conveyor_id": conveyor_id, **device.info()}
 
@@ -130,7 +140,7 @@ class ConveyorService:
 
     def delete_conveyor(self, conveyor_id):
         """Unregister the conveyor (the USD prim is left in the stage, and a running belt
-        keeps running). 404 if unknown."""
+        keeps running), and forget the belt's captured travel direction. 404 if unknown."""
         device = self._devices.get(conveyor_id)
         if device is None:
             raise HTTPException(
@@ -141,6 +151,8 @@ class ConveyorService:
         for prim, registered_id in list(self._id_by_prim.items()):
             if registered_id == conveyor_id:
                 del self._id_by_prim[prim]
+                # Unregistering is the way to make the next PUT read the belt again.
+                self._authored_by_prim.pop(prim, None)
                 self._create_locks.pop(prim, None)
         return {"deleted": conveyor_id}
 
