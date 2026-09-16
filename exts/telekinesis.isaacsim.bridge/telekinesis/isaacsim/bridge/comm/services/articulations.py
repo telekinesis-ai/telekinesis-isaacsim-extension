@@ -201,7 +201,10 @@ class ArticulationService:
 
     # -- driving + introspection ------------------------------------------------
 
-    async def move_j(self, articulation_id, positions, indices, asynchronous):
+    async def move_j(
+        self, articulation_id, positions, indices, asynchronous,
+        position_stall_tolerance=None, position_stall_duration=0.25,
+    ):
         """Drive joint ``positions`` (radians) onto the device's chosen joints.
 
         ``indices`` may be None (drive the device's current driven subset).
@@ -209,7 +212,10 @@ class ArticulationService:
         :meth:`..core.articulation.SingleArticulation.move_j`.
         """
         try:
-            return await self.get_device(articulation_id).move_j(positions, indices, asynchronous)
+            return await self.get_device(articulation_id).move_j(
+                positions, indices, asynchronous,
+                position_stall_tolerance, position_stall_duration,
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

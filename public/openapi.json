@@ -9277,6 +9277,24 @@
             "type": "boolean",
             "title": "Asynchronous",
             "default": false
+          },
+          "position_stall_tolerance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Stall Tolerance"
+          },
+          "position_stall_duration": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Position Stall Duration",
+            "default": 0.25
           }
         },
         "type": "object",
@@ -9396,7 +9414,7 @@
           "joint_positions"
         ],
         "title": "JointPositionsRequest",
-        "description": "Body of POST /articulations/{id}/move_j -- drive joints (radians).\n\n``joint_positions`` are the target angles for ``indices`` (default: the\ndevice's current driven joints, so a robot sends all of them and a gripper\nnarrowed to its driver sends one). ``asynchronous`` true applies the action and\nreturns immediately (the client decides when the move is done); false blocks\nuntil the joints reach the target or stall."
+        "description": "Body of POST /articulations/{id}/move_j -- drive joints (radians).\n\n``joint_positions`` are the target angles for ``indices`` (default: the\ndevice's current driven joints, so a robot sends all of them and a gripper\nnarrowed to its driver sends one). ``asynchronous`` true applies the action and\nreturns immediately (the client decides when the move is done); false blocks\nuntil the joints reach the target or stall.\n\n``position_stall_tolerance`` opts into position-progress stall detection.\nEach commanded joint must stay within this position range for\n``position_stall_duration`` simulation seconds and five distinct sampled\nphysics updates. Tolerance uses radians for revolute joints and metres for\nprismatic joints; both tuning values must be finite and positive. Omitted or\nnull tolerance disables the check. Paused/repeated physics states cannot\ncomplete opted-in moves. Asynchronous calls do not wait.\n\nBlocking responses distinguish motion-limit expiry with ``timed_out=true``;\nexpiry is not evidence of a grasp.\n\nExample:\n    JointPositionsRequest(joint_positions=[0.7], position_stall_tolerance=0.0001)"
       },
       "JointVelocitiesRequest": {
         "properties": {

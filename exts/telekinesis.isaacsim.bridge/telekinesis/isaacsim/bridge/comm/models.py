@@ -37,11 +37,27 @@ class JointPositionsRequest(BaseModel):
     narrowed to its driver sends one). ``asynchronous`` true applies the action and
     returns immediately (the client decides when the move is done); false blocks
     until the joints reach the target or stall.
+
+    ``position_stall_tolerance`` opts into position-progress stall detection.
+    Each commanded joint must stay within this position range for
+    ``position_stall_duration`` simulation seconds and five distinct sampled
+    physics updates. Tolerance uses radians for revolute joints and metres for
+    prismatic joints; both tuning values must be finite and positive. Omitted or
+    null tolerance disables the check. Paused/repeated physics states cannot
+    complete opted-in moves. Asynchronous calls do not wait.
+
+    Blocking responses distinguish motion-limit expiry with ``timed_out=true``;
+    expiry is not evidence of a grasp.
+
+    Example:
+        JointPositionsRequest(joint_positions=[0.7], position_stall_tolerance=0.0001)
     """
 
     joint_positions: list[float]
     indices: list[int] | None = None
     asynchronous: bool = False
+    position_stall_tolerance: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    position_stall_duration: float = Field(default=0.25, gt=0, allow_inf_nan=False)
 
 
 class SetJointPositionsRequest(BaseModel):

@@ -178,7 +178,8 @@ async def move_j(
 ):
     """Drive the joints (radians). Blocks until reached/stalled unless asynchronous."""
     return await articulation_service.move_j(
-        articulation_id, req.joint_positions, req.indices, req.asynchronous
+        articulation_id, req.joint_positions, req.indices, req.asynchronous,
+        req.position_stall_tolerance, req.position_stall_duration,
     )
 
 
