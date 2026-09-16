@@ -56,7 +56,9 @@ import carb
 
 from .services.articulations import ArticulationService
 from .services.cameras import CameraService
+from .services.conveyors import ConveyorService
 from .services.lidars import LidarService
+from .services.lightbeams import LightBeamService
 from .services.general import GeneralService
 from .services.prims import PrimService
 from .services.stage import StageService
@@ -141,16 +143,23 @@ class BridgeServer:
         articulation_service = ArticulationService(surface_gripper_service)
         camera_service = CameraService()
         lidar_service = LidarService()
+        lightbeam_service = LightBeamService()
+        conveyor_service = ConveyorService()
         stage_service = StageService()
         # assemble_robot accepts either kind of gripper, so the two registries know
         # about each other: the articulation service resolves a surface gripper id,
-        # and a deleted surface gripper drops the assembly record naming it.
+        # and a deleted surface gripper drops the assembly record naming it. A
+        # surface gripper loaded from a USD asset also stops the timeline, so the
+        # articulation service repairs the handles that stop invalidated.
         surface_gripper_service.on_deleted = articulation_service.forget_assembly
+        surface_gripper_service.on_timeline_stopped = articulation_service.rebind_stale_devices
 
         app.state.articulation_service = articulation_service
         app.state.surface_gripper_service = surface_gripper_service
         app.state.camera_service = camera_service
         app.state.lidar_service = lidar_service
+        app.state.lightbeam_service = lightbeam_service
+        app.state.conveyor_service = conveyor_service
         app.state.stage_service = stage_service
         app.state.prim_service = PrimService(stage_service)  # composes the stage service
         app.state.general_service = GeneralService()
@@ -159,6 +168,8 @@ class BridgeServer:
             surface_gripper_service,
             camera_service,
             lidar_service,
+            lightbeam_service,
+            conveyor_service,
         )
 
         for router in ALL_ROUTERS:

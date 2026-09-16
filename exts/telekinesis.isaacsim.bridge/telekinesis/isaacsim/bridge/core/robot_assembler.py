@@ -18,7 +18,7 @@ Two kinds of gripper, two paths:
   own device.
 
 omni/isaac imports live at module top (only imported inside Isaac Sim), matching
-:mod:`.urdf_loader`. ``RobotAssembler`` ships as its own Kit extension, so it is
+:mod:`.asset_loader`. ``RobotAssembler`` ships as its own Kit extension, so it is
 enabled + imported lazily inside the two assembly functions.
 """
 

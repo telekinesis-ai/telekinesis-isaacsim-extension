@@ -16,10 +16,17 @@ from pydantic import BaseModel, Field
 
 
 class CreateArticulationRequest(BaseModel):
-    """Body of PUT /articulations -- register (and bind) one articulation."""
+    """Body of PUT /articulations -- register (and bind) one articulation.
+
+    ``urdf_path`` and ``usd_path`` are the two descriptions the articulation can be
+    loaded from when no prim is at ``prim_path`` yet: a URDF, which is imported, or a
+    prepared USD asset, which is referenced. Either may be given, not both; a prim
+    that is already in the stage is used as it is and both are ignored.
+    """
 
     prim_path: str = Field(min_length=1)
     urdf_path: str | None = None
+    usd_path: str | None = None
 
 
 class JointPositionsRequest(BaseModel):
@@ -30,11 +37,27 @@ class JointPositionsRequest(BaseModel):
     narrowed to its driver sends one). ``asynchronous`` true applies the action and
     returns immediately (the client decides when the move is done); false blocks
     until the joints reach the target or stall.
+
+    ``position_stall_tolerance`` opts into position-progress stall detection.
+    Each commanded joint must stay within this position range for
+    ``position_stall_duration`` simulation seconds and five distinct sampled
+    physics updates. Tolerance uses radians for revolute joints and metres for
+    prismatic joints; both tuning values must be finite and positive. Omitted or
+    null tolerance disables the check. Paused/repeated physics states cannot
+    complete opted-in moves. Asynchronous calls do not wait.
+
+    Blocking responses distinguish motion-limit expiry with ``timed_out=true``;
+    expiry is not evidence of a grasp.
+
+    Example:
+        JointPositionsRequest(joint_positions=[0.7], position_stall_tolerance=0.0001)
     """
 
     joint_positions: list[float]
     indices: list[int] | None = None
     asynchronous: bool = False
+    position_stall_tolerance: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    position_stall_duration: float = Field(default=0.25, gt=0, allow_inf_nan=False)
 
 
 class SetJointPositionsRequest(BaseModel):
@@ -218,6 +241,19 @@ class OpenSceneRequest(BaseModel):
     """Body of PUT /stage/scene (spec: ``UsdStageModel``)."""
 
     uri: str  # USD stage to open
+
+
+class AddToSceneRequest(BaseModel):
+    """Body of POST /stage/scene/reference.
+
+    ``uri`` is a USD asset on the machine running Isaac Sim, not a URL: a client
+    fetches the asset's bundle itself and hands over the extracted asset. It is
+    referenced onto ``prim_path``, so it arrives as one prim with everything it owns
+    below it, beside whatever is already in the stage.
+    """
+
+    uri: str = Field(min_length=1)
+    prim_path: str = Field(min_length=1)  # where the asset arrives, e.g. "/World/belt"
 
 
 class StageUnits(BaseModel):
@@ -417,12 +453,16 @@ class CreateSurfaceGripperRequest(BaseModel):
 
     ``prim_path`` is the gripper prim itself or any ancestor of it -- usually the
     gripper asset's root, which is also the prim assemble_robot attaches to an arm.
-    The ``IsaacSurfaceGripper`` prim is found by searching that subtree. There is no
-    ``urdf_path`` counterpart to the articulation route: a suction gripper has no
-    URDF representation, so it must be a prepared USD asset already in the stage.
+    The ``IsaacSurfaceGripper`` prim is found by searching that subtree.
+
+    A suction gripper has no URDF representation, so there is no ``urdf_path``
+    counterpart to the articulation route. ``usd_path`` is a prepared USD asset that
+    is referenced onto ``prim_path`` when no prim is there yet; a prim that is already
+    in the stage is used as it is and ``usd_path`` is ignored.
     """
 
     prim_path: str = Field(min_length=1)
+    usd_path: str | None = None
 
 
 class GripperActionRequest(BaseModel):
@@ -598,3 +638,73 @@ class LidarBoolValueRequest(BaseModel):
     enable semantics)."""
 
     value: bool
+
+
+# -- Conveyors (device registry, analogous to articulations) -----------------
+
+
+class CreateConveyorRequest(BaseModel):
+    """Body of PUT /conveyors -- register (and bind) one conveyor belt.
+
+    ``prim_path`` is the conveyor asset's root, the belt rigid body itself, or any
+    prim in between; the belt is found by walking up to the nearest rigid body and,
+    failing that, down to the first one. The belt has to be provisioned in the stage
+    already -- carrying a ``PhysxSurfaceVelocityAPI`` with a non-zero velocity, or
+    driven by an ``IsaacConveyor`` node -- because its travel direction is read from
+    the scene rather than sent here.
+
+    ``cargo_root`` is the prim whose rigid bodies are woken when the belt starts.
+    PhysX leaves sleeping bodies out of the contact solve, so a belt cannot pick up
+    cargo that came to rest while it was stopped. Null wakes nothing; narrow it to
+    the prims the belt actually carries, since waking a whole warehouse costs a pass
+    over every prim in it.
+    """
+
+    prim_path: str = Field(min_length=1)
+    cargo_root: str | None = None
+
+
+class ConveyorVelocityRequest(BaseModel):
+    """Body of POST /conveyors/{id}/start -- run the belt.
+
+    ``velocity`` is a signed speed along the belt's authored travel direction, in
+    meters per second (radians per second for a curved belt). A negative value
+    reverses the belt. Null runs it at the speed its scene authored.
+    """
+
+    velocity: float | None = None
+
+
+# -- Lightbeam sensors (device registry, analogous to lidars) ---------------
+
+
+class CreateLightBeamRequest(BaseModel):
+    """Body of PUT /lightbeams -- register (and bind) one lightbeam sensor.
+
+    ``prim_path`` has to name an existing ``IsaacLightBeamSensor`` prim: a
+    lightbeam's placement and aim are the whole sensor, so unlike a lidar the bridge
+    does not create one. Registering it enables the sensor if the scene left it
+    disabled, because a disabled sensor never reports a hit; POST .../pause switches
+    it off again.
+    """
+
+    prim_path: str = Field(min_length=1)
+
+
+class LightBeamConfigurationRequest(BaseModel):
+    """Body of PATCH /lightbeams/{id}/configuration -- set the beam layout and range.
+
+    Fields left null are untouched. ``num_rays`` above one spreads the beams evenly
+    over ``curtain_length`` meters along the curtain axis, which is what lets the
+    sensor detect an object of unknown height. The axes are XYZ vectors in the
+    sensor's own frame. ``min_range`` is a blind zone the beams start beyond, so an
+    object closer than it is not seen; ``max_range`` is both the furthest an object
+    is seen and the distance an unbroken beam reports.
+    """
+
+    num_rays: int | None = None
+    curtain_length: float | None = None
+    forward_axis: list[float] | None = None
+    curtain_axis: list[float] | None = None
+    min_range: float | None = None
+    max_range: float | None = None

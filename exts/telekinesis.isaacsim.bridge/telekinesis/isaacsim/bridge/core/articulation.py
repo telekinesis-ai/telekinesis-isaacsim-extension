@@ -44,7 +44,7 @@ from .robot_assembler import get_articulation_base_link_name
 # either settled at a steady-state offset, or blocked by a grasped object). The
 # consecutive-frame requirement keeps the stall test from firing before the drive
 # has accelerated the joints. The frame cap is a ~30 s backstop at 60 fps.
-_REACH_TOLERANCE_RAD = 5e-3  # ~0.3 deg: target reached cleanly
+_REACH_TOLERANCE_RAD = 0.01  # ~0.5 deg: target reached cleanly
 _SETTLED_VELOCITY_RAD_S = 5e-3  # joints no longer moving
 _SETTLED_FRAMES = 5  # consecutive low-velocity frames => stalled
 _BIND_RETRIES = 60
@@ -381,8 +381,11 @@ class SingleArticulation:
             "dof_names": list(self._articulation.dof_names),
         }
 
-    async def move_j(self, positions, indices=None, asynchronous=False):
-        """Move ``positions`` (radians) onto the chosen joint ``indices`` via the drive.
+    async def move_j(
+        self, positions, indices=None, asynchronous=False,
+        position_stall_tolerance=None, position_stall_duration=0.25,
+    ):
+        """Drive the selected joints until the target is reached or motion stalls.
 
         ``indices`` defaults to this device's driven subset (``joint_indices``), so
         a robot client sends all joint angles and a gripper client (narrowed to its
@@ -392,10 +395,30 @@ class SingleArticulation:
         polls ``get_joints_state`` / decides "done" itself). ``asynchronous=False`` blocks,
         awaiting ``next_update_async`` in a loop until the joints reach the target or
         stall, then returns the final status with ``reached`` telling the two apart.
-        Each ``next_update_async`` steps one physics frame and yields Isaac Sim's
-        loop, so other requests keep being served while a blocking move waits. The
-        ``_move_lock`` serializes repeat commands to this one device.
+        Each update yields to Isaac Sim so other requests can be served. Updates
+        do not necessarily advance physics. The lock serializes commands to this
+        device, including while an opted-in command waits for physics to resume.
+
+        A positive, finite ``position_stall_tolerance`` additionally detects
+        stalled position progress. It bounds each commanded joint's accumulated
+        position range, in radians for revolute joints or metres for prismatic
+        joints. The range must remain within this tolerance for at least
+        ``position_stall_duration`` simulation seconds (positive and finite)
+        and five distinct sampled physics updates. ``None`` disables this check.
+        Paused or repeated physics states cannot complete opted-in moves; a pause
+        or clock rewind resets the stable interval. Asynchronous calls do not wait.
+
+        Blocking results include ``timed_out``: true only when the 1,800-update
+        limit expires without reaching the target or detecting a stall. A stall
+        does not establish object presence. The position drive retains its target
+        on completion, including timeout. Invalid tuning values raise ValueError.
         """
+        if position_stall_tolerance is not None and (
+            not np.isfinite(position_stall_tolerance) or position_stall_tolerance <= 0
+        ):
+            raise ValueError("position_stall_tolerance must be finite and positive, or None")
+        if not np.isfinite(position_stall_duration) or position_stall_duration <= 0:
+            raise ValueError("position_stall_duration must be finite and positive")
         target = np.asarray(positions, dtype=float)
         idx = list(self.joint_indices) if indices is None else list(indices)
         if target.shape != (len(idx),):
@@ -414,13 +437,48 @@ class SingleArticulation:
                 return {"done": False, "reached": False, "applied": True, "target": target.tolist()}
 
             reached = False
+            timed_out = False
             stalled_frames = 0
             max_error = float("inf")
             q = self._articulation.get_joint_positions()[idx]
+            if position_stall_tolerance is not None:
+                from isaacsim.core.simulation_manager import SimulationManager
+
+                timeline = omni.timeline.get_timeline_interface()
+                previous_step = SimulationManager.get_num_physics_steps()
+                previous_time = stable_since = SimulationManager.get_simulation_time()
+                best_error = np.abs(q - target)
+                stable_samples = 0
             for _ in range(_MOTION_MAX_FRAMES):
                 await app.next_update_async()
                 q = self._articulation.get_joint_positions()[idx]
                 max_error = float(np.max(np.abs(q - target)))
+                position_stalled = False
+                if position_stall_tolerance is not None:
+                    step = SimulationManager.get_num_physics_steps()
+                    now = SimulationManager.get_simulation_time()
+                    if not timeline.is_playing() or step < previous_step or now < previous_time:
+                        best_error = np.abs(q - target)
+                        stable_since = previous_time = now
+                        previous_step = step
+                        stable_samples = stalled_frames = 0
+                        continue
+                    if step == previous_step or now <= previous_time:
+                        continue
+                    previous_step, previous_time = step, now
+                    # Progress toward the target, not stillness: a jammed grip
+                    # jitters around its blocked pose without ever getting closer.
+                    error = np.abs(q - target)
+                    if np.any(error < best_error - position_stall_tolerance):
+                        best_error = np.minimum(best_error, error)
+                        stable_since = now
+                        stable_samples = 0
+                    else:
+                        stable_samples += 1
+                    position_stalled = (
+                        stable_samples >= _SETTLED_FRAMES
+                        and now - stable_since >= position_stall_duration
+                    )
                 if max_error < _REACH_TOLERANCE_RAD:
                     reached = True
                     break
@@ -429,12 +487,15 @@ class SingleArticulation:
                     float(np.max(np.abs(velocities[idx]))) if velocities is not None else 0.0
                 )
                 stalled_frames = stalled_frames + 1 if max_speed < _SETTLED_VELOCITY_RAD_S else 0
-                if stalled_frames >= _SETTLED_FRAMES:
+                if stalled_frames >= _SETTLED_FRAMES or position_stalled:
                     break
+            else:
+                timed_out = True
 
         return {
             "done": True,
             "reached": reached,
+            "timed_out": timed_out,
             "max_error": max_error,
             "joint_positions": q.tolist(),
             "target": target.tolist(),

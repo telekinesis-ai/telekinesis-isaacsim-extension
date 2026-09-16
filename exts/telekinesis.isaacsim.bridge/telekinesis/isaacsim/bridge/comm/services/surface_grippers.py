@@ -31,6 +31,7 @@ import asyncio
 
 from fastapi import HTTPException
 
+from ...core.asset_loader import reference_usd_at
 from ...core.surface_gripper import SurfaceGripper
 
 
@@ -52,6 +53,10 @@ class SurfaceGripperService:
         # service can drop any assembly record naming it. Set by BridgeServer when
         # it composes the two services; None until then.
         self.on_deleted = None
+        # Awaited after loading a gripper asset stopped the timeline, so the
+        # articulation service can repair the device handles that stop killed. Set
+        # by BridgeServer alongside on_deleted; None until then.
+        self.on_timeline_stopped = None
 
     def clear(self):
         """Drop every bound gripper (called when the bridge stops or the stage changes)."""
@@ -60,7 +65,7 @@ class SurfaceGripperService:
         self._count = 0
         self._create_locks = {}
 
-    async def create_surface_gripper(self, prim_path):
+    async def create_surface_gripper(self, prim_path, usd_path=None):
         """Register (and bind) the surface gripper at ``prim_path`` and return its info.
 
         ``prim_path`` is the gripper prim itself or any ancestor of it -- usually
@@ -73,9 +78,10 @@ class SurfaceGripperService:
         rebuilt whenever the timeline is stopped and replayed, and again when the
         gripper is assembled onto an arm.
 
-        There is no ``urdf_path`` counterpart to the articulation route. A suction
-        gripper has no URDF representation, so it can only come from a prepared USD
-        asset already in the stage.
+        A suction gripper has no URDF representation, so there is no ``urdf_path``
+        counterpart to the articulation route. It can still be loaded rather than
+        prepared by hand: ``usd_path`` is a prepared USD asset that is referenced
+        onto ``prim_path`` when nothing is there yet.
         """
         # Normalize a trailing slash so "/World/gripper" and "/World/gripper/"
         # register as the same gripper (USD paths are case-sensitive, so case is
@@ -88,6 +94,8 @@ class SurfaceGripperService:
         # setdefault is synchronous, so concurrent callers land on one Lock.
         lock = self._create_locks.setdefault(prim_path, asyncio.Lock())
         async with lock:
+            await self._load_if_missing(prim_path, usd_path)
+
             surface_gripper_id = self._id_by_prim.get(prim_path)
             if surface_gripper_id is None:
                 self._count += 1
@@ -108,6 +116,42 @@ class SurfaceGripperService:
                 "prim_path": device.prim_path,
                 **device.info(),
             }
+
+    async def _load_if_missing(self, prim_path, usd_path):
+        """Reference ``usd_path`` onto ``prim_path`` unless a prim is already there.
+
+        A prim that is already in the stage is used as it is and ``usd_path`` has no
+        effect, so a client may pass it defensively on every connect. Absent both,
+        there is nothing to bind and the request is rejected.
+
+        Loading stops the timeline, which kills the physics handle of every device
+        bound before it, so the devices the articulation service holds are repaired
+        in this same request rather than left dead until their next client rebind.
+        """
+        import omni.usd
+
+        stage = omni.usd.get_context().get_stage()
+        if stage is None:
+            raise HTTPException(status_code=409, detail="no USD stage is open")
+
+        existing = stage.GetPrimAtPath(prim_path)
+        if existing and existing.IsValid():
+            return
+        if not usd_path:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"'{prim_path}' is not in the stage and no usd_path was given to load it"
+                ),
+            )
+        try:
+            await reference_usd_at(stage, usd_path, prim_path)
+        except RuntimeError as exc:
+            # 422: well-formed request, but loading the asset itself failed.
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        if self.on_timeline_stopped is not None:
+            await self.on_timeline_stopped()
 
     def get_surface_gripper(self, surface_gripper_id):
         """Info for one registered gripper (id, prims, properties, state), or 404."""

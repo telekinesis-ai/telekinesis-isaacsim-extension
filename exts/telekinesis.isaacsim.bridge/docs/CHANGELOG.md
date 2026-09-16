@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.5.1] - 2026-09-04
+### Fixed
+- Registering a conveyor that was already registered re-read the belt's velocity attribute,
+  which is the same attribute `POST /conveyors/{id}/start` writes to. A belt that had been
+  started in reverse therefore came back with its travel direction flipped, and one whose
+  velocity had been overwritten with zero could not be registered again at all. The travel
+  direction and authored speed are now captured on a belt's first registration in the open
+  stage and reused, so only `DELETE /conveyors/{id}` or a stage change reads the belt again.
+
+### Added
+- A belt whose velocity reads zero is now registered anyway when a weaker USD layer still
+  holds the velocity the scene authored, which is what a zeroing `over` or a session-layer
+  edit leaves behind. The layer it was recovered from is logged.
+- The refusal for a belt that is not provisioned as a conveyor says how to provision it --
+  which attribute to author on which prim, and the Conveyor Belt Utility documentation --
+  because a travel direction cannot be inferred: a belt has no natural speed, one end of it
+  is not distinguishable from the other, and a curved belt has no single travel axis.
+
+## [0.5.0] - 2026-09-02
+### Added
+- Conveyor belts are a device registry of their own: `PUT /conveyors {prim_path, cargo_root?}`
+  hands back a `conveyor_id`, then `POST /conveyors/{id}/start` and `.../stop` run and stop the
+  belt, `GET /conveyors/{id}` reports its speed and whether it is running, and
+  `DELETE /conveyors/{id}` unregisters it. A belt runs at a signed speed along the travel direction
+  its scene authored, so no direction is sent: a negative velocity reverses it and an omitted one
+  runs it at the authored speed. Both authorings are driven -- a `PhysxSurfaceVelocityAPI` on the
+  belt, or an `IsaacConveyor` node, whose graph velocity variable is written because the node
+  overwrites the belt's own attribute every tick. `cargo_root` names the prim whose sleeping rigid
+  bodies each start wakes, without which a belt cannot pick up a box that came to rest while it was
+  stopped. Registering a conveyor plays the timeline, like every other device's bind: a belt
+  carries nothing while physics is stopped, and `POST .../start` logs a warning if it is issued
+  then, since the speed is written but moves nothing until the timeline plays.
+- Lightbeam sensors are a device registry of their own: `PUT /lightbeams {prim_path}` hands back a
+  `lightbeam_id`, then `GET /lightbeams/{id}/reading` answers
+  `{num_rays, broken, beam_hit, linear_depth, hit_pos}`,
+  `PATCH /lightbeams/{id}/configuration` sets the beam layout and detection range,
+  `POST /lightbeams/{id}/pause` / `.../resume` switch the sensor's computation, and
+  `DELETE /lightbeams/{id}` unregisters it. The reading route answers 409 while the timeline is
+  stopped, because the sensor's buffers then hold a stale reading that looks like a clear beam.
+  Registering a sensor enables it if the scene left it disabled, since a disabled sensor never
+  reports a hit.
+- `examples/conveyors/` and `examples/lightbeams/`, one runnable script per route plus a
+  `smoke_all.py` for each.
+
 ## [0.4.0] - 2026-08-18
 ### Changed
 - **Breaking:** the camera image routes (`POST /cameras/{id}/capture`, `GET /cameras/{id}/rgb`,
