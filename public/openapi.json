@@ -7277,6 +7277,46 @@
         }
       }
     },
+    "/stage/physics/solve_articulation_contact_last": {
+      "put": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Set Articulation Contact Order",
+        "description": "Stop simulation and set contact-last solving on all physics scenes.\n\nCreates /physicsScene if needed; leaves the timeline stopped. Changes apply\non the next play and are not saved to disk. Returns 409 when no stage is open.",
+        "operationId": "set_solve_articulation_contact_last_stage_physics_solve_articulation_contact_last_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetEnabledRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/stage/configuration": {
       "get": {
         "tags": [
