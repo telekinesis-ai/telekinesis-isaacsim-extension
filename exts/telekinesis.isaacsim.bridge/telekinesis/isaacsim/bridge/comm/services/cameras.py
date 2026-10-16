@@ -27,7 +27,7 @@ import asyncio
 
 from fastapi import HTTPException
 
-from ...core.camera import Camera
+from ...core.camera import Camera, capture_cameras, discover_camera_prims
 
 
 class CameraService:
@@ -183,6 +183,20 @@ class CameraService:
         """Return a ``{camera_id: prim_path}`` map of every registered camera."""
         return {camera_id: device.prim_path for camera_id, device in self._devices.items()}
 
+    @staticmethod
+    def discover_cameras(prim_path):
+        """Return ``{"prim_paths": [...]}``, every camera prim at or below ``prim_path``.
+
+        404 if the prim is not in the open stage, 400 if no camera is at or below it.
+        See :func:`..core.camera.discover_camera_prims`."""
+        try:
+            prim_paths = discover_camera_prims(prim_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if not prim_paths:
+            raise HTTPException(status_code=400, detail=f"no camera prim at or below {prim_path!r}")
+        return {"prim_paths": prim_paths}
+
     # -- capture ---------------------------------------------------------------
 
     async def capture(self, camera_id, data_types, world_frame=False):
@@ -198,6 +212,24 @@ class CameraService:
         except RuntimeError as exc:
             # 422, mirroring a failed bind: the request named real data types, but a
             # newly attached annotator never produced data.
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    async def capture_cameras(self, captures, world_frame=False):
+        """Pump one frame and return the requested outputs of several cameras, keyed
+        by ``camera_id``, all from the same rendering frame. ``captures`` maps each
+        ``camera_id`` to the data types to read from it. Errors map as in
+        :meth:`capture`. See :func:`..core.camera.capture_cameras`."""
+        if not captures:
+            raise HTTPException(status_code=400, detail="captures must name at least one camera")
+        cameras_with_data_types = {
+            camera_id: (self.get_device(camera_id), data_types)
+            for camera_id, data_types in captures.items()
+        }
+        try:
+            return await capture_cameras(cameras_with_data_types, world_frame=world_frame)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     def get_rgb(self, camera_id):

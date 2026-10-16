@@ -48,6 +48,7 @@ from .models import (
     AddToSceneRequest,
     ApplyRelativePoseRequest,
     AssembleRobotRequest,
+    MountPrimRequest,
     AttachmentPointPropertiesRequest,
     CameraApertureRequest,
     CameraClippingRangeRequest,
@@ -76,6 +77,7 @@ from .models import (
     LidarLocalPoseRequest,
     LidarWorldPoseRequest,
     LightBeamConfigurationRequest,
+    MultiCaptureRequest,
     OpenSceneRequest,
     PrimPathRequest,
     SetDrivenJointsRequest,
@@ -398,6 +400,24 @@ async def assemble_robot(
         req.gripper_id,
         req.arm_mount_link,
         req.gripper_mount_link,
+        req.offset,
+        req.mask_collisions,
+    )
+
+
+@articulations.post("/articulations/{articulation_id}/mount_prim", summary="Mount Prim")
+async def mount_prim(
+    articulation_id: str,
+    req: MountPrimRequest,
+    articulation_service=Depends(get_articulation_service),
+):
+    """Fix any prim, such as a camera, to this arm's mount link with a fixed joint, so
+    it moves with the arm. Mounting the same prim again replaces its earlier joint.
+    """
+    return await articulation_service.mount_prim(
+        articulation_id,
+        req.prim_path,
+        req.arm_mount_link,
         req.offset,
         req.mask_collisions,
     )
@@ -792,6 +812,18 @@ async def simulation_state(stage_service=Depends(get_stage_service)):
     return stage_service.simulation_state()
 
 
+@stage.put("/physics/solve_articulation_contact_last", summary="Set Articulation Contact Order")
+async def set_solve_articulation_contact_last(
+    req: SetEnabledRequest, stage_service=Depends(get_stage_service)
+):
+    """Stop simulation and set contact-last solving on all physics scenes.
+
+    Creates /physicsScene if needed; leaves the timeline stopped. Changes apply
+    on the next play and are not saved to disk. Returns 409 when no stage is open.
+    """
+    await stage_service.set_solve_articulation_contact_last(req.enabled)
+
+
 @stage.get("/configuration", summary="Export Configuration")
 async def export_configuration():
     """Mirrored from the spec; not yet implemented."""
@@ -1025,6 +1057,30 @@ async def create_camera(req: CreateCameraRequest, camera_service=Depends(get_cam
 async def list_cameras(camera_service=Depends(get_camera_service)):
     """Every registered camera id mapped to its prim path."""
     return camera_service.list_cameras()
+
+
+# Registered before /cameras/{camera_id}, which would otherwise match "discover" as
+# a camera id.
+@cameras.get("/cameras/discover", summary="Discover Cameras")
+async def discover_cameras(prim_path: str, camera_service=Depends(get_camera_service)):
+    """Every camera prim at or below ``prim_path``, e.g. the left, right, and color
+    cameras of a depth-camera asset. 404 if the prim is missing, 400 if no camera is at
+    or below it."""
+    return camera_service.discover_cameras(prim_path)
+
+
+@cameras.post(
+    "/cameras/capture",
+    summary="Capture Frame From Several Cameras",
+    response_class=Response,
+    responses=binary.OCTET_STREAM_RESPONSES,
+)
+async def capture_cameras(req: MultiCaptureRequest, camera_service=Depends(get_camera_service)):
+    """Pump one frame and return the requested outputs of several cameras as one
+    binary frame (see :mod:`.binary`), keyed by ``camera_id``. Every output comes from
+    the same rendering frame."""
+    frame = await camera_service.capture_cameras(req.captures, req.world_frame)
+    return Response(binary.encode(frame), media_type=binary.MEDIA_TYPE)
 
 
 @cameras.get("/cameras/{camera_id}", summary="Get Camera")

@@ -17,6 +17,10 @@ Two kinds of gripper, two paths:
   re-parked onto the arm. The arm's articulation is unchanged; the gripper stays its
   own device.
 
+Any other prim, such as a camera, is bolted on the suction way by :func:`mount_prim`,
+minus the attachment points: it becomes a rigid body if it is not one and is fixed
+to the mount link.
+
 omni/isaac imports live at module top (only imported inside Isaac Sim), matching
 :mod:`.asset_loader`. ``RobotAssembler`` ships as its own Kit extension, so it is
 enabled + imported lazily inside the two assembly functions.
@@ -28,7 +32,7 @@ import omni.timeline
 import omni.usd
 from isaacsim.core.prims import SingleArticulation
 import carb
-from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
+from pxr import Gf, PhysxSchema, Sdf, Usd, UsdGeom, UsdPhysics
 
 _BIND_RETRIES = 60
 # Name of the fixed joint the suction path authors, matched on to clear out the ones
@@ -283,6 +287,66 @@ async def attach_surface_gripper(
         # the links lose their meshes while the frames keep moving. Nothing else in
         # this function writes to the arm, so the attach leaves it composed as it was.
         assembler.mask_collisions(gripper_prim, arm_prim)
+
+    await app.next_update_async()
+    await app.next_update_async()
+
+    return fixed_joint.GetPath().pathString
+
+
+async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_collisions=True):
+    """Fix any prim to the arm's mount link so it moves with the arm.
+
+    The counterpart to :func:`attach_surface_gripper` for a prim that is not a
+    gripper, such as a camera: a prim parented under an articulation link in USD
+    does not follow the simulated link, so it is bolted on with a fixed joint
+    instead, and can sit anywhere in the stage. The prim is moved so its origin
+    lands at ``offset`` in the mount link's frame, any joint an earlier mount left
+    on it is removed, and a fixed joint excluded from the articulation joins the
+    two, leaving the arm's DOF unchanged.
+
+    A fixed joint needs a rigid body on both ends, so a prim that is not one gets
+    ``RigidBodyAPI`` with gravity off: the joint is then all that holds it, and
+    gravity would only make the arm carry its default mass. A kinematic prim is
+    made dynamic for the same reason.
+
+    Edits USD, so the timeline is stopped throughout; the caller plays it again
+    and re-binds the arm. Returns the path of the fixed joint.
+    """
+    ext_manager = omni.kit.app.get_app().get_extension_manager()
+    ext_manager.set_extension_enabled_immediate("isaacsim.robot_setup.assembler", True)
+    from isaacsim.robot_setup.assembler import RobotAssembler
+
+    app = omni.kit.app.get_app()
+    omni.timeline.get_timeline_interface().stop()
+    # Read the arm at its authored pose, as in attach_surface_gripper.
+    await app.next_update_async()
+    await app.next_update_async()
+
+    if not stage.GetPrimAtPath(arm_prim).IsValid():
+        raise RuntimeError(f"arm prim {arm_prim!r} not found in the open stage")
+    prim = stage.GetPrimAtPath(prim_path)
+    if not prim.IsValid():
+        raise RuntimeError(f"prim {prim_path!r} not found in the open stage")
+
+    arm_mount = find_prim_by_name(stage, arm_prim, arm_mount_link)
+
+    _remove_previous_mount_joints(stage, prim_path)
+    _place_at_mount(stage, arm_mount, prim_path, prim_path, offset)
+
+    if not prim.HasAPI(UsdPhysics.RigidBodyAPI):
+        UsdPhysics.RigidBodyAPI.Apply(prim)
+        PhysxSchema.PhysxRigidBodyAPI.Apply(prim).CreateDisableGravityAttr(True)
+    if prim.HasAttribute("physics:kinematicEnabled"):
+        prim.GetAttribute("physics:kinematicEnabled").Set(False)
+
+    await app.next_update_async()
+    fixed_joint = _create_mount_joint(stage, arm_mount, prim_path, offset)
+
+    if mask_collisions:
+        # Authored on the mounted prim, not the arm, for the reason given in
+        # attach_surface_gripper.
+        RobotAssembler().mask_collisions(prim_path, arm_prim)
 
     await app.next_update_async()
     await app.next_update_async()

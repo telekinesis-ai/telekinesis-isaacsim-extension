@@ -113,3 +113,24 @@ class StageService:
         else:
             state = "paused"
         return {"timeline": state}
+
+    async def set_solve_articulation_contact_last(self, enabled: bool) -> None:
+        """Stop simulation and set contact ordering on every physics scene.
+
+        Creates ``/physicsScene`` if none exists. The timeline remains stopped;
+        its next play creates the solver with the new order. Changes are authored
+        in the current edit layer without saving it. Raises 409 if no stage is open.
+        """
+        import omni.kit.app
+        import omni.timeline
+        from pxr import PhysxSchema, UsdPhysics
+
+        stage = self.stage()
+        # PhysX reads this immutable scene flag when simulation is initialized.
+        omni.timeline.get_timeline_interface().stop()
+        await omni.kit.app.get_app().next_update_async()
+        scenes = [prim for prim in stage.Traverse() if prim.IsA(UsdPhysics.Scene)]
+        if not scenes:
+            scenes = [UsdPhysics.Scene.Define(stage, "/physicsScene").GetPrim()]
+        for prim in scenes:
+            PhysxSchema.PhysxSceneAPI.Apply(prim).CreateSolveArticulationContactLastAttr(enabled)

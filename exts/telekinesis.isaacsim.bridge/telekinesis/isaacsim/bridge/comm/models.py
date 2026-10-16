@@ -234,6 +234,24 @@ class AssembleRobotRequest(BaseModel):
     mask_collisions: bool = True
 
 
+class MountPrimRequest(BaseModel):
+    """Body of POST /articulations/{articulation_id}/mount_prim.
+
+    Fixes ``prim_path`` -- any prim, such as a camera, wherever it sits in the
+    stage -- to the arm's ``arm_mount_link`` with a fixed joint, so it moves with
+    the arm. The prim's origin is placed at ``offset`` in the mount link's frame
+    (null/omitted => at the mount link's origin). A prim that is not a rigid body
+    becomes one, with gravity off. ``mask_collisions`` stops the arm and the prim
+    colliding with each other. Mounting the same prim again replaces its earlier
+    joint.
+    """
+
+    prim_path: str
+    arm_mount_link: str
+    offset: Transformation | None = None
+    mask_collisions: bool = True
+
+
 # -- Stage (mirrors the extension's Omniservice schemas) --------------------
 
 
@@ -377,6 +395,19 @@ class CaptureRequest(BaseModel):
     """
 
     data_types: list[str] | None = None
+    world_frame: bool = False
+
+
+class MultiCaptureRequest(BaseModel):
+    """Body of POST /cameras/capture -- pump one frame and read several cameras.
+
+    ``captures`` maps each registered ``camera_id`` to the render outputs to return
+    from it, with the activation rules of :class:`CaptureRequest`. Every output comes
+    from the same rendering frame, which is what a stereo pair needs.
+    ``world_frame`` applies to every ``pointcloud`` output.
+    """
+
+    captures: dict[str, list[str]]
     world_frame: bool = False
 
 

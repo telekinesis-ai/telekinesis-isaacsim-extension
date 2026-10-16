@@ -562,6 +562,57 @@
         }
       }
     },
+    "/articulations/{articulation_id}/mount_prim": {
+      "post": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Mount Prim",
+        "description": "Fix any prim, such as a camera, to this arm's mount link with a fixed joint, so\nit moves with the arm. Mounting the same prim again replaces its earlier joint.",
+        "operationId": "mount_prim_articulations__articulation_id__mount_prim_post",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MountPrimRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/articulations/{articulation_id}/handles_initialized": {
       "get": {
         "tags": [
@@ -2356,6 +2407,85 @@
               "application/json": {
                 "schema": {}
               }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/discover": {
+      "get": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Discover Cameras",
+        "description": "Every camera prim at or below ``prim_path``, e.g. the left, right, and color\ncameras of a depth-camera asset. 404 if the prim is missing, 400 if no camera is at\nor below it.",
+        "operationId": "discover_cameras_cameras_discover_get",
+        "parameters": [
+          {
+            "name": "prim_path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prim Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cameras/capture": {
+      "post": {
+        "tags": [
+          "cameras"
+        ],
+        "summary": "Capture Frame From Several Cameras",
+        "description": "Pump one frame and return the requested outputs of several cameras as one\nbinary frame (see :mod:`.binary`), keyed by ``camera_id``. Every output comes from\nthe same rendering frame.",
+        "operationId": "capture_cameras_cameras_capture_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultiCaptureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/octet-stream": {}
             }
           },
           "422": {
@@ -7107,6 +7237,46 @@
         }
       }
     },
+    "/stage/physics/solve_articulation_contact_last": {
+      "put": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Set Articulation Contact Order",
+        "description": "Stop simulation and set contact-last solving on all physics scenes.\n\nCreates /physicsScene if needed; leaves the timeline stopped. Changes apply\non the next play and are not saved to disk. Returns 409 when no stage is open.",
+        "operationId": "set_solve_articulation_contact_last_stage_physics_solve_articulation_contact_last_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetEnabledRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/stage/configuration": {
       "get": {
         "tags": [
@@ -9277,24 +9447,6 @@
             "type": "boolean",
             "title": "Asynchronous",
             "default": false
-          },
-          "position_stall_tolerance": {
-            "anyOf": [
-              {
-                "type": "number",
-                "exclusiveMinimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Position Stall Tolerance"
-          },
-          "position_stall_duration": {
-            "type": "number",
-            "exclusiveMinimum": 0.0,
-            "title": "Position Stall Duration",
-            "default": 0.25
           }
         },
         "type": "object",
@@ -9407,6 +9559,24 @@
             "type": "boolean",
             "title": "Asynchronous",
             "default": false
+          },
+          "position_stall_tolerance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Stall Tolerance"
+          },
+          "position_stall_duration": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Position Stall Duration",
+            "default": 0.25
           }
         },
         "type": "object",
@@ -9644,6 +9814,65 @@
         "type": "object",
         "title": "LightBeamConfigurationRequest",
         "description": "Body of PATCH /lightbeams/{id}/configuration -- set the beam layout and range.\n\nFields left null are untouched. ``num_rays`` above one spreads the beams evenly\nover ``curtain_length`` meters along the curtain axis, which is what lets the\nsensor detect an object of unknown height. The axes are XYZ vectors in the\nsensor's own frame. ``min_range`` is a blind zone the beams start beyond, so an\nobject closer than it is not seen; ``max_range`` is both the furthest an object\nis seen and the distance an unbroken beam reports."
+      },
+      "MountPrimRequest": {
+        "properties": {
+          "prim_path": {
+            "type": "string",
+            "title": "Prim Path"
+          },
+          "arm_mount_link": {
+            "type": "string",
+            "title": "Arm Mount Link"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Transformation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mask_collisions": {
+            "type": "boolean",
+            "title": "Mask Collisions",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "prim_path",
+          "arm_mount_link"
+        ],
+        "title": "MountPrimRequest",
+        "description": "Body of POST /articulations/{articulation_id}/mount_prim.\n\nFixes ``prim_path`` -- any prim, such as a camera, wherever it sits in the\nstage -- to the arm's ``arm_mount_link`` with a fixed joint, so it moves with\nthe arm. The prim's origin is placed at ``offset`` in the mount link's frame\n(null/omitted => at the mount link's origin). A prim that is not a rigid body\nbecomes one, with gravity off. ``mask_collisions`` stops the arm and the prim\ncolliding with each other. Mounting the same prim again replaces its earlier\njoint."
+      },
+      "MultiCaptureRequest": {
+        "properties": {
+          "captures": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Captures"
+          },
+          "world_frame": {
+            "type": "boolean",
+            "title": "World Frame",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "captures"
+        ],
+        "title": "MultiCaptureRequest",
+        "description": "Body of POST /cameras/capture -- pump one frame and read several cameras.\n\n``captures`` maps each registered ``camera_id`` to the render outputs to return\nfrom it, with the activation rules of :class:`CaptureRequest`. Every output comes\nfrom the same rendering frame, which is what a stereo pair needs.\n``world_frame`` applies to every ``pointcloud`` output."
       },
       "OpenSceneRequest": {
         "properties": {
