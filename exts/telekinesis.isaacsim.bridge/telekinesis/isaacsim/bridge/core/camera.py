@@ -52,8 +52,10 @@ import time
 import numpy as np
 import omni.kit.app
 import omni.timeline
+import omni.usd
 from isaacsim.sensors import camera as camera_sensor
 import carb
+from pxr import Usd, UsdGeom
 
 # -- static tables ----------------------------------------------------------
 #
@@ -209,6 +211,59 @@ def _is_ready(value):
     if isinstance(value, (list, tuple, dict)) and len(value) == 0:
         return False
     return True
+
+
+def discover_camera_prims(prim_path):
+    """Return the path of every camera prim at or below ``prim_path``.
+
+    A sensor asset such as a stereo depth camera nests several camera prims below
+    one root, so a client names the root and picks its cameras from this list. A
+    camera prim passed directly is its own only result.
+
+    Raises ``ValueError`` if ``prim_path`` is not in the open stage.
+    """
+    root = omni.usd.get_context().get_stage().GetPrimAtPath(prim_path)
+    if not root.IsValid():
+        raise ValueError(f"prim {prim_path!r} not found in the open stage")
+    return [
+        prim.GetPath().pathString for prim in Usd.PrimRange(root) if prim.IsA(UsdGeom.Camera)
+    ]
+
+
+async def capture_cameras(cameras_with_data_types, world_frame=False):
+    """Pump one frame and return the requested outputs of several cameras.
+
+    The counterpart to :meth:`Camera.capture` for a sensor made of several cameras,
+    such as a stereo pair: every render product updates on the same app tick, so
+    reading all of them after a single ``next_update_async`` returns outputs of one
+    rendering frame. Separate captures would each pump their own frame.
+
+    ``cameras_with_data_types`` maps a key to a ``(Camera, data_types)`` pair; the
+    result maps the same keys to ``{<data_type>: <array or None>}``, plus
+    ``rendering_frame`` and a monotonic ``timestamp``. Raises ``ValueError`` on an
+    unknown data type, before anything is attached.
+    """
+    requested = {
+        key: (camera, camera._validate_data_types(data_types))
+        for key, (camera, data_types) in cameras_with_data_types.items()
+    }
+    for camera, data_types in requested.values():
+        await camera._attach_data_types(data_types)
+    await omni.kit.app.get_app().next_update_async()
+
+    out = {
+        key: {
+            data_type: camera._read(data_type, world_frame=world_frame)
+            for data_type in data_types
+        }
+        for key, (camera, data_types) in requested.items()
+    }
+    first_camera = next(iter(requested.values()))[0]
+    out["rendering_frame"] = _to_json(
+        first_camera._camera.get_current_frame().get("rendering_frame")
+    )
+    out["timestamp"] = time.monotonic()
+    return out
 
 
 class Camera:

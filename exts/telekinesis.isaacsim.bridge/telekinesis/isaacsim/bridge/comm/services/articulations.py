@@ -27,7 +27,12 @@ from fastapi import HTTPException
 
 from ...core.articulation import SingleArticulation, find_driver_joint
 from ...core.asset_loader import import_urdf_at, reference_usd_at
-from ...core.robot_assembler import assemble_tool, attach_surface_gripper, bind_shared_articulation
+from ...core.robot_assembler import (
+    assemble_tool,
+    attach_surface_gripper,
+    bind_shared_articulation,
+    mount_prim,
+)
 
 
 class ArticulationService:
@@ -541,6 +546,47 @@ class ArticulationService:
             self._assemblies[arm_id] = record
             await self.rebind_stale_devices()
             return self._assembly_info(arm_id, record, already_assembled=False)
+
+    async def mount_prim(self, arm_id, prim_path, arm_mount_link, offset, mask_collisions):
+        """Fix any prim to the arm's mount link with a fixed joint, so it moves with the arm.
+
+        For a prim that is not a gripper, such as a camera; see
+        :func:`..core.robot_assembler.mount_prim`. The prim is placed at ``offset``
+        in the mount link's frame, and the arm's DOF are unchanged. Mounting the same
+        prim again replaces its earlier joint, so nothing is recorded.
+
+        Mounting stops the timeline, which invalidates every bound articulation
+        handle, so the timeline is played again and those are re-bound -- the arm,
+        and a gripper merged into it, included.
+        """
+        import omni.kit.app
+        import omni.timeline
+
+        lock = self._assembly_locks.setdefault(arm_id, asyncio.Lock())
+        async with lock:
+            arm = self.get_device(arm_id)  # 404 early if the arm itself is unknown
+            try:
+                fixed_joint = await mount_prim(
+                    self._stage(),
+                    arm.prim_path,
+                    arm_mount_link,
+                    prim_path,
+                    offset,
+                    mask_collisions=mask_collisions,
+                )
+            except RuntimeError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+            omni.timeline.get_timeline_interface().play()
+            app = omni.kit.app.get_app()
+            await app.next_update_async()
+            await app.next_update_async()
+            await self.rebind_stale_devices()
+            return {
+                "prim_path": prim_path,
+                "arm_mount_link": arm_mount_link,
+                "fixed_joint": fixed_joint,
+            }
 
     async def _merge_articulated_gripper(
         self, arm_id, gripper_id, arm_mount_link, gripper_mount_link, offset
