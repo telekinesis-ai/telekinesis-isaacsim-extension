@@ -1,4 +1,7 @@
 # Changelog
+## [0.6.0] - 2026-10-19
+### Added
+- Support for editing physics of the scene
 
 ## [0.5.1] - 2026-09-04
 ### Fixed
