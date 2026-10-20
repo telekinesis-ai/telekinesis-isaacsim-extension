@@ -1,4 +1,19 @@
 # Changelog
+## [0.7.0] - 2026-10-20
+### Added
+- `GET /prims/scale` and `PUT /prims/scale` read and set a prim's local scale, keeping its pose.
+- `POST /stage/scene/reference` accepts an OBJ mesh, converted to USD in metres with
+  `omni.kit.asset_converter`. The converted asset carries no colliders or rigid body.
+- `PUT /prims/physics/rigid_body {prim_path, mass}` makes a prop one dynamic rigid body that
+  collides through convex decompositions of its meshes.
+- `DELETE /prims?prim_path=` removes a prim and everything beneath it; a missing path succeeds.
+
+### Fixed
+- Pose edits (`PUT /prims/poses`, `POST /prims/poses/relative`, `POST /prims/poses/default/reset`)
+  wiped the prim's scale. They now keep it.
+- Poses read from a scaled prim, or a prim under a scaled parent, reported a rotation
+  distorted by the scale.
+
 ## [0.6.0] - 2026-10-19
 ### Added
 - Support for editing physics of the scene

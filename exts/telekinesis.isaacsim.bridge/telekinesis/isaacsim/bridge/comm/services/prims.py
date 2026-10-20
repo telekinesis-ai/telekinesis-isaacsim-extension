@@ -2,8 +2,9 @@
 """Prim service: the orchestration behind the ``/prims`` routes.
 
 ``PrimService`` reads and edits individual prims on the open stage -- poses
-(world/local, rotation-vector or quaternion), the stored "default pose" used to
-reset a prim, user metadata, visibility, physics joint enable, and colliders. It
+(world/local, rotation-vector or quaternion), local scale, the stored "default
+pose" used to reset a prim, user metadata, visibility, physics joint enable,
+colliders and rigid bodies -- and deletes prims. Pose edits keep a prim's scale; only ``set_scale`` changes it. It
 needs the open stage, so it is composed with :class:`StageService` (one shared
 instance, injected at construction) and reuses that single "409 if no stage"
 rule rather than duplicating it.
@@ -24,9 +25,16 @@ _DEFAULT_POSE_KEY = "telekinesis:default_pose"
 
 
 def _matrix_to_pose(matrix, rotation_type):
-    """Gf.Matrix4d -> {"pose": [...]} in cartesian (rotvec) or quaternion form."""
-    translation = matrix.ExtractTranslation()
-    rotation = matrix.ExtractRotation()
+    """Gf.Matrix4d -> {"pose": [...]} in cartesian (rotvec) or quaternion form.
+
+    The matrix is decomposed rather than read directly, so scale on the prim or its
+    ancestors does not leak into the rotation.
+    """
+    from pxr import Gf
+
+    transform = Gf.Transform(matrix)
+    translation = transform.GetTranslation()
+    rotation = transform.GetRotation()
     head = [translation[0], translation[1], translation[2]]
     if rotation_type == "quaternions":
         quat = rotation.GetQuat()
@@ -71,11 +79,21 @@ def _local_matrix(prim):
 
 
 def _set_local_matrix(prim, local_matrix):
-    from pxr import UsdGeom
+    """Give the prim ``local_matrix``'s translation and rotation, keeping its own scale.
 
+    Any scale in ``local_matrix`` -- such as a scaled parent's inverse, picked up when a
+    world pose is converted to local -- is discarded, so pose edits never resize the
+    prim. Replaces the prim's xform ops with a single transform op.
+    """
+    from pxr import Gf, UsdGeom
+
+    transform = Gf.Transform(_local_matrix(prim))
+    target = Gf.Transform(local_matrix)
+    transform.SetRotation(target.GetRotation())
+    transform.SetTranslation(target.GetTranslation())
     xform = UsdGeom.Xformable(prim)
     xform.ClearXformOpOrder()
-    xform.AddTransformOp().Set(local_matrix)
+    xform.AddTransformOp().Set(transform.GetMatrix())
 
 
 def _set_world_matrix(prim, world_matrix):
@@ -114,7 +132,10 @@ class PrimService:
         return _matrix_to_pose(matrix, rotation_type)
 
     def update_pose(self, prim_path, pose):
-        """Set a prim's world-space pose from a rotation-vector pose (6 floats)."""
+        """Set a prim's world-space pose from a rotation-vector pose (6 floats).
+
+        The prim's local scale is kept.
+        """
         prim = self._prim_or_404(prim_path)
         _set_world_matrix(prim, _wspose_to_matrix(pose))
 
@@ -137,13 +158,39 @@ class PrimService:
 
         ``object_first`` chooses the multiplication order: ``world * relative`` when
         true (move in the prim's own frame), ``relative * world`` otherwise (move in
-        world frame).
+        world frame). The prim's scale is kept and does not scale the offset.
         """
+        from pxr import Gf
+
         prim = self._prim_or_404(prim_path)
         relative = _wspose_to_matrix(relative_pose)
-        current = _world_matrix(prim)
+        current = Gf.Transform(_world_matrix(prim))
+        current.SetScale(Gf.Vec3d(1.0, 1.0, 1.0))
+        current = current.GetMatrix()
         new_world = (current * relative) if object_first else (relative * current)
         _set_world_matrix(prim, new_world)
+
+    def get_scale(self, prim_path):
+        """Local scale of a prim (relative to its parent) as {"scale": [sx, sy, sz]}."""
+        from pxr import Gf
+
+        scale = Gf.Transform(_local_matrix(self._prim_or_404(prim_path))).GetScale()
+        return {"scale": list(scale)}
+
+    def set_scale(self, prim_path, scale):
+        """Set a prim's local scale, keeping its local translation and rotation.
+
+        The prim's pose is unchanged; its children scale with it. Replaces the prim's
+        xform ops with a single transform op.
+        """
+        from pxr import Gf, UsdGeom
+
+        prim = self._prim_or_404(prim_path)
+        transform = Gf.Transform(_local_matrix(prim))
+        transform.SetScale(Gf.Vec3d(*scale))
+        xform = UsdGeom.Xformable(prim)
+        xform.ClearXformOpOrder()
+        xform.AddTransformOp().Set(transform.GetMatrix())
 
     def list_default_poses(self):
         """Map every prim that has a stored default pose to that pose (local rotvec)."""
@@ -219,3 +266,28 @@ class PrimService:
         if not collision:
             collision = UsdPhysics.CollisionAPI.Apply(prim)
         collision.CreateCollisionEnabledAttr(enable)
+
+    def set_rigid_body(self, prim_path, mass):
+        """Make a prim one dynamic rigid body of ``mass`` kilograms that collides.
+
+        Applies the rigid body and mass APIs to the prim, and enables collision on
+        every mesh beneath it with a convex decomposition approximation, which holds
+        concave parts as well as convex ones. Meant for a prop with no rigid body of
+        its own: a rigid body nested beneath it would simulate separately.
+        """
+        from pxr import Usd, UsdGeom, UsdPhysics
+
+        prim = self._prim_or_404(prim_path)
+        UsdPhysics.RigidBodyAPI.Apply(prim).CreateRigidBodyEnabledAttr(True)
+        UsdPhysics.MassAPI.Apply(prim).CreateMassAttr(mass)
+        for descendant in Usd.PrimRange(prim):
+            if not descendant.IsA(UsdGeom.Mesh):
+                continue
+            UsdPhysics.CollisionAPI.Apply(descendant).CreateCollisionEnabledAttr(True)
+            UsdPhysics.MeshCollisionAPI.Apply(descendant).CreateApproximationAttr(
+                UsdPhysics.Tokens.convexDecomposition
+            )
+
+    def delete_prim(self, prim_path):
+        """Remove a prim and everything beneath it; a path with no prim is left as is."""
+        self._stage_service.stage().RemovePrim(prim_path)

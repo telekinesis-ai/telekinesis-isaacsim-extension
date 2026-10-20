@@ -12,7 +12,7 @@ the client, which maps them to joint angles before calling these routes.
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PositiveFloat
 
 
 class CreateArticulationRequest(BaseModel):
@@ -264,10 +264,11 @@ class OpenSceneRequest(BaseModel):
 class AddToSceneRequest(BaseModel):
     """Body of POST /stage/scene/reference.
 
-    ``uri`` is a USD asset on the machine running Isaac Sim, not a URL: a client
-    fetches the asset's bundle itself and hands over the extracted asset. It is
-    referenced onto ``prim_path``, so it arrives as one prim with everything it owns
-    below it, beside whatever is already in the stage.
+    ``uri`` is a USD or OBJ asset on the machine running Isaac Sim, not a URL: a client
+    fetches the asset's bundle itself and hands over the extracted asset. An OBJ is
+    converted to USD first. The asset is referenced onto ``prim_path``, so it arrives
+    as one prim with everything it owns below it, beside whatever is already in the
+    stage.
     """
 
     uri: str = Field(min_length=1)
@@ -307,6 +308,13 @@ class UpdatePoseRequest(BaseModel):
 
     input_pose: WSPose
     prim_path: str
+
+
+class SetScaleRequest(BaseModel):
+    """Body of PUT /prims/scale. ``scale`` is the prim's local ``[sx, sy, sz]``."""
+
+    prim_path: str
+    scale: list[PositiveFloat] = Field(min_length=3, max_length=3)
 
 
 class ApplyRelativePoseRequest(BaseModel):
@@ -359,6 +367,13 @@ class UpdateCollidersRequest(BaseModel):
 
     enable: bool
     prim_path: str
+
+
+class SetRigidBodyRequest(BaseModel):
+    """Body of PUT /prims/physics/rigid_body. ``mass`` is the whole body's mass in kilograms."""
+
+    prim_path: str
+    mass: PositiveFloat
 
 
 # -- Cameras (device registry, analogous to articulations) ------------------

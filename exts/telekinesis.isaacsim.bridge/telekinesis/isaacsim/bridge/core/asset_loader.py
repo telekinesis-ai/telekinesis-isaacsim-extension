@@ -3,7 +3,8 @@
 Bring a robot or tool into the open stage at an exact prim path, from either of the
 two descriptions a client can hand the bridge: a URDF, which is imported to a
 self-contained USD asset first (:func:`import_urdf_at`), or a USD asset that is
-already prepared (:func:`reference_usd_at`). Both end up referencing one asset onto
+already prepared (:func:`reference_usd_at`). A plain OBJ mesh, such as a stage prop, is
+converted to USD the same way (:func:`import_mesh_at`). Both end up referencing one asset onto
 one prim path, so the device arrives as a single prim with everything it owns below
 it. Shared by the robot and gripper connect paths.
 """
@@ -14,6 +15,7 @@ from pathlib import Path
 
 import carb
 import omni.kit.app
+import omni.kit.asset_converter
 import omni.kit.commands
 import omni.timeline
 from isaacsim.asset.importer import urdf as urdf_importer
@@ -84,6 +86,38 @@ async def reference_usd_at(stage, usd_path, dest_prim_path):
         raise RuntimeError(f"cannot find the usd asset '{usd_path}'")
 
     return await _reference_asset_at(stage, usd_path, dest_prim_path)
+
+
+async def import_mesh_at(stage, mesh_path, dest_prim_path):
+    """Convert the OBJ mesh at ``mesh_path`` to USD and reference it onto ``dest_prim_path``.
+
+    USD cannot reference an OBJ directly, so the mesh is converted into its own USD
+    asset under :data:`ASSET_ROOT` first, read in metres. Every call re-converts, so an
+    edited mesh always reaches the stage. The asset is visual only: it carries no
+    collider or rigid body.
+
+    Returns ``dest_prim_path`` and otherwise behaves like :func:`reference_usd_at`.
+    Raises ``RuntimeError`` when the mesh is missing or the conversion fails.
+    """
+    mesh_path = Path(mesh_path)
+    if not mesh_path.is_file():
+        raise RuntimeError(f"cannot find the mesh '{mesh_path}'")
+
+    asset_directory = _asset_directory_for(mesh_path)
+    asset_directory.mkdir(parents=True, exist_ok=True)
+    asset_path = asset_directory / f"{mesh_path.stem}.usd"
+
+    context = omni.kit.asset_converter.AssetConverterContext()
+    # OBJ carries no unit; the bridge's stages are authored in metres.
+    context.use_meter_as_world_unit = True
+    task = omni.kit.asset_converter.get_instance().create_converter_task(
+        mesh_path.as_posix(), asset_path.as_posix(), None, context
+    )
+    if not await task.wait_until_finished():
+        raise RuntimeError(f"failed to convert the mesh '{mesh_path}': {task.get_error_message()}")
+
+    carb.log_info(f"[bridge] converted '{mesh_path}' to asset {asset_path}")
+    return await _reference_asset_at(stage, asset_path, dest_prim_path)
 
 
 async def _reference_asset_at(stage, asset_path, dest_prim_path):
@@ -337,9 +371,9 @@ def _is_mimic(prim):
 
 
 def _asset_directory_for(urdf_path):
-    """Directory holding the USD asset built from ``urdf_path``.
+    """Directory holding the USD asset built from ``urdf_path`` (a URDF or a mesh).
 
-    Keyed on the URDF's absolute path, so two robots that happen to share a file name
+    Keyed on the source's absolute path, so two assets that happen to share a file name
     get their own directory, and re-importing the same URDF always lands on the same
     one.
     """

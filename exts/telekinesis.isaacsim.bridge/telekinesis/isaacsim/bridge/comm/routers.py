@@ -85,6 +85,8 @@ from .models import (
     SetJointPositionsRequest,
     SetJointStateRequest,
     SetPrimMetadataRequest,
+    SetRigidBodyRequest,
+    SetScaleRequest,
     SetVelocityRequest,
     SetVisibilityRequest,
     SetWorldVelocityRequest,
@@ -778,7 +780,7 @@ async def open_scene(req: OpenSceneRequest, stage_service=Depends(get_stage_serv
 
 @stage.post("/scene/reference", summary="Add To Scene")
 async def add_to_scene(req: AddToSceneRequest, stage_service=Depends(get_stage_service)):
-    """Reference a USD asset into the open stage at ``prim_path`` (keeps the stage)."""
+    """Reference a USD or OBJ asset into the open stage at ``prim_path`` (keeps the stage)."""
     return await stage_service.add_to_scene(req.uri, req.prim_path)
 
 
@@ -852,8 +854,20 @@ async def get_pose(
 
 @prims.put("/poses", summary="Update Pose")
 async def update_pose(req: UpdatePoseRequest, prim_service=Depends(get_prim_service)):
-    """Set a prim's world-space pose from a rotation-vector ``WSPose``."""
+    """Set a prim's world-space pose from a rotation-vector ``WSPose`` (keeps its scale)."""
     prim_service.update_pose(req.prim_path, req.input_pose.pose)
+
+
+@prims.get("/scale", summary="Get Scale")
+async def get_scale(prim_path: str, prim_service=Depends(get_prim_service)):
+    """Local scale of a prim as ``{"scale": [sx, sy, sz]}``."""
+    return prim_service.get_scale(prim_path)
+
+
+@prims.put("/scale", summary="Set Scale")
+async def set_scale(req: SetScaleRequest, prim_service=Depends(get_prim_service)):
+    """Set a prim's local scale, keeping its pose."""
+    prim_service.set_scale(req.prim_path, req.scale)
 
 
 @prims.get("/poses/relative", summary="Get Relative Pose")
@@ -928,6 +942,20 @@ async def set_joint_state(req: SetJointStateRequest, prim_service=Depends(get_pr
 async def update_colliders(req: UpdateCollidersRequest, prim_service=Depends(get_prim_service)):
     """Enable or disable collision on a prim (applies the CollisionAPI as needed)."""
     prim_service.update_colliders(req.prim_path, req.enable)
+
+
+@prims.put("/physics/rigid_body", summary="Set Rigid Body")
+async def set_rigid_body(req: SetRigidBodyRequest, prim_service=Depends(get_prim_service)):
+    """Make a prim one dynamic rigid body of ``mass`` kg, colliding through convex
+    decompositions of every mesh beneath it. Meant for a prop with no rigid body of its own.
+    """
+    prim_service.set_rigid_body(req.prim_path, req.mass)
+
+
+@prims.delete("", summary="Delete Prim")
+async def delete_prim(prim_path: str, prim_service=Depends(get_prim_service)):
+    """Remove a prim and everything beneath it. A path with no prim succeeds unchanged."""
+    prim_service.delete_prim(prim_path)
 
 
 @prims.put("/labels", summary="Set Semantic Label")
