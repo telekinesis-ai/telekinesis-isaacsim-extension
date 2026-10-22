@@ -262,6 +262,18 @@ class MountPrimRequest(BaseModel):
     mask_collisions: bool = True
 
 
+class SetTcpRequest(BaseModel):
+    """Body of PUT /articulations/{articulation_id}/tcp.
+
+    Places the arm's TCP marker, a plain Xform named ``tcp`` under ``arm_mount_link``,
+    at ``offset`` in the mount link's frame (null/omitted => at the mount link's
+    origin). Setting it again moves the same marker.
+    """
+
+    arm_mount_link: str
+    offset: Transformation | None = None
+
+
 # -- Stage (mirrors the extension's Omniservice schemas) --------------------
 
 

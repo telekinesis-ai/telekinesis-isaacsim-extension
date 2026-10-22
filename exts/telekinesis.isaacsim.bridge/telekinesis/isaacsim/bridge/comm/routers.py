@@ -49,6 +49,7 @@ from .models import (
     ApplyRelativePoseRequest,
     AssembleRobotRequest,
     MountPrimRequest,
+    SetTcpRequest,
     AttachmentPointPropertiesRequest,
     CameraApertureRequest,
     CameraClippingRangeRequest,
@@ -424,6 +425,18 @@ async def mount_prim(
         req.offset,
         req.mask_collisions,
     )
+
+
+@articulations.put("/articulations/{articulation_id}/tcp", summary="Set TCP")
+async def set_tcp(
+    articulation_id: str,
+    req: SetTcpRequest,
+    articulation_service=Depends(get_articulation_service),
+):
+    """Place this arm's TCP marker, an Xform under its mount link, at the given offset so
+    the active TCP can be seen and its world pose read in the stage.
+    """
+    return articulation_service.set_tcp(articulation_id, req.arm_mount_link, req.offset)
 
 
 # -- articulations: extended SingleArticulation surface ---------------------

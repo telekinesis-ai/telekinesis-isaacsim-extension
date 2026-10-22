@@ -38,6 +38,7 @@ _BIND_RETRIES = 60
 # Name of the fixed joint the suction path authors, matched on to clear out the ones
 # an earlier assembly of the same gripper left behind.
 _MOUNT_JOINT_NAME = "AssemblerFixedJoint"
+_TCP_XFORM_NAME = "tcp"
 
 
 def find_prim_by_name(stage, root_path, name):
@@ -352,6 +353,24 @@ async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_co
     await app.next_update_async()
 
     return fixed_joint.GetPath().pathString
+
+
+def place_tcp(stage, arm_prim, arm_mount_link, offset):
+    """Place the arm's TCP marker at ``offset`` in the mount link's frame.
+
+    The marker is a plain Xform named ``_TCP_XFORM_NAME`` under the mount link, with
+    no physics API, so it is drawn with the link like the link's visuals rather than
+    simulated -- the fixed-joint bolt-on :func:`mount_prim` needs for a rigid body is
+    not needed. Its local transform is replaced on every call, so one marker always
+    shows the most recently set TCP. Returns the marker's path.
+    """
+    if not stage.GetPrimAtPath(arm_prim).IsValid():
+        raise RuntimeError(f"arm prim {arm_prim!r} not found in the open stage")
+    arm_mount = find_prim_by_name(stage, arm_prim, arm_mount_link)
+
+    marker = UsdGeom.Xform.Define(stage, f"{arm_mount}/{_TCP_XFORM_NAME}")
+    marker.MakeMatrixXform().Set(offset_matrix(offset))
+    return marker.GetPath().pathString
 
 
 def _remove_previous_mount_joints(stage, gripper_prim):
