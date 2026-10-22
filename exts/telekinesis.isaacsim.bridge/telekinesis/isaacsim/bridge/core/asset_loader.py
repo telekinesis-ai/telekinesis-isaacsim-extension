@@ -280,17 +280,17 @@ def _author_missing_drives(asset_path):
     motion, at twice the remaining error per second, so lifting the wall changes what
     the solver is allowed to correct, not how fast the gripper moves.
 
-    Only joints whose composed stiffness is zero or absent are touched, so an asset
-    that authors real drives keeps them. Mimic joints are skipped: the mimic constraint
-    moves them, and a drive would fight it. Written as overs on the asset's root layer,
-    which outweighs the importer's internal layers regardless of the asset's variant
-    structure.
+    Existing nonzero stiffness is preserved. For assets without mimic joints,
+    missing or zero damping on a positive-stiffness drive is completed using the
+    arm damping factor. Mimic joints are skipped. Overrides are written to the
+    asset's root layer.
     """
     stage = Usd.Stage.Open(asset_path.as_posix())
     if stage is None:
         raise RuntimeError(f"cannot open the urdf asset at '{asset_path}'")
 
-    if any(_is_mimic(prim) for prim in stage.Traverse()):
+    has_mimic_joints = any(_is_mimic(prim) for prim in stage.Traverse())
+    if has_mimic_joints:
         # A mimic linkage: gram-scale links behind one driver commanded in steps.
         angular_stiffness = 3.75  # USD degrees; the OnRobot RG6's authored figure
         linear_stiffness = 1.0e4  # per metre
@@ -322,6 +322,13 @@ def _author_missing_drives(asset_path):
         drive = UsdPhysics.DriveAPI.Get(prim, kind)
         authored = drive.GetStiffnessAttr().Get() if drive else None
         if authored:
+            if (
+                not has_mimic_joints
+                and authored > 0.0
+                and drive.GetDampingAttr().Get() in (None, 0.0)
+            ):
+                drive.CreateDampingAttr(authored * damping_ratio)
+                completed.append(prim.GetName())
             continue
 
         drive = UsdPhysics.DriveAPI.Apply(prim, kind)
@@ -355,10 +362,8 @@ def _author_missing_drives(asset_path):
     if completed:
         stage.GetRootLayer().Save()
         carb.log_warn(
-            f"[bridge] asset {asset_path}: authored position-drive values for joint(s) the "
-            f"import left without any: {completed}. The drives clamp at the URDF's effort "
-            "limits, so a joint that misbehaves under these gains has a wrong effort limit "
-            "in its URDF."
+            f"[bridge] asset {asset_path}: completed missing or zero "
+            f"position-drive settings for joints: {completed}"
         )
 
 

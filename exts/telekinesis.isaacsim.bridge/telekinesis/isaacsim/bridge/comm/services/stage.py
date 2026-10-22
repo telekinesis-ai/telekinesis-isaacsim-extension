@@ -128,7 +128,7 @@ class StageService:
         """
         import omni.kit.app
         import omni.timeline
-        from pxr import PhysxSchema, UsdPhysics
+        from pxr import PhysxSchema, UsdPhysics, Sdf
 
         stage = self.stage()
         # PhysX reads this immutable scene flag when simulation is initialized.
@@ -138,4 +138,13 @@ class StageService:
         if not scenes:
             scenes = [UsdPhysics.Scene.Define(stage, "/physicsScene").GetPrim()]
         for prim in scenes:
-            PhysxSchema.PhysxSceneAPI.Apply(prim).CreateSolveArticulationContactLastAttr(enabled)
+            scene_api = PhysxSchema.PhysxSceneAPI.Apply(prim)
+            if hasattr(scene_api, "CreateSolveArticulationContactLastAttr"):
+                scene_api.CreateSolveArticulationContactLastAttr(enabled)
+            else:
+                # Isaac Sim 5.1 exposes this setting as a custom USD attribute.
+                prim.CreateAttribute(
+                    "physxScene:solveArticulationContactLast",
+                    Sdf.ValueTypeNames.Bool,
+                    custom=True,
+                ).Set(enabled)
