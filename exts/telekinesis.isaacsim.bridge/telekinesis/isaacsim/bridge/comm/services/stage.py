@@ -46,12 +46,12 @@ class StageService:
             raise HTTPException(status_code=400, detail=f"could not open '{uri}': {error}")
 
     async def add_to_scene(self, uri, prim_path):
-        """Reference the USD or OBJ asset at ``uri`` into the open stage at ``prim_path``.
+        """Reference the USD, OBJ, GLB or glTF asset at ``uri`` into the open stage at ``prim_path``.
 
         The counterpart to :meth:`open_scene` for adding one device to a stage instead
         of replacing it: the asset arrives as one prim beside what is already there,
         so a cell someone has built survives bringing a conveyor or a sensor into it.
-        An OBJ is converted to USD first and arrives without physics.
+        An OBJ, GLB or glTF mesh is converted to USD first and arrives without physics.
 
         ``uri`` names an asset on the machine running Isaac Sim, not a URL. Returns the
         prim path the asset arrived at, and leaves the timeline stopped.
@@ -60,7 +60,8 @@ class StageService:
 
         from ...core.asset_loader import import_mesh_at, reference_usd_at
 
-        load = import_mesh_at if Path(uri).suffix.lower() == ".obj" else reference_usd_at
+        is_mesh = Path(uri).suffix.lower() in {".obj", ".glb", ".gltf"}
+        load = import_mesh_at if is_mesh else reference_usd_at
         try:
             return await load(self.stage(), uri, prim_path)
         except RuntimeError as exc:

@@ -780,7 +780,7 @@ async def open_scene(req: OpenSceneRequest, stage_service=Depends(get_stage_serv
 
 @stage.post("/scene/reference", summary="Add To Scene")
 async def add_to_scene(req: AddToSceneRequest, stage_service=Depends(get_stage_service)):
-    """Reference a USD or OBJ asset into the open stage at ``prim_path`` (keeps the stage)."""
+    """Reference a USD, OBJ, GLB or glTF asset into the open stage at ``prim_path`` (keeps the stage)."""
     return await stage_service.add_to_scene(req.uri, req.prim_path)
 
 

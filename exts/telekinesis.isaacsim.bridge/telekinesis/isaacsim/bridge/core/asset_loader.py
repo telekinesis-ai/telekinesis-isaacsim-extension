@@ -3,8 +3,8 @@
 Bring a robot or tool into the open stage at an exact prim path, from either of the
 two descriptions a client can hand the bridge: a URDF, which is imported to a
 self-contained USD asset first (:func:`import_urdf_at`), or a USD asset that is
-already prepared (:func:`reference_usd_at`). A plain OBJ mesh, such as a stage prop, is
-converted to USD the same way (:func:`import_mesh_at`). Both end up referencing one asset onto
+already prepared (:func:`reference_usd_at`). A plain OBJ, GLB or glTF mesh, such as a
+stage prop, is converted to USD the same way (:func:`import_mesh_at`). Both end up referencing one asset onto
 one prim path, so the device arrives as a single prim with everything it owns below
 it. Shared by the robot and gripper connect paths.
 """
@@ -89,12 +89,14 @@ async def reference_usd_at(stage, usd_path, dest_prim_path):
 
 
 async def import_mesh_at(stage, mesh_path, dest_prim_path):
-    """Convert the OBJ mesh at ``mesh_path`` to USD and reference it onto ``dest_prim_path``.
+    """Convert the OBJ, GLB or glTF mesh at ``mesh_path`` to USD and reference it onto
+    ``dest_prim_path``.
 
-    USD cannot reference an OBJ directly, so the mesh is converted into its own USD
-    asset under :data:`ASSET_ROOT` first, read in metres. Every call re-converts, so an
-    edited mesh always reaches the stage. The asset is visual only: it carries no
-    collider or rigid body.
+    USD cannot reference these formats directly, so the mesh is converted into its own
+    USD asset under :data:`ASSET_ROOT` first, read in metres. Every call re-converts, so
+    an edited mesh always reaches the stage. The asset is visual only: it carries no
+    collider or rigid body. A ``.gltf`` needs the buffer and texture files it names
+    beside it; a ``.glb`` is self-contained.
 
     Returns ``dest_prim_path`` and otherwise behaves like :func:`reference_usd_at`.
     Raises ``RuntimeError`` when the mesh is missing or the conversion fails.
@@ -108,7 +110,7 @@ async def import_mesh_at(stage, mesh_path, dest_prim_path):
     asset_path = asset_directory / f"{mesh_path.stem}.usd"
 
     context = omni.kit.asset_converter.AssetConverterContext()
-    # OBJ carries no unit; the bridge's stages are authored in metres.
+    # OBJ carries no unit and glTF is defined in metres; the bridge's stages are in metres.
     context.use_meter_as_world_unit = True
     task = omni.kit.asset_converter.get_instance().create_converter_task(
         mesh_path.as_posix(), asset_path.as_posix(), None, context

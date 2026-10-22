@@ -39,13 +39,18 @@ from .robot_assembler import get_articulation_base_link_name
 # A PhysX position drive settles with a small steady-state offset (gravity, drive
 # stiffness, the URDF importer's default gains), so an over-tight position
 # tolerance is never satisfied and a move looks "never done". A move is done when
-# the joints are within _REACH_TOLERANCE_RAD of target (reached cleanly), OR when
+# every joint is within its reach tolerance of target (reached cleanly), OR when
 # they have stopped moving for _SETTLED_FRAMES consecutive frames (stalled --
 # either settled at a steady-state offset, or blocked by a grasped object). The
 # consecutive-frame requirement keeps the stall test from firing before the drive
 # has accelerated the joints. The frame cap is a ~30 s backstop at 60 fps.
+# Revolute and prismatic joints get separate thresholds because their positions
+# are in radians and metres: 0.01 read as metres is 10 mm, most of a gripper's
+# stroke, which would report a closing finger as arrived long before it is.
 _REACH_TOLERANCE_RAD = 0.01  # ~0.5 deg: target reached cleanly
+_REACH_TOLERANCE_M = 5e-4  # 0.5 mm: target reached cleanly
 _SETTLED_VELOCITY_RAD_S = 5e-3  # joints no longer moving
+_SETTLED_VELOCITY_M_S = 5e-4
 _SETTLED_FRAMES = 5  # consecutive low-velocity frames => stalled
 _BIND_RETRIES = 60
 _MOTION_MAX_FRAMES = 1800
@@ -436,6 +441,17 @@ class SingleArticulation:
                 # Fire-and-forget: the action is queued; the client owns "done".
                 return {"done": False, "reached": False, "applied": True, "target": target.tolist()}
 
+            # Joint type comes from the USD schema: dof_properties["type"] repeats the
+            # first DOF's type for every DOF, so it cannot tell a finger from an arm joint.
+            joints = joint_prims(self._articulation.prim.GetStage(), self.prim_path)
+            dof_names = self._articulation.dof_names
+            linear = np.array([
+                dof_names[i] in joints and joints[dof_names[i]].IsA(UsdPhysics.PrismaticJoint)
+                for i in idx
+            ])
+            reach_tolerance = np.where(linear, _REACH_TOLERANCE_M, _REACH_TOLERANCE_RAD)
+            settled_speed = np.where(linear, _SETTLED_VELOCITY_M_S, _SETTLED_VELOCITY_RAD_S)
+
             reached = False
             timed_out = False
             stalled_frames = 0
@@ -449,10 +465,12 @@ class SingleArticulation:
                 previous_time = stable_since = SimulationManager.get_simulation_time()
                 best_error = np.abs(q - target)
                 stable_samples = 0
-            for _ in range(_MOTION_MAX_FRAMES):
+            exit_reason = "timed out: no reach or stall within the update limit"
+            for frame in range(_MOTION_MAX_FRAMES):
                 await app.next_update_async()
                 q = self._articulation.get_joint_positions()[idx]
-                max_error = float(np.max(np.abs(q - target)))
+                error = np.abs(q - target)
+                max_error = float(np.max(error))
                 position_stalled = False
                 if position_stall_tolerance is not None:
                     step = SimulationManager.get_num_physics_steps()
@@ -468,7 +486,6 @@ class SingleArticulation:
                     previous_step, previous_time = step, now
                     # Progress toward the target, not stillness: a jammed grip
                     # jitters around its blocked pose without ever getting closer.
-                    error = np.abs(q - target)
                     if np.any(error < best_error - position_stall_tolerance):
                         best_error = np.minimum(best_error, error)
                         stable_since = now
@@ -479,18 +496,37 @@ class SingleArticulation:
                         stable_samples >= _SETTLED_FRAMES
                         and now - stable_since >= position_stall_duration
                     )
-                if max_error < _REACH_TOLERANCE_RAD:
+                if np.all(error < reach_tolerance):
                     reached = True
+                    exit_reason = "reached: every joint within its reach tolerance"
                     break
                 velocities = self._articulation.get_joint_velocities()
-                max_speed = (
-                    float(np.max(np.abs(velocities[idx]))) if velocities is not None else 0.0
-                )
-                stalled_frames = stalled_frames + 1 if max_speed < _SETTLED_VELOCITY_RAD_S else 0
-                if stalled_frames >= _SETTLED_FRAMES or position_stalled:
+                settled = velocities is None or np.all(np.abs(velocities[idx]) < settled_speed)
+                stalled_frames = stalled_frames + 1 if settled else 0
+                if position_stalled:
+                    exit_reason = (
+                        f"position stalled: no progress beyond {position_stall_tolerance} "
+                        f"for {position_stall_duration} s"
+                    )
+                    break
+                if stalled_frames >= _SETTLED_FRAMES:
+                    exit_reason = (
+                        f"velocity settled: speed under {settled_speed.tolist()} "
+                        f"for {_SETTLED_FRAMES} updates"
+                    )
                     break
             else:
                 timed_out = True
+
+            velocities = self._articulation.get_joint_velocities()
+            carb.log_warn(
+                f"[bridge] move_j {self.prim_path} returned after {frame + 1} updates, "
+                f"{exit_reason}; joints {[dof_names[i] for i in idx]}, "
+                f"prismatic {linear.tolist()}, target {target.tolist()}, "
+                f"position {q.tolist()}, error {error.tolist()}, "
+                f"reach tolerance {reach_tolerance.tolist()}, "
+                f"velocity {None if velocities is None else velocities[idx].tolist()}"
+            )
 
         return {
             "done": True,

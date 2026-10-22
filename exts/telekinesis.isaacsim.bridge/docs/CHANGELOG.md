@@ -1,8 +1,15 @@
 # Changelog
+## [Unreleased]
+### Fixed
+- Blocking joint moves on prismatic joints (the Robotiq Hand-E fingers) reported `reached`
+  while still up to 10 mm from target, so a gripper `close` returned mid-stroke. Reach and
+  settle thresholds were radian values applied to metres; prismatic joints now use 0.5 mm
+  and 0.5 mm/s.
+
 ## [0.7.0] - 2026-10-20
 ### Added
 - `GET /prims/scale` and `PUT /prims/scale` read and set a prim's local scale, keeping its pose.
-- `POST /stage/scene/reference` accepts an OBJ mesh, converted to USD in metres with
+- `POST /stage/scene/reference` accepts an OBJ, GLB or glTF mesh, converted to USD in metres with
   `omni.kit.asset_converter`. The converted asset carries no colliders or rigid body.
 - `PUT /prims/physics/rigid_body {prim_path, mass}` makes a prop one dynamic rigid body that
   collides through convex decompositions of its meshes.
