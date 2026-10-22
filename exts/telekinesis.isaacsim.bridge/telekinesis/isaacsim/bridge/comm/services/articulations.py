@@ -25,7 +25,7 @@ import asyncio
 
 from fastapi import HTTPException
 
-from ...core.articulation import SingleArticulation, find_driver_joint
+from ...core.articulation import SingleArticulation, find_driver_joint, joint_prims
 from ...core.asset_loader import import_urdf_at, reference_usd_at
 from ...core.robot_assembler import (
     assemble_tool,
@@ -62,6 +62,8 @@ class ArticulationService:
 
     def clear(self):
         """Drop every bound device (called when the bridge stops or the stage changes)."""
+        for device in self._devices.values():
+            device.stop_velocity_drive()
         self._devices = {}
         self._id_by_prim = {}
         self._count = 0
@@ -181,6 +183,7 @@ class ArticulationService:
                 status_code=404,
                 detail=f"no articulation registered with id '{articulation_id}'",
             )
+        self._devices[articulation_id].stop_velocity_drive()
         del self._devices[articulation_id]
         for prim, registered_id in list(self._id_by_prim.items()):
             if registered_id == articulation_id:
@@ -209,6 +212,7 @@ class ArticulationService:
     async def move_j(
         self, articulation_id, positions, indices, asynchronous,
         position_stall_tolerance=None, position_stall_duration=0.25,
+        joint_speeds=None, max_efforts=None,
     ):
         """Drive joint ``positions`` (radians) onto the device's chosen joints.
 
@@ -220,6 +224,7 @@ class ArticulationService:
             return await self.get_device(articulation_id).move_j(
                 positions, indices, asynchronous,
                 position_stall_tolerance, position_stall_duration,
+                joint_speeds, max_efforts,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -466,18 +471,28 @@ class ArticulationService:
         return {"threshold": device.get_sleep_threshold()}
 
     def get_driver_joint(self, articulation_id):
-        """Discover the gripper's actuated driver joint: its name and DOF index.
+        """Return the driver name, DOF index, maximum speed and effort.
 
         A USD/PhysX schema walk (mimic vs DriveAPI) the client cannot do itself.
         The index is into the device's current ``dof_names`` (so it is valid both
         standalone and after assembly).
+        Speed is rad/s or m/s; effort is Nm or N. The URDF speed is used when
+        recorded, because solver velocity limits can be lifted for mimic joints.
         """
         device = self.get_device(articulation_id)
         try:
             name = find_driver_joint(self._stage(), device.prim_path, device.dof_names)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {"name": name, "index": device.dof_names.index(name)}
+        index = device.dof_names.index(name)
+        properties = device.dof_properties()[index]
+        prim = joint_prims(self._stage(), device.prim_path)[name]
+        velocity = prim.GetAttribute("urdf:limit:velocity").Get()
+        return {
+            "name": name, "index": index,
+            "max_velocity": velocity if velocity is not None else properties["max_velocity"],
+            "max_effort": properties["max_effort"],
+        }
 
     async def assemble_robot(
         self, arm_id, gripper_id, arm_mount_link, gripper_mount_link, offset, mask_collisions

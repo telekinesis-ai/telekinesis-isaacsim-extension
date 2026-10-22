@@ -184,6 +184,7 @@ async def move_j(
     return await articulation_service.move_j(
         articulation_id, req.joint_positions, req.indices, req.asynchronous,
         req.position_stall_tolerance, req.position_stall_duration,
+        req.joint_speeds, req.max_efforts,
     )
 
 

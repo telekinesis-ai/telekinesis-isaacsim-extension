@@ -49,6 +49,14 @@ class JointPositionsRequest(BaseModel):
     Blocking responses distinguish motion-limit expiry with ``timed_out=true``;
     expiry is not evidence of a grasp.
 
+    ``joint_speeds`` and ``max_efforts`` together select force-limited velocity
+    control to the target: positive speeds in rad/s or m/s, nonnegative limits
+    in Nm or N, one finite value per selected joint. A blocked joint maintains
+    effort after returning; target arrival restores position holding. Target
+    monitoring continues for asynchronous moves and after stalls. Timeout stops
+    velocity control. Omitting both uses the existing position drives.
+    This mode requires force-type joint drives; acceleration drives are rejected.
+
     Example:
         JointPositionsRequest(joint_positions=[0.7], position_stall_tolerance=0.0001)
     """
@@ -58,6 +66,8 @@ class JointPositionsRequest(BaseModel):
     asynchronous: bool = False
     position_stall_tolerance: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     position_stall_duration: float = Field(default=0.25, gt=0, allow_inf_nan=False)
+    joint_speeds: list[float] | None = None
+    max_efforts: list[float] | None = None
 
 
 class SetJointPositionsRequest(BaseModel):
