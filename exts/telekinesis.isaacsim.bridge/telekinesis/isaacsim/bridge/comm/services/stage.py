@@ -148,7 +148,6 @@ class StageService:
                     Sdf.ValueTypeNames.Bool,
                     custom=True,
                 ).Set(enabled)
-            PhysxSchema.PhysxSceneAPI.Apply(prim).CreateSolveArticulationContactLastAttr(enabled)
 
     def set_guides_visible(self, visible: bool) -> None:
         """Show or hide guide-purpose prims, such as the TCP marker axes, in the viewport.

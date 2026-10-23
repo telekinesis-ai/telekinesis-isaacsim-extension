@@ -271,9 +271,11 @@ class PrimService:
         """Make a prim one dynamic rigid body of ``mass`` kilograms that collides.
 
         Applies the rigid body and mass APIs to the prim, and enables collision on
-        every mesh beneath it with a convex decomposition approximation, which holds
-        concave parts as well as convex ones. Meant for a prop with no rigid body of
-        its own: a rigid body nested beneath it would simulate separately.
+        every mesh beneath it as that mesh's convex hull. A hull is solid even when
+        the mesh is an open or multi-shell surface, as CAD exports often are, but it
+        fills the mesh's holes and concave pockets; a prop built from several meshes
+        keeps one hull per mesh. Meant for a prop with no rigid body of its own: a
+        rigid body nested beneath it would simulate separately.
         """
         from pxr import Usd, UsdGeom, UsdPhysics
 
@@ -284,8 +286,10 @@ class PrimService:
             if not descendant.IsA(UsdGeom.Mesh):
                 continue
             UsdPhysics.CollisionAPI.Apply(descendant).CreateCollisionEnabledAttr(True)
+            # Not a convex decomposition: it fills a closed inside, and an open surface
+            # has none, so it leaves thin hulls that gripper fingers are pushed through.
             UsdPhysics.MeshCollisionAPI.Apply(descendant).CreateApproximationAttr(
-                UsdPhysics.Tokens.convexDecomposition
+                UsdPhysics.Tokens.convexHull
             )
 
     def delete_prim(self, prim_path):

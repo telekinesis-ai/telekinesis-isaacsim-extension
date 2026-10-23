@@ -970,8 +970,8 @@ async def update_colliders(req: UpdateCollidersRequest, prim_service=Depends(get
 
 @prims.put("/physics/rigid_body", summary="Set Rigid Body")
 async def set_rigid_body(req: SetRigidBodyRequest, prim_service=Depends(get_prim_service)):
-    """Make a prim one dynamic rigid body of ``mass`` kg, colliding through convex
-    decompositions of every mesh beneath it. Meant for a prop with no rigid body of its own.
+    """Make a prim one dynamic rigid body of ``mass`` kg, colliding through the convex
+    hull of every mesh beneath it. Meant for a prop with no rigid body of its own.
     """
     prim_service.set_rigid_body(req.prim_path, req.mass)
 

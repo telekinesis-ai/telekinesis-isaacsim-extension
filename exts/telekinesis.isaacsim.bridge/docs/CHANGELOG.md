@@ -1,6 +1,14 @@
 # Changelog
 ## [Unreleased]
+### Changed
+- `PUT /prims/physics/rigid_body` makes each mesh collide as its convex hull instead of a
+  convex decomposition. Decomposing open, multi-shell CAD meshes left thin hulls that gripper
+  fingers were pushed through. A hull is solid, but fills holes and concave pockets.
+
 ### Fixed
+- `PUT /stage/physics/solve_articulation_contact_last` failed on an Isaac Sim whose
+  `PhysxSceneAPI` has no `CreateSolveArticulationContactLastAttr`, after already writing the
+  setting as a custom attribute.
 - Blocking joint moves on prismatic joints (the Robotiq Hand-E fingers) reported `reached`
   while still up to 10 mm from target, so a gripper `close` returned mid-stroke. Reach and
   settle thresholds were radian values applied to metres; prismatic joints now use 0.5 mm
