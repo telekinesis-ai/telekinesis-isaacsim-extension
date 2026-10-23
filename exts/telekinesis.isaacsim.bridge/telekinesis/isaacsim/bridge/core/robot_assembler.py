@@ -32,13 +32,16 @@ import omni.timeline
 import omni.usd
 from isaacsim.core.prims import SingleArticulation
 import carb
-from pxr import Gf, PhysxSchema, Sdf, Usd, UsdGeom, UsdPhysics
+from pxr import Gf, PhysxSchema, Sdf, Tf, Usd, UsdGeom, UsdPhysics
 
 _BIND_RETRIES = 60
 # Name of the fixed joint the suction path authors, matched on to clear out the ones
 # an earlier assembly of the same gripper left behind.
 _MOUNT_JOINT_NAME = "AssemblerFixedJoint"
 _TCP_XFORM_NAME = "tcp"
+# Size of the TCP marker's axes, in meters.
+_TCP_AXIS_LENGTH = 0.05
+_TCP_AXIS_RADIUS = 0.002
 
 
 def find_prim_by_name(stage, root_path, name):
@@ -355,21 +358,42 @@ async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_co
     return fixed_joint.GetPath().pathString
 
 
-def place_tcp(stage, arm_prim, arm_mount_link, offset):
-    """Place the arm's TCP marker at ``offset`` in the mount link's frame.
+def place_tcp(stage, arm_prim, arm_mount_link, tcp_name, offset):
+    """Place the arm's TCP marker, named ``tcp_name``, at ``offset`` in the mount link's frame.
 
-    The marker is a plain Xform named ``_TCP_XFORM_NAME`` under the mount link, with
-    no physics API, so it is drawn with the link like the link's visuals rather than
+    The marker is a plain Xform at ``<mount link>/_TCP_XFORM_NAME/<tcp_name>`` with no
+    physics API, so it is drawn with the link like the link's visuals rather than
     simulated -- the fixed-joint bolt-on :func:`mount_prim` needs for a rigid body is
-    not needed. Its local transform is replaced on every call, so one marker always
-    shows the most recently set TCP. Returns the marker's path.
+    not needed. The fixed parent keeps the TCP name from colliding with the arm's own
+    prims, and is emptied on every call so only the most recently set TCP is shown.
+
+    The marker carries red/green/blue X/Y/Z axes with guide purpose, so they are
+    drawn only while the viewport shows guides (``StageService.set_guides_visible``).
+    Returns the marker's path.
     """
     if not stage.GetPrimAtPath(arm_prim).IsValid():
         raise RuntimeError(f"arm prim {arm_prim!r} not found in the open stage")
     arm_mount = find_prim_by_name(stage, arm_prim, arm_mount_link)
 
-    marker = UsdGeom.Xform.Define(stage, f"{arm_mount}/{_TCP_XFORM_NAME}")
+    parent = UsdGeom.Xform.Define(stage, f"{arm_mount}/{_TCP_XFORM_NAME}").GetPrim()
+    for child in list(parent.GetChildren()):
+        stage.RemovePrim(child.GetPath())
+
+    marker = UsdGeom.Xform.Define(stage, parent.GetPath().AppendChild(Tf.MakeValidIdentifier(tcp_name)))
     marker.MakeMatrixXform().Set(offset_matrix(offset))
+
+    for axis, color in (("X", (1, 0, 0)), ("Y", (0, 1, 0)), ("Z", (0, 0, 1))):
+        cylinder = UsdGeom.Cylinder.Define(stage, marker.GetPath().AppendChild(f"axis_{axis}"))
+        cylinder.CreateAxisAttr(axis)
+        cylinder.CreateHeightAttr(_TCP_AXIS_LENGTH)
+        cylinder.CreateRadiusAttr(_TCP_AXIS_RADIUS)
+        cylinder.CreateDisplayColorAttr([Gf.Vec3f(*color)])
+        cylinder.CreatePurposeAttr(UsdGeom.Tokens.guide)
+        # A cylinder is centred on its origin; shift it so the axis starts at the TCP.
+        shift = Gf.Vec3d(0, 0, 0)
+        shift["XYZ".index(axis)] = _TCP_AXIS_LENGTH / 2
+        cylinder.AddTranslateOp().Set(shift)
+
     return marker.GetPath().pathString
 
 

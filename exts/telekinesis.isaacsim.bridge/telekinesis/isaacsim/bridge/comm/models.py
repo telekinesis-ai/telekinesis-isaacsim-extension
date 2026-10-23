@@ -265,12 +265,13 @@ class MountPrimRequest(BaseModel):
 class SetTcpRequest(BaseModel):
     """Body of PUT /articulations/{articulation_id}/tcp.
 
-    Places the arm's TCP marker, a plain Xform named ``tcp`` under ``arm_mount_link``,
-    at ``offset`` in the mount link's frame (null/omitted => at the mount link's
-    origin). Setting it again moves the same marker.
+    Places the arm's TCP marker, a plain Xform named ``tcp_name`` under
+    ``<arm_mount_link>/tcp``, at ``offset`` in the mount link's frame (null/omitted =>
+    at the mount link's origin). Setting it again replaces the previous marker.
     """
 
     arm_mount_link: str
+    tcp_name: str
     offset: Transformation | None = None
 
 

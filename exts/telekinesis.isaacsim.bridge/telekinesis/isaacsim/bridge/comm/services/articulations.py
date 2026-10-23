@@ -604,15 +604,15 @@ class ArticulationService:
                 "fixed_joint": fixed_joint,
             }
 
-    def set_tcp(self, arm_id, arm_mount_link, offset):
-        """Place the arm's TCP marker at ``offset`` in its mount link's frame.
+    def set_tcp(self, arm_id, arm_mount_link, tcp_name, offset):
+        """Place the arm's TCP marker, named ``tcp_name``, at ``offset`` in its mount link's frame.
 
         See :func:`..core.robot_assembler.place_tcp`. The marker carries no physics, so
         the timeline keeps playing and no articulation handle is invalidated.
         """
         arm = self.get_device(arm_id)  # 404 early if the arm itself is unknown
         try:
-            prim_path = place_tcp(self._stage(), arm.prim_path, arm_mount_link, offset)
+            prim_path = place_tcp(self._stage(), arm.prim_path, arm_mount_link, tcp_name, offset)
         except RuntimeError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return {"prim_path": prim_path, "arm_mount_link": arm_mount_link}

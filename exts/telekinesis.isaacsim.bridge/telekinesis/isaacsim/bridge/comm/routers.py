@@ -436,7 +436,7 @@ async def set_tcp(
     """Place this arm's TCP marker, an Xform under its mount link, at the given offset so
     the active TCP can be seen and its world pose read in the stage.
     """
-    return articulation_service.set_tcp(articulation_id, req.arm_mount_link, req.offset)
+    return articulation_service.set_tcp(articulation_id, req.arm_mount_link, req.tcp_name, req.offset)
 
 
 # -- articulations: extended SingleArticulation surface ---------------------
@@ -838,6 +838,16 @@ async def set_solve_articulation_contact_last(
     on the next play and are not saved to disk. Returns 409 when no stage is open.
     """
     await stage_service.set_solve_articulation_contact_last(req.enabled)
+
+
+@stage.put("/viewport/guides", summary="Set Guides Visible")
+async def set_guides_visible(req: SetEnabledRequest, stage_service=Depends(get_stage_service)):
+    """Show or hide guide-purpose prims (e.g. TCP marker axes) in the viewport.
+
+    Same as Display > Show By Purpose > Guide: applies to every guide prim and persists
+    across Isaac Sim restarts.
+    """
+    stage_service.set_guides_visible(req.enabled)
 
 
 @stage.get("/configuration", summary="Export Configuration")
