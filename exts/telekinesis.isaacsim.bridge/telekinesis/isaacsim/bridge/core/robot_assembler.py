@@ -13,9 +13,9 @@ Two kinds of gripper, two paths:
   (resolved by joint name) -- see ``adopt_shared_articulation`` on the device class.
 * A **suction** gripper (:func:`attach_surface_gripper`) has no joints and no
   articulation to merge, so it is placed at the mount directly, bolted on with a
-  fixed joint that makes its body a link of the arm's articulation, and its
-  attachment points are re-parked onto the arm. The arm's DOF are unchanged; the
-  gripper stays its own device.
+  fixed joint that is excluded from the articulation, and its attachment points are
+  re-parked onto the arm. The arm's articulation is unchanged; the gripper stays its
+  own device.
 
 Any other prim, such as a camera, is bolted on the suction way by :func:`mount_prim`,
 minus the attachment points: it becomes a rigid body if it is not one, gets a mass
@@ -236,15 +236,16 @@ async def attach_surface_gripper(
     3. The gripper is freed from the stage -- any joint holding it to the world is
        disabled and it stops being kinematic -- so the new fixed joint is the only
        thing constraining it.
-    4. A fixed joint joins the arm's mount link to the gripper's mount body, making
-       the gripper body a link of the arm's articulation without adding a DOF.
+    4. A fixed joint excluded from the articulation joins the arm's mount link to
+       the gripper's mount body, leaving the arm's articulation topology unchanged.
     5. Every attachment point is re-parked onto the arm's mount link: its
        ``physics:body1`` is re-pointed there and its local frame recomputed so the
        parked joint holds nothing. Until this is done the attachment points are
        still parked against whatever body the asset shipped them against, and the
        gripper cannot grip.
     6. Collisions between the arm and the gripper are masked (``mask_collisions``)
-       -- the cups sit against the flange.
+       -- the cups sit against the flange, and unlike the articulated path there is
+       no articulation merge to sort this out.
 
     Edits USD, so the timeline is stopped throughout; the caller plays it again and
     re-binds both devices, since stopping invalidates the arm's articulation handle
@@ -307,8 +308,8 @@ async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_co
     does not follow the simulated link, so it is bolted on with a fixed joint
     instead, and can sit anywhere in the stage. The prim is moved so its origin
     lands at ``offset`` in the mount link's frame, any joint an earlier mount left
-    on it is removed, and a fixed joint joins the two, making the prim a link of
-    the arm's articulation without changing the arm's DOF.
+    on it is removed, and a fixed joint excluded from the articulation joins the
+    two, leaving the arm's DOF unchanged.
 
     A fixed joint needs a rigid body on both ends, so a prim that is not one gets
     ``RigidBodyAPI`` with gravity off: the joint is then all that holds it. A
@@ -519,11 +520,7 @@ def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
     poses the arm and the gripper happen to hold at that instant; writing the offset
     means the joint says what was asked for regardless.
 
-    The joint is left in the arm's articulation, as ``RobotAssembler`` leaves the
-    one it authors, so the mounted body becomes a link with no DOF of its own: the
-    attachment has no joint error and the arm's DOF are unchanged. Excluded, the
-    joint would be solved as a separate constraint that gives under the mounted
-    body's mass and makes the arm jitter.
+    The joint is excluded from the articulation, so the arm's DOF are unchanged.
     """
     joint = UsdPhysics.FixedJoint.Define(
         stage, f"{gripper_mount_path}/{_MOUNT_JOINT_NAME}"
@@ -536,6 +533,7 @@ def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
     joint.CreateLocalRot0Attr().Set(Gf.Quatf(mount_pose.GetRotation().GetQuat()))
     joint.CreateLocalPos1Attr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
     joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
+    joint.CreateExcludeFromArticulationAttr(True)
     return joint
 
 
