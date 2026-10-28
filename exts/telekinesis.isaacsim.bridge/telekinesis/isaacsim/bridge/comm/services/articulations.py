@@ -688,11 +688,11 @@ class ArticulationService:
     ):
         """Bolt a suction gripper onto the arm's mount link with a fixed joint.
 
-        Nothing is merged: a suction gripper has no joints to fold into the arm's
-        articulation, so it keeps its own id and its own close/open routes and the
-        arm's DOF are unchanged. What assembly does instead is place the gripper at
-        the flange, join the two with a fixed joint excluded from the articulation,
-        and re-park the gripper's attachment points onto the arm's mount link so
+        A suction gripper has no joints to fold into the arm's articulation, so it
+        keeps its own id and its own close/open routes and the arm's DOF are
+        unchanged. Assembly places the gripper at the flange, joins the two with a
+        fixed joint that makes the gripper's body a link of the arm's articulation,
+        and re-parks the gripper's attachment points onto the arm's mount link so
         they can grip (see
         :func:`..core.robot_assembler.attach_surface_gripper`).
 

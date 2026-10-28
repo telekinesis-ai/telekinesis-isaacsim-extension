@@ -6,6 +6,14 @@
   fingers were pushed through. A hull is solid, but fills holes and concave pockets.
 
 ### Fixed
+- `POST /articulations/{id}/mount_prim` mounted a prim with no mass and no colliders, such as a
+  camera, as a body PhysX weighs at its 1 kg default with an inertia unrelated to the prim, which
+  shook the arm. Such a prim now gets the mass and inertia of a solid box filling its bounds at
+  1000 kg/m³; a prim with no extent is refused with 422.
+- Prims mounted with `mount_prim` and suction grippers attached with `assemble_robot` were held
+  by a fixed joint excluded from the arm's articulation, a separate constraint that gave under
+  the mounted body's mass. The joint is now part of the arm's articulation, so the mounted body
+  is a link without DOF; the gripper's attachment points stay excluded.
 - `PUT /stage/physics/solve_articulation_contact_last` failed on an Isaac Sim whose
   `PhysxSceneAPI` has no `CreateSolveArticulationContactLastAttr`, after already writing the
   setting as a custom attribute.

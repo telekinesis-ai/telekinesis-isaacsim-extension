@@ -13,13 +13,13 @@ Two kinds of gripper, two paths:
   (resolved by joint name) -- see ``adopt_shared_articulation`` on the device class.
 * A **suction** gripper (:func:`attach_surface_gripper`) has no joints and no
   articulation to merge, so it is placed at the mount directly, bolted on with a
-  fixed joint that is excluded from the articulation, and its attachment points are
-  re-parked onto the arm. The arm's articulation is unchanged; the gripper stays its
-  own device.
+  fixed joint that makes its body a link of the arm's articulation, and its
+  attachment points are re-parked onto the arm. The arm's DOF are unchanged; the
+  gripper stays its own device.
 
 Any other prim, such as a camera, is bolted on the suction way by :func:`mount_prim`,
-minus the attachment points: it becomes a rigid body if it is not one and is fixed
-to the mount link.
+minus the attachment points: it becomes a rigid body if it is not one, gets a mass
+from its bounds when it has none, and is fixed to the mount link.
 
 omni/isaac imports live at module top (only imported inside Isaac Sim), matching
 :mod:`.asset_loader`. ``RobotAssembler`` ships as its own Kit extension, so it is
@@ -38,6 +38,8 @@ _BIND_RETRIES = 60
 # Name of the fixed joint the suction path authors, matched on to clear out the ones
 # an earlier assembly of the same gripper left behind.
 _MOUNT_JOINT_NAME = "AssemblerFixedJoint"
+# PhysX's default density, in kg/m^3, used to weigh a mounted prim that has no mass.
+_MOUNTED_PRIM_DENSITY = 1000.0
 _TCP_XFORM_NAME = "tcp"
 # Size of the TCP marker's axes, in meters.
 _TCP_AXIS_LENGTH = 0.05
@@ -234,16 +236,15 @@ async def attach_surface_gripper(
     3. The gripper is freed from the stage -- any joint holding it to the world is
        disabled and it stops being kinematic -- so the new fixed joint is the only
        thing constraining it.
-    4. A fixed joint excluded from the articulation joins the arm's mount link to
-       the gripper's mount body, leaving the arm's articulation topology unchanged.
+    4. A fixed joint joins the arm's mount link to the gripper's mount body, making
+       the gripper body a link of the arm's articulation without adding a DOF.
     5. Every attachment point is re-parked onto the arm's mount link: its
        ``physics:body1`` is re-pointed there and its local frame recomputed so the
        parked joint holds nothing. Until this is done the attachment points are
        still parked against whatever body the asset shipped them against, and the
        gripper cannot grip.
     6. Collisions between the arm and the gripper are masked (``mask_collisions``)
-       -- the cups sit against the flange, and unlike the articulated path there is
-       no articulation merge to sort this out.
+       -- the cups sit against the flange.
 
     Edits USD, so the timeline is stopped throughout; the caller plays it again and
     re-binds both devices, since stopping invalidates the arm's articulation handle
@@ -306,16 +307,21 @@ async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_co
     does not follow the simulated link, so it is bolted on with a fixed joint
     instead, and can sit anywhere in the stage. The prim is moved so its origin
     lands at ``offset`` in the mount link's frame, any joint an earlier mount left
-    on it is removed, and a fixed joint excluded from the articulation joins the
-    two, leaving the arm's DOF unchanged.
+    on it is removed, and a fixed joint joins the two, making the prim a link of
+    the arm's articulation without changing the arm's DOF.
 
     A fixed joint needs a rigid body on both ends, so a prim that is not one gets
-    ``RigidBodyAPI`` with gravity off: the joint is then all that holds it, and
-    gravity would only make the arm carry its default mass. A kinematic prim is
-    made dynamic for the same reason.
+    ``RigidBodyAPI`` with gravity off: the joint is then all that holds it. A
+    kinematic prim is made dynamic for the same reason. A prim with neither mass
+    nor colliders anywhere beneath it gets the mass of a solid box filling its
+    bounds (see :func:`_set_mass_from_bounds`); one that has either keeps it.
 
     Edits USD, so the timeline is stopped throughout; the caller plays it again
     and re-binds the arm. Returns the path of the fixed joint.
+
+    Raises:
+        RuntimeError: If the arm, its mount link or the prim is missing, or the
+            prim needs a mass but has no extent to derive one from.
     """
     ext_manager = omni.kit.app.get_app().get_extension_manager()
     ext_manager.set_extension_enabled_immediate("isaacsim.robot_setup.assembler", True)
@@ -343,6 +349,13 @@ async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_co
         PhysxSchema.PhysxRigidBodyAPI.Apply(prim).CreateDisableGravityAttr(True)
     if prim.HasAttribute("physics:kinematicEnabled"):
         prim.GetAttribute("physics:kinematicEnabled").Set(False)
+    # Checked apart from the rigid body: a stage kept from an earlier mount already
+    # holds the prim as a rigid body, possibly without a mass.
+    if not any(
+        descendant.HasAPI(UsdPhysics.MassAPI) or descendant.HasAPI(UsdPhysics.CollisionAPI)
+        for descendant in Usd.PrimRange(prim, Usd.TraverseInstanceProxies())
+    ):
+        _set_mass_from_bounds(prim)
 
     await app.next_update_async()
     fixed_joint = _create_mount_joint(stage, arm_mount, prim_path, offset)
@@ -455,6 +468,44 @@ def _place_at_mount(stage, arm_mount_path, gripper_prim, gripper_mount_path, off
     )
 
 
+def _set_mass_from_bounds(prim):
+    """Give ``prim`` the mass, center of mass and inertia of a solid box filling its bounds.
+
+    Without colliders PhysX cannot derive a body's mass and falls back to 1 kg with
+    an inertia unrelated to the prim -- for a camera, many times the real device,
+    which the mount joint then makes the arm's last link swing. The box is weighed
+    at PhysX's default density, so the prim gets the mass PhysX would infer from a
+    box collider of its size. The bounds are the prim's own, without its transform,
+    in stage units taken as meters like the mount offset.
+
+    Raises:
+        RuntimeError: If the prim has no extent, which would give it a zero mass
+            that PhysX treats as infinite.
+    """
+    bounds = (
+        UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
+        .ComputeUntransformedBound(prim)
+        .ComputeAlignedRange()
+    )
+    if bounds.IsEmpty() or min(bounds.GetSize()) <= 0.0:
+        raise RuntimeError(
+            f"prim {prim.GetPath().pathString!r} has no mass, colliders or extent to "
+            "derive a mass from; author a MassAPI on it before mounting it"
+        )
+    x, y, z = bounds.GetSize()
+    mass = _MOUNTED_PRIM_DENSITY * x * y * z
+    mass_api = UsdPhysics.MassAPI.Apply(prim)
+    mass_api.CreateMassAttr(mass)
+    mass_api.CreateCenterOfMassAttr(Gf.Vec3f(bounds.GetMidpoint()))
+    mass_api.CreateDiagonalInertiaAttr(
+        Gf.Vec3f(
+            mass / 12.0 * (y * y + z * z),
+            mass / 12.0 * (x * x + z * z),
+            mass / 12.0 * (x * x + y * y),
+        )
+    )
+
+
 def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
     """Bolt the gripper's mount body to the arm's mount link at exactly ``m_T_g``.
 
@@ -468,7 +519,11 @@ def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
     poses the arm and the gripper happen to hold at that instant; writing the offset
     means the joint says what was asked for regardless.
 
-    The joint is excluded from the articulation, so the arm's DOF are unchanged.
+    The joint is left in the arm's articulation, as ``RobotAssembler`` leaves the
+    one it authors, so the mounted body becomes a link with no DOF of its own: the
+    attachment has no joint error and the arm's DOF are unchanged. Excluded, the
+    joint would be solved as a separate constraint that gives under the mounted
+    body's mass and makes the arm jitter.
     """
     joint = UsdPhysics.FixedJoint.Define(
         stage, f"{gripper_mount_path}/{_MOUNT_JOINT_NAME}"
@@ -481,7 +536,6 @@ def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
     joint.CreateLocalRot0Attr().Set(Gf.Quatf(mount_pose.GetRotation().GetQuat()))
     joint.CreateLocalPos1Attr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
     joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
-    joint.CreateExcludeFromArticulationAttr(True)
     return joint
 
 
