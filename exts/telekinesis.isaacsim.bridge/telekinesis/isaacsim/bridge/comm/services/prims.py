@@ -292,6 +292,16 @@ class PrimService:
                 UsdPhysics.Tokens.convexHull
             )
 
-    def delete_prim(self, prim_path):
-        """Remove a prim and everything beneath it; a path with no prim is left as is."""
+    async def delete_prim(self, prim_path):
+        """Remove a prim and everything beneath it; a path with no prim is left as is.
+
+        Stops the timeline first and leaves it stopped: removing a body the running
+        simulation holds, such as a prim mounted on an arm (a link of its
+        articulation), invalidates every physics handle.
+        """
+        import omni.kit.app
+        import omni.timeline
+
+        omni.timeline.get_timeline_interface().stop()
+        await omni.kit.app.get_app().next_update_async()
         self._stage_service.stage().RemovePrim(prim_path)

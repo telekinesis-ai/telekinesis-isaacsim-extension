@@ -4,6 +4,9 @@
 - `PUT /prims/physics/rigid_body` makes each mesh collide as its convex hull instead of a
   convex decomposition. Decomposing open, multi-shell CAD meshes left thin hulls that gripper
   fingers were pushed through. A hull is solid, but fills holes and concave pockets.
+- `DELETE /prims` stops the timeline before removing the prim and leaves it stopped. A prim
+  mounted with `mount_prim` is a link of the arm's articulation, and removing it while the
+  simulation ran invalidated every physics handle and closed the arm's websockets.
 
 ### Fixed
 - `POST /articulations/{id}/mount_prim` mounted a prim with no mass and no colliders, such as a
