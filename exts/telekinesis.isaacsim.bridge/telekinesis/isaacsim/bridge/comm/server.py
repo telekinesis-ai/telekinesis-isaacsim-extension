@@ -161,7 +161,11 @@ class BridgeServer:
         app.state.lightbeam_service = lightbeam_service
         app.state.conveyor_service = conveyor_service
         app.state.stage_service = stage_service
-        app.state.prim_service = PrimService(stage_service)  # composes the stage service
+        prim_service = PrimService(stage_service)  # composes the stage service
+        # Deleting a prim stops and replays the timeline, so the articulation
+        # service repairs the handles that stop invalidated.
+        prim_service.on_timeline_stopped = articulation_service.rebind_stale_devices
+        app.state.prim_service = prim_service
         app.state.general_service = GeneralService()
         self._device_services = (
             articulation_service,

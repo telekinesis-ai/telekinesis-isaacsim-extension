@@ -117,6 +117,10 @@ class PrimService:
     def __init__(self, stage_service):
         """``stage_service`` supplies the open stage (and the 409-if-none rule)."""
         self._stage_service = stage_service
+        # Awaited after a deletion stopped and replayed the timeline, so the
+        # articulation service can repair the device handles that stop killed. Set
+        # by BridgeServer; None until then.
+        self.on_timeline_stopped = None
 
     def _prim_or_404(self, prim_path):
         """Resolve a prim path on the open stage, or raise 404."""
@@ -292,6 +296,36 @@ class PrimService:
                 UsdPhysics.Tokens.convexHull
             )
 
-    def delete_prim(self, prim_path):
-        """Remove a prim and everything beneath it; a path with no prim is left as is."""
-        self._stage_service.stage().RemovePrim(prim_path)
+    async def delete_prim(self, prim_path):
+        """Remove a prim and everything beneath it; a path with no prim is left as is.
+
+        The prim may be a link of a bound articulation -- a body fixed to an arm is --
+        and removing it while physics runs invalidates the physics view every device
+        reads through. So the timeline is stopped for the removal. A timeline that was
+        playing is played again and the device handles the stop killed are rebound in
+        this same request; otherwise it is left stopped.
+        """
+        import omni.kit.app
+        import omni.timeline
+
+        stage = self._stage_service.stage()
+        if not stage.GetPrimAtPath(prim_path).IsValid():
+            return
+
+        timeline = omni.timeline.get_timeline_interface()
+        app = omni.kit.app.get_app()
+        was_playing = timeline.is_playing()
+        timeline.stop()
+        # The stop only lands on the next updates; removing before then still
+        # pulls the prim out from under a live physics view.
+        await app.next_update_async()
+        await app.next_update_async()
+        stage.RemovePrim(prim_path)
+        if not was_playing:
+            return
+
+        timeline.play()
+        await app.next_update_async()
+        await app.next_update_async()
+        if self.on_timeline_stopped is not None:
+            await self.on_timeline_stopped()

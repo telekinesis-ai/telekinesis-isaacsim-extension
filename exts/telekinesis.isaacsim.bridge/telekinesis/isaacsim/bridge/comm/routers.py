@@ -978,8 +978,11 @@ async def set_rigid_body(req: SetRigidBodyRequest, prim_service=Depends(get_prim
 
 @prims.delete("", summary="Delete Prim")
 async def delete_prim(prim_path: str, prim_service=Depends(get_prim_service)):
-    """Remove a prim and everything beneath it. A path with no prim succeeds unchanged."""
-    prim_service.delete_prim(prim_path)
+    """Remove a prim and everything beneath it. A path with no prim succeeds unchanged.
+
+    The timeline is stopped for the removal and, if it was playing, played again.
+    """
+    await prim_service.delete_prim(prim_path)
 
 
 @prims.put("/labels", summary="Set Semantic Label")

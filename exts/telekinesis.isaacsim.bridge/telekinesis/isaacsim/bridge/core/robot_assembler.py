@@ -533,7 +533,6 @@ def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
     joint.CreateLocalRot0Attr().Set(Gf.Quatf(mount_pose.GetRotation().GetQuat()))
     joint.CreateLocalPos1Attr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
     joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
-    joint.CreateExcludeFromArticulationAttr(True)
     return joint
 
 
