@@ -80,7 +80,9 @@ def main():
     base = f"http://{args.host}:{args.port}"
     info = create_articulation(base, args.prim)
     articulation_id = info["articulation_id"]
-    print(f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
+    print(
+        f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}"
+    )
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
 
     positions_rad = np.deg2rad(np.linspace(START_DEG, END_DEG, num=NUM_POINTS))

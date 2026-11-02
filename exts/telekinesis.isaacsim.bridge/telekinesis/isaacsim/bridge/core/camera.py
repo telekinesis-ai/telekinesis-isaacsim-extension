@@ -226,7 +226,9 @@ def discover_camera_prims(prim_path):
     if not root.IsValid():
         raise ValueError(f"prim {prim_path!r} not found in the open stage")
     return [
-        prim.GetPath().pathString for prim in Usd.PrimRange(root) if prim.IsA(UsdGeom.Camera)
+        prim.GetPath().pathString
+        for prim in Usd.PrimRange(root)
+        if prim.IsA(UsdGeom.Camera)
     ]
 
 
@@ -300,7 +302,9 @@ class Camera:
             dt=dt,
             resolution=self.resolution,
             position=None if position is None else np.asarray(position, dtype=float),
-            orientation=None if orientation is None else np.asarray(orientation, dtype=float),
+            orientation=None
+            if orientation is None
+            else np.asarray(orientation, dtype=float),
         )
         # Render outputs currently attached and warmed up -- a subset of
         # SUPPORTED_DATA_TYPES. bind() seeds it with the rgb pair; capture()
@@ -401,7 +405,9 @@ class Camera:
         empty, absent = [], []
         for data_type in pending:
             try:
-                (empty if self._read(data_type) is not None else absent).append(data_type)
+                (empty if self._read(data_type) is not None else absent).append(
+                    data_type
+                )
             except Exception as exc:
                 last_exc = exc
                 absent.append(data_type)
@@ -431,7 +437,9 @@ class Camera:
             return
 
         attached_adders = {
-            DATA_TYPE_TO_ADDER[d] for d in self.active_data_types if d in DATA_TYPE_TO_ADDER
+            DATA_TYPE_TO_ADDER[d]
+            for d in self.active_data_types
+            if d in DATA_TYPE_TO_ADDER
         }
         for data_type in missing:
             adder = DATA_TYPE_TO_ADDER.get(data_type)
@@ -495,7 +503,9 @@ class Camera:
             data_type: self._read(data_type, world_frame=world_frame)
             for data_type in requested
         }
-        out["rendering_frame"] = _to_json(self._camera.get_current_frame().get("rendering_frame"))
+        out["rendering_frame"] = _to_json(
+            self._camera.get_current_frame().get("rendering_frame")
+        )
         out["timestamp"] = time.monotonic() - self._start_time
         return out
 
@@ -646,7 +656,10 @@ class Camera:
         """Local-frame (parent-relative) pose, same shape as :meth:`get_world_pose`."""
         self._check_axes(camera_axes)
         translation, orientation = self._camera.get_local_pose(camera_axes=camera_axes)
-        return {"translation": _to_json(translation), "orientation": _to_json(orientation)}
+        return {
+            "translation": _to_json(translation),
+            "orientation": _to_json(orientation),
+        }
 
     def set_local_pose(self, translation=None, orientation=None, camera_axes="world"):
         """Set the local-frame pose. See :meth:`set_world_pose`."""
@@ -676,7 +689,9 @@ class Camera:
     @staticmethod
     def _check_axes(camera_axes):
         if camera_axes not in POSE_AXES:
-            raise ValueError(f"camera_axes must be one of {POSE_AXES}, got {camera_axes!r}")
+            raise ValueError(
+                f"camera_axes must be one of {POSE_AXES}, got {camera_axes!r}"
+            )
 
     # -- annotator management --------------------------------------------------
 
@@ -924,7 +939,9 @@ class Camera:
     def get_image_coords_from_world_points(self, points_3d):
         """Project world points ``(N, 3)`` to pixel coords ``(N, 2)`` (pinhole)."""
         return _to_json(
-            self._camera.get_image_coords_from_world_points(np.asarray(points_3d, dtype=float))
+            self._camera.get_image_coords_from_world_points(
+                np.asarray(points_3d, dtype=float)
+            )
         )
 
     def get_camera_points_from_image_coords(self, points_2d, depth):
@@ -962,11 +979,22 @@ class Camera:
     # -- lens distortion models ------------------------------------------------
 
     def set_fisheye_polynomial_properties(
-        self, nominal_width, nominal_height, optical_centre_x, optical_centre_y, max_fov, polynomial
+        self,
+        nominal_width,
+        nominal_height,
+        optical_centre_x,
+        optical_centre_y,
+        max_fov,
+        polynomial,
     ):
         """[Deprecated in isaacsim] Set fisheye-polynomial distortion parameters."""
         self._camera.set_fisheye_polynomial_properties(
-            nominal_width, nominal_height, optical_centre_x, optical_centre_y, max_fov, polynomial
+            nominal_width,
+            nominal_height,
+            optical_centre_x,
+            optical_centre_y,
+            max_fov,
+            polynomial,
         )
 
     def set_matching_fisheye_polynomial_properties(
@@ -1045,7 +1073,11 @@ class Camera:
     ):
         """Apply the F-theta lens distortion model and set its parameters."""
         self._camera.set_ftheta_properties(
-            nominal_height, nominal_width, optical_center, max_fov, distortion_coefficients
+            nominal_height,
+            nominal_width,
+            optical_center,
+            max_fov,
+            distortion_coefficients,
         )
 
     def get_ftheta_properties(self):
@@ -1062,7 +1094,11 @@ class Camera:
     ):
         """Apply the Kannala-Brandt K3 lens distortion model and set its parameters."""
         self._camera.set_kannala_brandt_k3_properties(
-            nominal_height, nominal_width, optical_center, max_fov, distortion_coefficients
+            nominal_height,
+            nominal_width,
+            optical_center,
+            max_fov,
+            distortion_coefficients,
         )
 
     def get_kannala_brandt_k3_properties(self):
@@ -1080,7 +1116,11 @@ class Camera:
         """Apply the Radial-Tangential Thin-Prism lens distortion model and set its
         parameters."""
         self._camera.set_rad_tan_thin_prism_properties(
-            nominal_height, nominal_width, optical_center, max_fov, distortion_coefficients
+            nominal_height,
+            nominal_width,
+            optical_center,
+            max_fov,
+            distortion_coefficients,
         )
 
     def get_rad_tan_thin_prism_properties(self):
@@ -1108,17 +1148,25 @@ class Camera:
         """LUT distortion parameters as a JSON list."""
         return _to_json(self._camera.get_lut_properties())
 
-    def set_opencv_pinhole_properties(self, cx=None, cy=None, fx=None, fy=None, pinhole=None):
+    def set_opencv_pinhole_properties(
+        self, cx=None, cy=None, fx=None, fy=None, pinhole=None
+    ):
         """Apply the OpenCV pinhole distortion model and set its parameters."""
-        self._camera.set_opencv_pinhole_properties(cx=cx, cy=cy, fx=fx, fy=fy, pinhole=pinhole)
+        self._camera.set_opencv_pinhole_properties(
+            cx=cx, cy=cy, fx=fx, fy=fy, pinhole=pinhole
+        )
 
     def get_opencv_pinhole_properties(self):
         """OpenCV pinhole distortion parameters as a JSON list."""
         return _to_json(self._camera.get_opencv_pinhole_properties())
 
-    def set_opencv_fisheye_properties(self, cx=None, cy=None, fx=None, fy=None, fisheye=None):
+    def set_opencv_fisheye_properties(
+        self, cx=None, cy=None, fx=None, fy=None, fisheye=None
+    ):
         """Apply the OpenCV fisheye distortion model and set its parameters."""
-        self._camera.set_opencv_fisheye_properties(cx=cx, cy=cy, fx=fx, fy=fy, fisheye=fisheye)
+        self._camera.set_opencv_fisheye_properties(
+            cx=cx, cy=cy, fx=fx, fy=fy, fisheye=fisheye
+        )
 
     def get_opencv_fisheye_properties(self):
         """OpenCV fisheye distortion parameters as a JSON list."""

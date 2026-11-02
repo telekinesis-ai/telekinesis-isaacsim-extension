@@ -144,7 +144,8 @@ class ConveyorService:
         device = self._devices.get(conveyor_id)
         if device is None:
             raise HTTPException(
-                status_code=404, detail=f"no conveyor registered with id '{conveyor_id}'"
+                status_code=404,
+                detail=f"no conveyor registered with id '{conveyor_id}'",
             )
         self._safe_destroy(device)
         del self._devices[conveyor_id]
@@ -159,7 +160,8 @@ class ConveyorService:
     def list_conveyors(self):
         """Return a ``{conveyor_id: prim_path}`` map of every registered conveyor."""
         return {
-            conveyor_id: device.prim_path for conveyor_id, device in self._devices.items()
+            conveyor_id: device.prim_path
+            for conveyor_id, device in self._devices.items()
         }
 
     # -- control ---------------------------------------------------------------

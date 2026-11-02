@@ -122,7 +122,9 @@ class LightBeamSensor:
         self._initialized = False
         if self.is_paused():
             self.resume()
-            carb.log_info(f"[bridge] enabled the disabled lightbeam sensor at {prim_path}")
+            carb.log_info(
+                f"[bridge] enabled the disabled lightbeam sensor at {prim_path}"
+            )
 
     # -- bridge lifecycle / readings (not part of the isaacsim surface) ---------
 
@@ -142,7 +144,10 @@ class LightBeamSensor:
         for _ in range(_BIND_RETRIES):
             await app.next_update_async()
             try:
-                if _values(self._sensor.get_beam_hit_data(self.prim_path), bool) is not None:
+                if (
+                    _values(self._sensor.get_beam_hit_data(self.prim_path), bool)
+                    is not None
+                ):
                     self._initialized = True
                     carb.log_info(
                         f"[bridge] bound lightbeam {self.prim_path}: "

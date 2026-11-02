@@ -37,7 +37,9 @@ DEFAULT_TIMEOUT = 30.0
 
 def _request(base, method, path, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
-    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+    response = requests.request(
+        method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+    )
     response.raise_for_status()
     return response.json() if response.content else None
 
@@ -62,7 +64,9 @@ def main():
         dest="surface_gripper_id",
         help="surface_gripper_id from put_surface_gripper.py",
     )
-    parser.add_argument("--coaxial-force-limit", type=float, default=None, help="newtons")
+    parser.add_argument(
+        "--coaxial-force-limit", type=float, default=None, help="newtons"
+    )
     parser.add_argument("--shear-force-limit", type=float, default=None, help="newtons")
     parser.add_argument("--max-grip-distance", type=float, default=None, help="meters")
     parser.add_argument("--retry-interval", type=float, default=None, help="seconds")

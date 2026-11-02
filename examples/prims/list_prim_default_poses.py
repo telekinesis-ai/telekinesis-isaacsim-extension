@@ -33,7 +33,9 @@ def _request(base, method, path, params=None, body=None):
 
 def main():
     """Print every prim that currently has a stored default pose."""
-    parser = argparse.ArgumentParser(description="List every prim's stored default pose.")
+    parser = argparse.ArgumentParser(
+        description="List every prim's stored default pose."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     args = parser.parse_args()

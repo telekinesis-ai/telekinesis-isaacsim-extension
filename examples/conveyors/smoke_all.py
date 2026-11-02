@@ -30,7 +30,9 @@ _results = []  # (label, "PASS" | "FAIL" | "SKIP", detail)
 def _call(base, method, path, body=None):
     """Return (ok, status, payload). payload is JSON on success, else the detail."""
     try:
-        resp = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+        resp = requests.request(
+            method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+        )
     except requests.exceptions.RequestException as exc:
         return False, "ERR", str(exc)
     payload = resp.json() if resp.content else None
@@ -58,7 +60,12 @@ def _exercise_routes(base, args):
     """Register a conveyor and exercise every exposed conveyor route."""
     created = _record(
         "PUT /conveyors (create)",
-        *_call(base, "PUT", "/conveyors", {"prim_path": args.prim, "cargo_root": args.cargo_root}),
+        *_call(
+            base,
+            "PUT",
+            "/conveyors",
+            {"prim_path": args.prim, "cargo_root": args.cargo_root},
+        ),
     )
     if not created or "conveyor_id" not in created:
         print(
@@ -73,7 +80,9 @@ def _exercise_routes(base, args):
 
     # Run at the speed the scene authored, then reversed, so both the default
     # and the signed-velocity path are covered.
-    _record(f"POST {root}/start (authored speed)", *_call(base, "POST", f"{root}/start", {}))
+    _record(
+        f"POST {root}/start (authored speed)", *_call(base, "POST", f"{root}/start", {})
+    )
     time.sleep(RUN_SECONDS)
     _record(f"GET {root} (running)", *_call(base, "GET", root))
 
@@ -91,7 +100,10 @@ def _exercise_routes(base, args):
     # attribute, which is the one its travel direction was read from, so a
     # re-register has to reuse the capture rather than read it again.
     ok, status, rebound = _call(
-        base, "PUT", "/conveyors", {"prim_path": args.prim, "cargo_root": args.cargo_root}
+        base,
+        "PUT",
+        "/conveyors",
+        {"prim_path": args.prim, "cargo_root": args.cargo_root},
     )
     _record("PUT /conveyors (re-register)", ok, status, rebound)
     if ok:
@@ -122,7 +134,9 @@ def _summary():
     for _, verdict, _detail in _results:
         counts[verdict] += 1
     print("\n" + "=" * 60)
-    print(f"SUMMARY: {counts['PASS']} passed, {counts['FAIL']} failed, {counts['SKIP']} skipped")
+    print(
+        f"SUMMARY: {counts['PASS']} passed, {counts['FAIL']} failed, {counts['SKIP']} skipped"
+    )
     if counts["FAIL"]:
         print("\nFailures:")
         for label, verdict, detail in _results:
@@ -136,14 +150,18 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--prim", default="/World/ConveyorBelt_A08", help="conveyor prim path to register"
+        "--prim",
+        default="/World/ConveyorBelt_A08",
+        help="conveyor prim path to register",
     )
     parser.add_argument(
         "--cargo-root",
         default="/World",
         help="prim whose sleeping rigid bodies are woken when the belt starts",
     )
-    parser.add_argument("--keep", action="store_true", help="don't delete the conveyor at the end")
+    parser.add_argument(
+        "--keep", action="store_true", help="don't delete the conveyor at the end"
+    )
     args = parser.parse_args()
     base = f"http://{args.host}:{args.port}"
     _exercise_routes(base, args)

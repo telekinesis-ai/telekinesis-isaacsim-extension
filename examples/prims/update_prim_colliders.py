@@ -34,7 +34,9 @@ def _request(base, method, path, params=None, body=None):
 
 def main():
     """Disable collision on a prim, then re-enable it."""
-    parser = argparse.ArgumentParser(description="Enable or disable collision on a prim.")
+    parser = argparse.ArgumentParser(
+        description="Enable or disable collision on a prim."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--prim", required=True, help="prim path, e.g. /World/Cube")
@@ -42,12 +44,18 @@ def main():
 
     base = f"http://{args.host}:{args.port}"
     _request(
-        base, "PATCH", "/prims/physics/colliders/", body={"prim_path": args.prim, "enable": False}
+        base,
+        "PATCH",
+        "/prims/physics/colliders/",
+        body={"prim_path": args.prim, "enable": False},
     )
     print(f"collider disabled: {args.prim}")
 
     _request(
-        base, "PATCH", "/prims/physics/colliders/", body={"prim_path": args.prim, "enable": True}
+        base,
+        "PATCH",
+        "/prims/physics/colliders/",
+        body={"prim_path": args.prim, "enable": True},
     )
     print(f"collider enabled: {args.prim}")
 

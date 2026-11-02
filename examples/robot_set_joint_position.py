@@ -47,16 +47,22 @@ DEFAULT_TIMEOUT = 120.0
 
 def _request(base, method, path, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
-    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+    response = requests.request(
+        method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+    )
     response.raise_for_status()
     return response.json() if response.content else None
 
 
 def run_robot(base, prim_path):
     """Register the robot, drive it through the target sequence, then teleport it."""
-    info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": None})
+    info = _request(
+        base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": None}
+    )
     articulation_id = info["articulation_id"]
-    print(f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
+    print(
+        f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}"
+    )
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
 
     for target_deg in TARGETS_DEG:

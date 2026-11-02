@@ -35,7 +35,9 @@ def _request(base, method, path, body=None):
             f"Could not connect to {base} -- is Isaac Sim running with the bridge extension loaded?"
         ) from exc
     except requests.exceptions.Timeout as exc:
-        raise SystemExit(f"{method} {path} timed out after {DEFAULT_TIMEOUT}s.") from exc
+        raise SystemExit(
+            f"{method} {path} timed out after {DEFAULT_TIMEOUT}s."
+        ) from exc
 
     try:
         response.raise_for_status()
@@ -44,7 +46,9 @@ def _request(base, method, path, body=None):
             detail = response.json().get("detail", response.text)
         except ValueError:
             detail = response.text
-        raise SystemExit(f"{method} {path} failed ({response.status_code}): {detail}") from exc
+        raise SystemExit(
+            f"{method} {path} failed ({response.status_code}): {detail}"
+        ) from exc
 
     return response.json() if response.content else None
 

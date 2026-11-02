@@ -102,13 +102,17 @@ class ArticulationService:
         # concurrent callers for the same prim_path always land on the same Lock.
         lock = self._create_locks.setdefault(prim_path, asyncio.Lock())
         async with lock:
-            resolved, prim_source = await self._resolve_prim(prim_path, urdf_path, usd_path)
+            resolved, prim_source = await self._resolve_prim(
+                prim_path, urdf_path, usd_path
+            )
 
             articulation_id = self._id_by_prim.get(prim_path)
             if articulation_id is None:
                 self._count += 1
                 articulation_id = f"articulation{self._count}"
-                self._devices[articulation_id] = SingleArticulation(resolved, name=articulation_id)
+                self._devices[articulation_id] = SingleArticulation(
+                    resolved, name=articulation_id
+                )
                 self._id_by_prim[prim_path] = articulation_id
 
             device = self._devices[articulation_id]
@@ -121,7 +125,9 @@ class ArticulationService:
             if prim_source != "isaac_usd" and default_joint_positions is not None:
                 try:
                     await device.set_j(default_joint_positions)
-                    device.set_joints_default_state(joint_positions=default_joint_positions)
+                    device.set_joints_default_state(
+                        joint_positions=default_joint_positions
+                    )
                 except ValueError as exc:
                     raise HTTPException(status_code=400, detail=str(exc)) from exc
             await self.rebind_stale_devices()
@@ -184,7 +190,11 @@ class ArticulationService:
     def get_articulation(self, articulation_id):
         """Info for one registered articulation (id, prim, dof, state), or 404."""
         device = self.get_device(articulation_id)
-        return {"articulation_id": articulation_id, "prim_path": device.prim_path, **device.info()}
+        return {
+            "articulation_id": articulation_id,
+            "prim_path": device.prim_path,
+            **device.info(),
+        }
 
     def delete_articulation(self, articulation_id):
         """Unregister the articulation (counterpart to ``create_articulation``).
@@ -218,15 +228,22 @@ class ArticulationService:
     def list_articulations(self):
         """Return a ``{articulation_id: prim_path}`` map of every registered articulation."""
         return {
-            articulation_id: device.prim_path for articulation_id, device in self._devices.items()
+            articulation_id: device.prim_path
+            for articulation_id, device in self._devices.items()
         }
 
     # -- driving + introspection ------------------------------------------------
 
     async def move_j(
-        self, articulation_id, positions, indices, asynchronous,
-        position_stall_tolerance=None, position_stall_duration=0.25,
-        joint_speeds=None, max_efforts=None,
+        self,
+        articulation_id,
+        positions,
+        indices,
+        asynchronous,
+        position_stall_tolerance=None,
+        position_stall_duration=0.25,
+        joint_speeds=None,
+        max_efforts=None,
     ):
         """Drive joint ``positions`` (radians) onto the device's chosen joints.
 
@@ -236,9 +253,13 @@ class ArticulationService:
         """
         try:
             return await self.get_device(articulation_id).move_j(
-                positions, indices, asynchronous,
-                position_stall_tolerance, position_stall_duration,
-                joint_speeds, max_efforts,
+                positions,
+                indices,
+                asynchronous,
+                position_stall_tolerance,
+                position_stall_duration,
+                joint_speeds,
+                max_efforts,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -273,7 +294,9 @@ class ArticulationService:
         :meth:`..core.articulation.SingleArticulation.set_joint_velocities`.
         """
         try:
-            return self.get_device(articulation_id).set_joint_velocities(velocities, indices)
+            return self.get_device(articulation_id).set_joint_velocities(
+                velocities, indices
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -299,13 +322,21 @@ class ArticulationService:
             device.set_driven_joints(joint_names)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {"articulation_id": articulation_id, "prim_path": device.prim_path, **device.info()}
+        return {
+            "articulation_id": articulation_id,
+            "prim_path": device.prim_path,
+            **device.info(),
+        }
 
     # -- extended introspection / physics tuning ---------------------------
 
     def get_handles_initialized(self, articulation_id):
         """Whether the device's handle is currently valid, without a re-bind."""
-        return {"handles_initialized": self.get_device(articulation_id).handles_initialized()}
+        return {
+            "handles_initialized": self.get_device(
+                articulation_id
+            ).handles_initialized()
+        }
 
     def get_num_bodies(self, articulation_id):
         """Number of rigid-body links in the underlying articulation."""
@@ -340,11 +371,17 @@ class ArticulationService:
 
     def get_applied_joint_efforts(self, articulation_id):
         """Efforts last commanded via ``set_joint_efforts`` on the driven joints."""
-        return {"joint_efforts": self.get_device(articulation_id).get_applied_joint_efforts()}
+        return {
+            "joint_efforts": self.get_device(
+                articulation_id
+            ).get_applied_joint_efforts()
+        }
 
     def get_measured_joint_forces(self, articulation_id):
         """Measured 6-axis joint reaction force/torque per driven joint."""
-        return {"joint_forces": self.get_device(articulation_id).get_measured_joint_forces()}
+        return {
+            "joint_forces": self.get_device(articulation_id).get_measured_joint_forces()
+        }
 
     def get_joints_default_state(self, articulation_id):
         """Stored joint-space home pose for the driven joints."""
@@ -356,7 +393,9 @@ class ArticulationService:
         """Set the driven joints' stored home pose (applied on the next reset)."""
         device = self.get_device(articulation_id)
         try:
-            device.set_joints_default_state(joint_positions, joint_velocities, joint_efforts)
+            device.set_joints_default_state(
+                joint_positions, joint_velocities, joint_efforts
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return device.get_joints_default_state()
@@ -424,7 +463,11 @@ class ArticulationService:
 
     def get_solver_position_iteration_count(self, articulation_id):
         """PhysX position-solver iteration count."""
-        return {"count": self.get_device(articulation_id).get_solver_position_iteration_count()}
+        return {
+            "count": self.get_device(
+                articulation_id
+            ).get_solver_position_iteration_count()
+        }
 
     def set_solver_position_iteration_count(self, articulation_id, count):
         """Set the PhysX position-solver iteration count."""
@@ -437,7 +480,11 @@ class ArticulationService:
 
     def get_solver_velocity_iteration_count(self, articulation_id):
         """PhysX velocity-solver iteration count."""
-        return {"count": self.get_device(articulation_id).get_solver_velocity_iteration_count()}
+        return {
+            "count": self.get_device(
+                articulation_id
+            ).get_solver_velocity_iteration_count()
+        }
 
     def set_solver_velocity_iteration_count(self, articulation_id, count):
         """Set the PhysX velocity-solver iteration count."""
@@ -450,7 +497,9 @@ class ArticulationService:
 
     def get_stabilization_threshold(self, articulation_id):
         """Mass-normalized kinetic energy below which PhysX may stabilize this articulation."""
-        return {"threshold": self.get_device(articulation_id).get_stabilization_threshold()}
+        return {
+            "threshold": self.get_device(articulation_id).get_stabilization_threshold()
+        }
 
     def set_stabilization_threshold(self, articulation_id, threshold):
         """Set the stabilization threshold."""
@@ -463,7 +512,9 @@ class ArticulationService:
 
     def get_enabled_self_collisions(self, articulation_id):
         """Whether this articulation's own links can collide with each other."""
-        return {"enabled": self.get_device(articulation_id).get_enabled_self_collisions()}
+        return {
+            "enabled": self.get_device(articulation_id).get_enabled_self_collisions()
+        }
 
     def set_enabled_self_collisions(self, articulation_id, enabled):
         """Enable/disable self-collision between this articulation's own links."""
@@ -503,13 +554,22 @@ class ArticulationService:
         prim = joint_prims(self._stage(), device.prim_path)[name]
         velocity = prim.GetAttribute("urdf:limit:velocity").Get()
         return {
-            "name": name, "index": index,
-            "max_velocity": velocity if velocity is not None else properties["max_velocity"],
+            "name": name,
+            "index": index,
+            "max_velocity": velocity
+            if velocity is not None
+            else properties["max_velocity"],
             "max_effort": properties["max_effort"],
         }
 
     async def assemble_robot(
-        self, arm_id, gripper_id, arm_mount_link, gripper_mount_link, offset, mask_collisions
+        self,
+        arm_id,
+        gripper_id,
+        arm_mount_link,
+        gripper_mount_link,
+        offset,
+        mask_collisions,
     ):
         """Assemble a gripper onto the arm, whichever kind of gripper it is.
 
@@ -576,7 +636,9 @@ class ArticulationService:
             await self.rebind_stale_devices()
             return self._assembly_info(arm_id, record, already_assembled=False)
 
-    async def mount_prim(self, arm_id, prim_path, arm_mount_link, offset, mask_collisions):
+    async def mount_prim(
+        self, arm_id, prim_path, arm_mount_link, offset, mask_collisions
+    ):
         """Fix any prim to the arm's mount link with a fixed joint, so it moves with the arm.
 
         For a prim that is not a gripper, such as a camera; see
@@ -625,7 +687,9 @@ class ArticulationService:
         """
         arm = self.get_device(arm_id)  # 404 early if the arm itself is unknown
         try:
-            prim_path = place_tcp(self._stage(), arm.prim_path, arm_mount_link, tcp_name, offset)
+            prim_path = place_tcp(
+                self._stage(), arm.prim_path, arm_mount_link, tcp_name, offset
+            )
         except RuntimeError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return {"prim_path": prim_path, "arm_mount_link": arm_mount_link}
@@ -660,7 +724,9 @@ class ArticulationService:
             gripper_driven = list(gripper.dof_names)
         else:
             try:
-                gripper_driven = [find_driver_joint(stage, gripper.prim_path, gripper.dof_names)]
+                gripper_driven = [
+                    find_driver_joint(stage, gripper.prim_path, gripper.dof_names)
+                ]
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
         if gripper_mount_link is None:
@@ -678,7 +744,9 @@ class ArticulationService:
             variant=f"{arm_leaf}_with_tool",
         )
 
-        shared = await bind_shared_articulation(arm.prim_path, name=f"{arm_leaf}_with_tool")
+        shared = await bind_shared_articulation(
+            arm.prim_path, name=f"{arm_leaf}_with_tool"
+        )
         arm.adopt_shared_articulation(shared, arm_names)
         gripper.adopt_shared_articulation(shared, gripper_driven)
 
@@ -747,7 +815,9 @@ class ArticulationService:
         # The arm's own handle, re-bound against the post-assembly stage. Its driven
         # joints are unchanged (the gripper contributes none), but the handle itself
         # did not survive the stop/play, so it is re-adopted rather than re-created.
-        shared = await bind_shared_articulation(arm.prim_path, name=f"{arm_leaf}_with_tool")
+        shared = await bind_shared_articulation(
+            arm.prim_path, name=f"{arm_leaf}_with_tool"
+        )
         arm.adopt_shared_articulation(shared, arm_names)
         try:
             await gripper.bind()
@@ -779,7 +849,10 @@ class ArticulationService:
             device = self._surface_gripper_service.get_device(gripper_id)
             gripper_info = {"surface_gripper_id": gripper_id, **device.info()}
         else:
-            gripper_info = {"articulation_id": gripper_id, **self.get_device(gripper_id).info()}
+            gripper_info = {
+                "articulation_id": gripper_id,
+                **self.get_device(gripper_id).info(),
+            }
         return {
             "articulation": arm.prim_path,
             "num_dof": shared["num_dof"],

@@ -21,7 +21,9 @@ DEFAULT_TIMEOUT = 30.0
 
 def _request(base, method, path, body=None):
     """Send one request and return the raw response body."""
-    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+    response = requests.request(
+        method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+    )
     response.raise_for_status()
     return response.content
 
@@ -50,9 +52,9 @@ def _decode(payload):
         if isinstance(dtype, list):  # record dtype, sent as numpy's descr
             dtype = np.dtype([tuple(field) for field in dtype])
         arrays.append(
-            np.frombuffer(payload[start : start + entry["nbytes"]], dtype=dtype).reshape(
-                entry["shape"]
-            )
+            np.frombuffer(
+                payload[start : start + entry["nbytes"]], dtype=dtype
+            ).reshape(entry["shape"])
         )
     return _restore(manifest["structure"], arrays)
 
@@ -80,7 +82,10 @@ def main():
 
     base = f"http://{args.host}:{args.port}"
     rgb = _decode(_request(base, "GET", f"/cameras/{args.camera_id}/rgb"))["rgb"]
-    print("rgb:", "null (not ready)" if rgb is None else f"shape {rgb.shape} dtype {rgb.dtype}")
+    print(
+        "rgb:",
+        "null (not ready)" if rgb is None else f"shape {rgb.shape} dtype {rgb.dtype}",
+    )
 
 
 if __name__ == "__main__":

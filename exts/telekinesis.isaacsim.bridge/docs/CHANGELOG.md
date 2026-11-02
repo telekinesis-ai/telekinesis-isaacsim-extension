@@ -1,5 +1,9 @@
 # Changelog
 ## [Unreleased]
+### Added
+- A "Telekinesis Isaac Sim Bridge" entry in the right-click Create menu of the Stage panel and
+  viewport. It is a placeholder that only prints the right-clicked prims to the terminal.
+
 ### Changed
 - `PUT /prims/physics/rigid_body` makes each mesh collide as its convex hull instead of a
   convex decomposition. Decomposing open, multi-shell CAD meshes left thin hulls that gripper

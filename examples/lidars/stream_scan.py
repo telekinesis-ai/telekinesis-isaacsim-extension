@@ -33,7 +33,9 @@ def _shape(value):
 def _brief(frame):
     """One-line summary of a frame (shapes for arrays, values otherwise)."""
     parts = (
-        f"{key}: shape {_shape(value)}" if isinstance(value, list) else f"{key}: {value}"
+        f"{key}: shape {_shape(value)}"
+        if isinstance(value, list)
+        else f"{key}: {value}"
         for key, value in frame.items()
     )
     return "{" + ", ".join(parts) + "}"
@@ -59,7 +61,10 @@ def main():
         "--id", required=True, dest="lidar_id", help="lidar_id from put_lidar.py"
     )
     parser.add_argument(
-        "--count", type=int, default=None, help="stop after this many frames (default: forever)"
+        "--count",
+        type=int,
+        default=None,
+        help="stop after this many frames (default: forever)",
     )
     args = parser.parse_args()
 

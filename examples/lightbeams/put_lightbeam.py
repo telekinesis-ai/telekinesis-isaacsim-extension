@@ -52,11 +52,15 @@ def _request(base, method, path, body=None):
 
 def main():
     """Register a prim as a lightbeam sensor and print its beam configuration."""
-    parser = argparse.ArgumentParser(description="Register a prim as a lightbeam sensor.")
+    parser = argparse.ArgumentParser(
+        description="Register a prim as a lightbeam sensor."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--prim", default=LIGHTBEAM_PRIM_PATH, help="lightbeam sensor prim path to register"
+        "--prim",
+        default=LIGHTBEAM_PRIM_PATH,
+        help="lightbeam sensor prim path to register",
     )
     args = parser.parse_args()
 

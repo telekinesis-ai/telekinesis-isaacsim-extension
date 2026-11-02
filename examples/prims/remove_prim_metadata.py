@@ -34,7 +34,9 @@ def _request(base, method, path, params=None, body=None):
 
 def main():
     """Store metadata on a prim, then remove it."""
-    parser = argparse.ArgumentParser(description="Remove metadata previously stored on a prim.")
+    parser = argparse.ArgumentParser(
+        description="Remove metadata previously stored on a prim."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--prim", required=True, help="prim path, e.g. /World/Cube")

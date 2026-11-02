@@ -36,14 +36,20 @@ def _request(base, method, path, params=None, body=None):
 
 def main():
     """Record a default pose, nudge away from it, then reset back to it."""
-    parser = argparse.ArgumentParser(description="Restore a prim to its stored default pose.")
+    parser = argparse.ArgumentParser(
+        description="Restore a prim to its stored default pose."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--prim", required=True, help="prim path, e.g. /World/Cube")
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    params = {"prim_path": args.prim, "coordinate_system": "world", "rotation_type": "cartesian"}
+    params = {
+        "prim_path": args.prim,
+        "coordinate_system": "world",
+        "rotation_type": "cartesian",
+    }
     original_pose = _request(base, "GET", "/prims/poses", params=params)["pose"]
     print(f"pose (original): {original_pose}")
 

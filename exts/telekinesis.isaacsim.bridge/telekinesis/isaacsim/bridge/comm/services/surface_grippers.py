@@ -253,7 +253,11 @@ class SurfaceGripperService:
 
     def get_attachment_points(self, surface_gripper_id):
         """Per-attachment-point properties of one gripper, in the order it grips with them."""
-        return {"attachment_points": self.get_device(surface_gripper_id).get_attachment_points()}
+        return {
+            "attachment_points": self.get_device(
+                surface_gripper_id
+            ).get_attachment_points()
+        }
 
     def set_attachment_point_properties(
         self,
