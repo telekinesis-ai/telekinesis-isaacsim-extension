@@ -126,9 +126,37 @@ curl http://127.0.0.1:8766/status
 # {"status":"OK"}
 ```
 
+## Automated Deployment (CI)
+
+`.github/workflows/ci.yml` automates the checks and the release below.
+
+| Trigger | Job | What it does |
+|---|---|---|
+| PR into `develop` or `main` | `verify-lint` | `ruff check`, `ruff format --check`, `pylint`, and fails if `public/openapi.json` is not regenerated and committed |
+| PR into `main` | `verify-release-version` | Fails if tag `v<VERSION>` already exists or `CHANGELOG.md` has no `## [<VERSION>]` section |
+| Push to `main` | `release` | Packages the ZIP, creates tag `v<VERSION>` on the pushed commit, publishes the GitHub release with the changelog section and ZIP, then merges `main` back into `develop` |
+
+The `release` job does nothing if tag `v<VERSION>` already exists, so pushes to `main` without a
+version bump are safe.
+
+With CI, a release is:
+
+1. On `develop`: bump `version` in `extension.toml`, add the `## [<VERSION>]` changelog section,
+   regenerate `public/openapi.json`, push.
+2. Open a PR `develop` → `main` and **squash merge** it once checks pass.
+3. CI tags, releases and reconnects `develop`. NVIDIA's crawler picks the release up nightly.
+
+One-time GitHub setup, in addition to [2.1](#21-one-time-repository-setup):
+
+- **Settings ▸ Actions ▸ General ▸ Workflow permissions**: *Read and write permissions*.
+- If `develop` is branch-protected, allow `github-actions[bot]` to push to it, or the final
+  reconnect step fails (the release itself is already published by then).
+- Optional: **Settings ▸ Environments ▸ `release`** ▸ add required reviewers to make every
+  release wait for a manual approval.
+
 ## Manual Deployment
 
-Follow the steps below to release a new version of the extension.
+Follow the steps below to release a new version of the extension without CI.
 
 ### 1. Linting, Static Checks and API Docs Generation
 
@@ -176,7 +204,8 @@ Every disabled check is intentional:
 `ruff format` formats the code.
 `pylint` performs broader static checks.
 
-There is currently no CI for these checks, so run them manually before each PR.
+CI runs these checks on every PR (see **Automated Deployment (CI)**). CI additionally disables
+`import-error`, since Isaac Sim is not installed on the runner.
 
 </details>
 

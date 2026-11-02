@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [main]
+
+env:
+  EXTENSION_TOML: exts/telekinesis.isaacsim.bridge/config/extension.toml
+  CHANGELOG: exts/telekinesis.isaacsim.bridge/docs/CHANGELOG.md
+
+jobs:
+  verify-lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff pylint -r requirements.txt
+      - run: ruff check --line-length 100 .
+      - run: ruff format --check --line-length 100 .
+      # import-error is disabled only here: CI has no Isaac Sim, so omni/carb/pxr cannot resolve.
+      - run: >
+          pylint --max-line-length 100 --ignored-modules=omni,carb,isaacsim,pxr,usd
+          --disable=import-error,duplicate-code,attribute-defined-outside-init,import-outside-toplevel,unused-argument,broad-exception-caught,protected-access,too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-public-methods,too-many-instance-attributes,too-many-lines
+          exts/telekinesis.isaacsim.bridge/telekinesis examples
+      - name: OpenAPI spec is regenerated and committed
+        run: |
+          python scripts/generate_openapi.py
+          git diff --exit-code public/openapi.json
+
+  verify-release-version:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('$EXTENSION_TOML','rb'))['package']['version'])")
+          echo "Checking release version $VERSION"
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "Tag v$VERSION already exists. Bump the version in $EXTENSION_TOML."
+            exit 1
+          fi
+          if ! grep -q "^## \[$VERSION\]" "$CHANGELOG"; then
+            echo "$CHANGELOG has no '## [$VERSION]' section."
+            exit 1
+          fi
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Add required reviewers to this environment in repo settings to make the release a manual approval.
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('$EXTENSION_TOML','rb'))['package']['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "Tag v$VERSION already exists, nothing to release."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Package extension
+        if: steps.version.outputs.exists != 'true'
+        run: bash scripts/package-extension.sh
+      - name: Publish GitHub release
+        if: steps.version.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Release notes are the "## [VERSION]" section of the changelog, up to the next "## [".
+          awk -v v="## [$VERSION]" 'index($0, v) == 1 {on=1; next} /^## \[/ {on=0} on' "$CHANGELOG" > release-notes.md
+          # --target tags the commit on main, i.e. the squashed release commit.
+          gh release create "v$VERSION" \
+            "packages/telekinesis-ai-telekinesis-isaacsim-extension-windows-x86_64-v$VERSION.zip" \
+            --target "$GITHUB_SHA" \
+            --title "v$VERSION" \
+            --notes-file release-notes.md \
+            --latest
+      - name: Reconnect develop with main
+        if: steps.version.outputs.exists != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898729+github-actions[bot]@users.noreply.github.com"
+          git checkout -B develop origin/develop
+          git merge --no-edit "$GITHUB_SHA"
+          git push origin develop
