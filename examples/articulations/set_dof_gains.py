@@ -25,18 +25,14 @@ DEFAULT_TIMEOUT = 30.0
 
 def _request(base, method, path, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
-    response = requests.request(
-        method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
-    )
+    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
     response.raise_for_status()
     return response.json() if response.content else None
 
 
 def main():
     """Retune every driven joint's position drive stiffness and damping, by id."""
-    parser = argparse.ArgumentParser(
-        description="Retune an articulation's position drive gains."
-    )
+    parser = argparse.ArgumentParser(description="Retune an articulation's position drive gains.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(

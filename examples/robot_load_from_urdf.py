@@ -41,9 +41,7 @@ try:
     robot_name = "UniversalRobotsUR10e"  # pylint: disable=invalid-name
     robot_description = telekinesis_urdfs.load(robot_name)
     if not robot_description.urdf_path.is_file():
-        raise ValueError(
-            f"No urdf found, i.e. {robot_description.urdf_path} is not a file"
-        )
+        raise ValueError(f"No urdf found, i.e. {robot_description.urdf_path} is not a file")
 
 except Exception as e:
     raise RuntimeError(
@@ -64,9 +62,7 @@ DEFAULT_TIMEOUT = 120.0
 
 def _request(base, method, path, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
-    response = requests.request(
-        method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
-    )
+    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
     response.raise_for_status()
     return response.json() if response.content else None
 
@@ -74,9 +70,7 @@ def _request(base, method, path, body=None):
 def run_robot(base, prim_path, urdf_path):
     """Register the robot (importing the URDF if needed), then drive it to the target."""
     # urdf_path tells the bridge to import the robot if prim_path isn't in the stage.
-    info = _request(
-        base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": urdf_path}
-    )
+    info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": urdf_path})
     articulation_id = info["articulation_id"]
     print(
         f"loaded + created robot: articulation_id={articulation_id} prim_path={info['prim_path']}"
@@ -98,17 +92,11 @@ def run_robot(base, prim_path, urdf_path):
 
 def main():
     """Parse CLI args and run the example."""
-    parser = argparse.ArgumentParser(
-        description="Load a robot from URDF via the Isaac Sim bridge."
-    )
+    parser = argparse.ArgumentParser(description="Load a robot from URDF via the Isaac Sim bridge.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument(
-        "--prim", default=ROBOT_PRIM_PATH, help="prim path to import the robot at"
-    )
-    parser.add_argument(
-        "--urdf", default=URDF_PATH, help="path to the robot URDF to import"
-    )
+    parser.add_argument("--prim", default=ROBOT_PRIM_PATH, help="prim path to import the robot at")
+    parser.add_argument("--urdf", default=URDF_PATH, help="path to the robot URDF to import")
     args = parser.parse_args()
 
     if args.urdf is ... or not args.urdf:

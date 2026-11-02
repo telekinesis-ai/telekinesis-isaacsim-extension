@@ -60,9 +60,7 @@ def main():
         "/prims/poses",
         body={"prim_path": args.prim, "input_pose": {"pose": nudged_pose}},
     )
-    print(
-        f"pose (after +1cm X): {_request(base, 'GET', '/prims/poses', params=params)}"
-    )
+    print(f"pose (after +1cm X): {_request(base, 'GET', '/prims/poses', params=params)}")
 
 
 if __name__ == "__main__":

@@ -110,8 +110,7 @@ class Conveyor:
             self.drive = CONVEYOR_NODE_DRIVE
             self._connect_conveyor_node(stage, node_prim)
         carb.log_info(
-            f"[bridge] bound conveyor {self.prim_path} ({self.drive}) at "
-            f"{self._nominal_speed} m/s"
+            f"[bridge] bound conveyor {self.prim_path} ({self.drive}) at {self._nominal_speed} m/s"
         )
 
     @property
@@ -220,9 +219,7 @@ class Conveyor:
 
     def is_running(self):
         """Whether the belt is set to move: a non-zero speed with its drive switched on."""
-        if self._enabled_attribute is not None and not bool(
-            self._enabled_attribute.Get()
-        ):
+        if self._enabled_attribute is not None and not bool(self._enabled_attribute.Get()):
             return False
         return self.get_velocity() != 0.0
 
@@ -296,9 +293,7 @@ class Conveyor:
             )
 
         if self._adopt_remembered():
-            self._enabled_attribute = (
-                surface_velocity.CreateSurfaceVelocityEnabledAttr()
-            )
+            self._enabled_attribute = surface_velocity.CreateSurfaceVelocityEnabledAttr()
             return
 
         attribute = surface_velocity.GetSurfaceVelocityAttr()
@@ -453,9 +448,7 @@ class Conveyor:
         context = omni.usd.get_context()
         root_prim = context.get_stage().GetPrimAtPath(self.cargo_root)
         if not root_prim.IsValid():
-            raise RuntimeError(
-                f"cargo root prim {self.cargo_root!r} not found in the open stage"
-            )
+            raise RuntimeError(f"cargo root prim {self.cargo_root!r} not found in the open stage")
 
         simulation = omni.physx.get_physx_simulation_interface()
         stage_id = context.get_stage_id()
@@ -463,8 +456,6 @@ class Conveyor:
         for prim in Usd.PrimRange(root_prim):
             if not prim.HasAPI(UsdPhysics.RigidBodyAPI):
                 continue
-            simulation.wake_up(
-                stage_id, PhysicsSchemaTools.sdfPathToInt(prim.GetPath())
-            )
+            simulation.wake_up(stage_id, PhysicsSchemaTools.sdfPathToInt(prim.GetPath()))
             woken += 1
         return woken

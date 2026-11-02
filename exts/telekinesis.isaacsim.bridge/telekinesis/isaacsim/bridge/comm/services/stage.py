@@ -43,9 +43,7 @@ class StageService:
 
         success, error = await omni.usd.get_context().open_stage_async(uri)
         if not success:
-            raise HTTPException(
-                status_code=400, detail=f"could not open '{uri}': {error}"
-            )
+            raise HTTPException(status_code=400, detail=f"could not open '{uri}': {error}")
 
     async def add_to_scene(self, uri, prim_path):
         """Reference the USD, OBJ, GLB or glTF asset at ``uri`` into the open stage at ``prim_path``.
@@ -160,6 +158,4 @@ class StageService:
         """
         import carb.settings
 
-        carb.settings.get_settings().set(
-            "/persistent/app/hydra/displayPurpose/guide", visible
-        )
+        carb.settings.get_settings().set("/persistent/app/hydra/displayPurpose/guide", visible)

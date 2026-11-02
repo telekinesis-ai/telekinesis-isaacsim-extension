@@ -57,9 +57,7 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--prim", default=ROBOT_PRIM_PATH, help="prim path to register")
-    parser.add_argument(
-        "--urdf", default=None, help="optional URDF to import at --prim first"
-    )
+    parser.add_argument("--urdf", default=None, help="optional URDF to import at --prim first")
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

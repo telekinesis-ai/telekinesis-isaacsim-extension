@@ -34,9 +34,7 @@ def _request(base, method, path, params=None, body=None):
 
 def main():
     """Record a prim's current pose as its default, then confirm it was stored."""
-    parser = argparse.ArgumentParser(
-        description="Record a prim's current pose as its default."
-    )
+    parser = argparse.ArgumentParser(description="Record a prim's current pose as its default.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--prim", required=True, help="prim path, e.g. /World/Cube")
@@ -44,9 +42,7 @@ def main():
 
     base = f"http://{args.host}:{args.port}"
     _request(base, "PUT", "/prims/poses/default", body={"prim_path": args.prim})
-    print(
-        f"default poses (after assign): {_request(base, 'GET', '/prims/poses/default')}"
-    )
+    print(f"default poses (after assign): {_request(base, 'GET', '/prims/poses/default')}")
 
 
 if __name__ == "__main__":

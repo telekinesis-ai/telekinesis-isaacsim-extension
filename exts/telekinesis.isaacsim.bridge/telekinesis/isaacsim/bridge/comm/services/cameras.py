@@ -185,9 +185,7 @@ class CameraService:
 
     def list_cameras(self):
         """Return a ``{camera_id: prim_path}`` map of every registered camera."""
-        return {
-            camera_id: device.prim_path for camera_id, device in self._devices.items()
-        }
+        return {camera_id: device.prim_path for camera_id, device in self._devices.items()}
 
     @staticmethod
     def discover_cameras(prim_path):
@@ -200,9 +198,7 @@ class CameraService:
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         if not prim_paths:
-            raise HTTPException(
-                status_code=400, detail=f"no camera prim at or below {prim_path!r}"
-            )
+            raise HTTPException(status_code=400, detail=f"no camera prim at or below {prim_path!r}")
         return {"prim_paths": prim_paths}
 
     # -- capture ---------------------------------------------------------------
@@ -214,9 +210,7 @@ class CameraService:
         ``world_frame`` applies to the ``pointcloud`` output alone.
         See :meth:`..core.camera.Camera.capture`."""
         try:
-            return await self.get_device(camera_id).capture(
-                data_types, world_frame=world_frame
-            )
+            return await self.get_device(camera_id).capture(data_types, world_frame=world_frame)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except RuntimeError as exc:
@@ -230,17 +224,13 @@ class CameraService:
         ``camera_id`` to the data types to read from it. Errors map as in
         :meth:`capture`. See :func:`..core.camera.capture_cameras`."""
         if not captures:
-            raise HTTPException(
-                status_code=400, detail="captures must name at least one camera"
-            )
+            raise HTTPException(status_code=400, detail="captures must name at least one camera")
         cameras_with_data_types = {
             camera_id: (self.get_device(camera_id), data_types)
             for camera_id, data_types in captures.items()
         }
         try:
-            return await capture_cameras(
-                cameras_with_data_types, world_frame=world_frame
-            )
+            return await capture_cameras(cameras_with_data_types, world_frame=world_frame)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except RuntimeError as exc:
@@ -262,11 +252,7 @@ class CameraService:
     def get_pointcloud(self, camera_id, world_frame=False):
         """Latest pointcloud as an (N, 3) array in world or, by default, camera
         frame."""
-        return {
-            "pointcloud": self.get_device(camera_id).get_pointcloud(
-                world_frame=world_frame
-            )
-        }
+        return {"pointcloud": self.get_device(camera_id).get_pointcloud(world_frame=world_frame)}
 
     # -- pose ------------------------------------------------------------------
 
@@ -349,9 +335,7 @@ class CameraService:
 
     def get_horizontal_aperture(self, camera_id):
         """Horizontal aperture / sensor width (stage units)."""
-        return {
-            "horizontal_aperture": self.get_device(camera_id).get_horizontal_aperture()
-        }
+        return {"horizontal_aperture": self.get_device(camera_id).get_horizontal_aperture()}
 
     def set_horizontal_aperture(self, camera_id, value, maintain_square_pixels):
         """Set the horizontal aperture (stage units)."""
@@ -414,11 +398,7 @@ class CameraService:
 
     def get_lens_distortion_model(self, camera_id):
         """Lens distortion model name (`pinhole` if unset)."""
-        return {
-            "lens_distortion_model": self.get_device(
-                camera_id
-            ).get_lens_distortion_model()
-        }
+        return {"lens_distortion_model": self.get_device(camera_id).get_lens_distortion_model()}
 
     def set_lens_distortion_model(self, camera_id, value):
         """Set the lens distortion model (applies the matching schema)."""
@@ -431,9 +411,7 @@ class CameraService:
     def get_intrinsics_matrix(self, camera_id):
         """3x3 intrinsics matrix (pinhole models only)."""
         try:
-            return {
-                "intrinsics_matrix": self.get_device(camera_id).get_intrinsics_matrix()
-            }
+            return {"intrinsics_matrix": self.get_device(camera_id).get_intrinsics_matrix()}
         except Exception as exc:  # non-pinhole model raises a bare Exception
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -447,15 +425,11 @@ class CameraService:
 
     def get_render_product_path(self, camera_id):
         """Path to the render product attached to this camera."""
-        return {
-            "render_product_path": self.get_device(camera_id).get_render_product_path()
-        }
+        return {"render_product_path": self.get_device(camera_id).get_render_product_path()}
 
     def get_supported_annotators(self, camera_id):
         """Annotator names that can be attached to this camera."""
-        return {
-            "supported_annotators": self.get_device(camera_id).supported_annotators()
-        }
+        return {"supported_annotators": self.get_device(camera_id).supported_annotators()}
 
     # -- collection control ----------------------------------------------------
 

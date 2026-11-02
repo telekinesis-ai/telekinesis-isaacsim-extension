@@ -103,9 +103,7 @@ class Extension(omni.ext.IExt):
         try:
             self._bridge_server.start()
         except Exception as exc:
-            carb.log_error(
-                f"[bridge] bridge server on port {BRIDGE_PORT} failed to start: {exc}"
-            )
+            carb.log_error(f"[bridge] bridge server on port {BRIDGE_PORT} failed to start: {exc}")
 
         # Clear the bridge's device registry whenever the stage is replaced. This
         # subscription is tied to the server (always active while the extension is
@@ -120,9 +118,7 @@ class Extension(omni.ext.IExt):
 
         # Shown under right-click -> Create in the Stage panel and viewport. The returned
         # subscription keeps the entry alive; dropping it in on_shutdown removes it.
-        extension_path = (
-            omni.kit.app.get_app().get_extension_manager().get_extension_path(ext_id)
-        )
+        extension_path = omni.kit.app.get_app().get_extension_manager().get_extension_path(ext_id)
         self._create_context_menu = omni.kit.context_menu.add_menu(
             {
                 "name": "Telekinesis Isaac Sim Bridge",
@@ -142,9 +138,7 @@ class Extension(omni.ext.IExt):
         remove_menu_items(self._menu_items, EXTENSION_TITLE)
 
         action_registry = omni.kit.actions.core.get_action_registry()
-        action_registry.deregister_action(
-            self.ext_id, f"CreateUIExtension:{EXTENSION_TITLE}"
-        )
+        action_registry.deregister_action(self.ext_id, f"CreateUIExtension:{EXTENSION_TITLE}")
 
         if self._window:
             self._window = None
@@ -157,13 +151,9 @@ class Extension(omni.ext.IExt):
             # Subscribe to Stage and Timeline Events
             self._usd_context = omni.usd.get_context()
             events = self._usd_context.get_stage_event_stream()
-            self._stage_event_sub = events.create_subscription_to_pop(
-                self._on_stage_event
-            )
+            self._stage_event_sub = events.create_subscription_to_pop(self._on_stage_event)
             stream = self._timeline.get_timeline_event_stream()
-            self._timeline_event_sub = stream.create_subscription_to_pop(
-                self._on_timeline_event
-            )
+            self._timeline_event_sub = stream.create_subscription_to_pop(self._on_timeline_event)
 
             self._build_ui()
         else:
@@ -206,10 +196,8 @@ class Extension(omni.ext.IExt):
         """Subscribe physics steps on play; unsubscribe on stop; forward to UIBuilder."""
         if event.type == int(omni.timeline.TimelineEventType.PLAY):
             if not self._physx_subscription:
-                self._physx_subscription = (
-                    self._physx_iface.subscribe_physics_step_events(
-                        self._on_physics_step
-                    )
+                self._physx_subscription = self._physx_iface.subscribe_physics_step_events(
+                    self._on_physics_step
                 )
         elif event.type == int(omni.timeline.TimelineEventType.STOP):
             self._physx_subscription = None
@@ -228,9 +216,7 @@ class Extension(omni.ext.IExt):
         rather than restart the server so the port stays bound and clients can
         simply re-PUT their articulations against the new stage.
         """
-        if event.type == int(StageEventType.OPENED) or event.type == int(
-            StageEventType.CLOSED
-        ):
+        if event.type == int(StageEventType.OPENED) or event.type == int(StageEventType.CLOSED):
             if getattr(self, "_bridge_server", None) is not None:
                 self._bridge_server.reset_devices()
 
@@ -241,15 +227,11 @@ class Extension(omni.ext.IExt):
             objects: Kit context-menu payload. ``prim_list`` holds the right-clicked prims and is
                 empty when the click was on empty space in the Stage panel.
         """
-        carb.log_info(
-            f"[{EXTENSION_TITLE}] Create menu clicked, prims: {objects.get('prim_list')}"
-        )
+        carb.log_info(f"[{EXTENSION_TITLE}] Create menu clicked, prims: {objects.get('prim_list')}")
 
     def _on_stage_event(self, event):
         """Clean up physics subscription on stage open/close; forward event to UIBuilder."""
-        if event.type == int(StageEventType.OPENED) or event.type == int(
-            StageEventType.CLOSED
-        ):
+        if event.type == int(StageEventType.OPENED) or event.type == int(StageEventType.CLOSED):
             # stage was opened or closed, cleanup
             self._physx_subscription = None
             self.ui_builder.cleanup()

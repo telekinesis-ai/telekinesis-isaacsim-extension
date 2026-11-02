@@ -51,9 +51,7 @@ def main():
     parser = argparse.ArgumentParser(description="Register a prim as a camera.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument(
-        "--prim", default=CAMERA_PRIM_PATH, help="camera prim path to register"
-    )
+    parser.add_argument("--prim", default=CAMERA_PRIM_PATH, help="camera prim path to register")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
     args = parser.parse_args()

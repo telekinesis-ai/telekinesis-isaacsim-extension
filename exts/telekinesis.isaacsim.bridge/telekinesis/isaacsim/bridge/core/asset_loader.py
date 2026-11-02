@@ -116,9 +116,7 @@ async def import_mesh_at(stage, mesh_path, dest_prim_path):
         mesh_path.as_posix(), asset_path.as_posix(), None, context
     )
     if not await task.wait_until_finished():
-        raise RuntimeError(
-            f"failed to convert the mesh '{mesh_path}': {task.get_error_message()}"
-        )
+        raise RuntimeError(f"failed to convert the mesh '{mesh_path}': {task.get_error_message()}")
 
     carb.log_info(f"[bridge] converted '{mesh_path}' to asset {asset_path}")
     return await _reference_asset_at(stage, asset_path, dest_prim_path)
@@ -145,9 +143,7 @@ async def _reference_asset_at(stage, asset_path, dest_prim_path):
         "AddReference",
         stage=stage,
         prim_path=Sdf.Path(dest_prim_path),
-        reference=Sdf.Reference(
-            asset_path.as_posix(), _asset_root_prim_path(asset_path)
-        ),
+        reference=Sdf.Reference(asset_path.as_posix(), _asset_root_prim_path(asset_path)),
     )
 
     # Let the stage recompose before the robot is measured against what is already
@@ -305,9 +301,7 @@ def _author_missing_drives(asset_path):
     else:
         angular_stiffness = 3000.0  # NVIDIA's manipulator scale, USD degrees
         linear_stiffness = 1.0e5  # per metre
-        damping_ratio = (
-            0.004  # NVIDIA's ratio: snappy tracking of a streamed trajectory
-        )
+        damping_ratio = 0.004  # NVIDIA's ratio: snappy tracking of a streamed trajectory
 
     completed = []
     for prim in stage.Traverse():
@@ -321,9 +315,9 @@ def _author_missing_drives(asset_path):
         if damping_ratio == 0.5:
             # A gripper joint must never hit a velocity wall (see the docstring).
             PhysxSchema.PhysxJointAPI.Apply(prim)
-            prim.CreateAttribute(
-                "physxJoint:maxJointVelocity", Sdf.ValueTypeNames.Float
-            ).Set(10000.0)
+            prim.CreateAttribute("physxJoint:maxJointVelocity", Sdf.ValueTypeNames.Float).Set(
+                10000.0
+            )
 
         if _is_mimic(prim):
             continue
@@ -383,9 +377,7 @@ def _is_mimic(prim):
     whose plugin is not loaded -- and the mimic schema is the physics backend's own.
     """
     schemas = prim.GetMetadata("apiSchemas")
-    return bool(schemas) and any(
-        "Mimic" in name for name in schemas.GetAddedOrExplicitItems()
-    )
+    return bool(schemas) and any("Mimic" in name for name in schemas.GetAddedOrExplicitItems())
 
 
 def _asset_directory_for(urdf_path):
@@ -436,9 +428,7 @@ def _import_asset(urdf_path, asset_directory):
     """
     try:
         if asset_directory.exists():
-            carb.log_info(
-                f"[bridge] replacing the previous urdf asset in {asset_directory}"
-            )
+            carb.log_info(f"[bridge] replacing the previous urdf asset in {asset_directory}")
             shutil.rmtree(asset_directory)
         asset_directory.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
@@ -455,9 +445,7 @@ def _import_asset(urdf_path, asset_directory):
         asset_path = _import_with_importer_commands(urdf_path, asset_directory)
 
     if not asset_path.is_file():
-        raise RuntimeError(
-            f"URDF import of '{urdf_path}' wrote no asset at '{asset_path}'"
-        )
+        raise RuntimeError(f"URDF import of '{urdf_path}' wrote no asset at '{asset_path}'")
 
     carb.log_info(f"[bridge] imported '{urdf_path}' to asset {asset_path}")
     return asset_path
@@ -509,8 +497,6 @@ def _import_with_importer_commands(urdf_path, asset_directory):
         get_articulation_root=False,
     )
     if not success or not imported:
-        raise RuntimeError(
-            f"failed to import URDF at '{urdf_path}' (check the path and file)"
-        )
+        raise RuntimeError(f"failed to import URDF at '{urdf_path}' (check the path and file)")
 
     return asset_path
