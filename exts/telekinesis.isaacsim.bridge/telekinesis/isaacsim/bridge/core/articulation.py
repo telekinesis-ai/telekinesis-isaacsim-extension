@@ -210,12 +210,23 @@ class SingleArticulation:
         than pulled back. The velocities are zeroed so nothing carries over from a
         previous run's motion.
 
+        The measured positions are clamped into each joint's limits first. A
+        freshly imported joint starts at zero even when its range excludes zero,
+        and adopting that pose would leave the articulation -- and the reset pose
+        recorded from it -- outside its own limits, which a client reading the
+        state treats as invalid.
+
         This covers every DOF of the underlying handle rather than just this
         device's driven subset: the stale targets are a property of the
         articulation, and the joints this device does not drive would otherwise
         still be pulled.
         """
-        positions = self._articulation.get_joint_positions()
+        limits = self._articulation._articulation_view.get_dof_limits()
+        if limits.ndim == 3:
+            limits = limits[0]
+        positions = np.clip(
+            self._articulation.get_joint_positions(), np.asarray(limits[:, 0]), np.asarray(limits[:, 1])
+        )
         self._articulation.set_joint_positions(positions)
         self._articulation.set_joint_velocities(np.zeros_like(positions))
         self._articulation.apply_action(ArticulationAction(joint_positions=positions))

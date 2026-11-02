@@ -149,7 +149,7 @@ async def create_articulation(
 ):
     """Register (and bind) one articulation; returns its id, prim, dof and state."""
     return await articulation_service.create_articulation(
-        req.prim_path, req.urdf_path, req.usd_path
+        req.prim_path, req.urdf_path, req.usd_path, req.default_joint_positions
     )
 
 
@@ -971,7 +971,8 @@ async def update_colliders(req: UpdateCollidersRequest, prim_service=Depends(get
 @prims.put("/physics/rigid_body", summary="Set Rigid Body")
 async def set_rigid_body(req: SetRigidBodyRequest, prim_service=Depends(get_prim_service)):
     """Make a prim one dynamic rigid body of ``mass`` kg, colliding through the convex
-    hull of every mesh beneath it. Meant for a prop with no rigid body of its own.
+    hull of every mesh beneath it with a friction of 1.0 (``max`` combine mode). Meant
+    for a prop with no rigid body of its own.
     """
     prim_service.set_rigid_body(req.prim_path, req.mass)
 

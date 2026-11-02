@@ -4,6 +4,9 @@
 - `PUT /prims/physics/rigid_body` makes each mesh collide as its convex hull instead of a
   convex decomposition. Decomposing open, multi-shell CAD meshes left thin hulls that gripper
   fingers were pushed through. A hull is solid, but fills holes and concave pockets.
+- `PUT /prims/physics/rigid_body` binds the prop's meshes to a physics material with a static
+  and dynamic friction of 1.0 and the `max` friction combine mode. At the PhysX default of 0.5,
+  small parts slid out of parallel-jaw grippers.
 
 ### Fixed
 - `POST /articulations/{id}/mount_prim` mounted a prim with no mass and no colliders, such as a

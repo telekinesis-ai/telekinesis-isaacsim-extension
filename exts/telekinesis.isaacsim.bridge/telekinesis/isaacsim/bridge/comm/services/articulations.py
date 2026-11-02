@@ -72,7 +72,9 @@ class ArticulationService:
         self._create_locks = {}
         self._assembly_locks = {}
 
-    async def create_articulation(self, prim_path, urdf_path, usd_path=None):
+    async def create_articulation(
+        self, prim_path, urdf_path, usd_path=None, default_joint_positions=None
+    ):
         """Register (and bind) the articulation at ``prim_path`` and return its info.
 
         One articulation per *requested* prim; PUTting the same prim again returns
@@ -83,6 +85,11 @@ class ArticulationService:
         ``articulation2``, ... The bind runs every time: a new client session may
         follow a timeline stop/replay, which invalidates the cached articulation
         handle.
+
+        ``default_joint_positions`` (radians) is applied only when this request
+        loaded the prim: the joints are teleported there and it becomes the reset
+        pose. A loaded asset starts every joint at zero, which may lie outside a
+        joint's range; a prim already in the stage keeps the pose it stands in.
         """
         # Normalize a trailing slash so "/World/ur10e" and "/World/ur10e/" register as
         # the same articulation (USD paths are case-sensitive, so case is left alone).
@@ -111,6 +118,12 @@ class ArticulationService:
                 # 422: the request was well-formed but the prim couldn't actually
                 # be bound (semantic/runtime failure, not a bad input value).
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
+            if prim_source != "isaac_usd" and default_joint_positions is not None:
+                try:
+                    await device.set_j(default_joint_positions)
+                    device.set_joints_default_state(joint_positions=default_joint_positions)
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
             await self.rebind_stale_devices()
             return {
                 "articulation_id": articulation_id,

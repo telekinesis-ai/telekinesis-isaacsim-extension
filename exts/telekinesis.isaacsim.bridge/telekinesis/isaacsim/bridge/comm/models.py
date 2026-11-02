@@ -22,11 +22,17 @@ class CreateArticulationRequest(BaseModel):
     loaded from when no prim is at ``prim_path`` yet: a URDF, which is imported, or a
     prepared USD asset, which is referenced. Either may be given, not both; a prim
     that is already in the stage is used as it is and both are ignored.
+
+    ``default_joint_positions`` (radians, one per driven joint) is the pose a
+    freshly loaded articulation is placed at and resets to on Stop+Play. It applies
+    only when this request loads the prim; a prim already in the stage keeps its
+    pose.
     """
 
     prim_path: str = Field(min_length=1)
     urdf_path: str | None = None
     usd_path: str | None = None
+    default_joint_positions: list[float] | None = None
 
 
 class JointPositionsRequest(BaseModel):

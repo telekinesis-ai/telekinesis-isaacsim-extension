@@ -280,16 +280,34 @@ class PrimService:
         fills the mesh's holes and concave pockets; a prop built from several meshes
         keeps one hull per mesh. Meant for a prop with no rigid body of its own: a
         rigid body nested beneath it would simulate separately.
+
+        Every mesh is bound to a physics material at ``<prim_path>/PhysicsMaterial``
+        with a static and dynamic friction of 1.0 and no restitution. Its friction
+        combine mode is ``max``, so the prop's friction applies against any surface
+        with lower friction, such as gripper pads that use the PhysX default of 0.5.
         """
-        from pxr import Usd, UsdGeom, UsdPhysics
+        from pxr import PhysxSchema, Usd, UsdGeom, UsdPhysics, UsdShade
 
         prim = self._prim_or_404(prim_path)
         UsdPhysics.RigidBodyAPI.Apply(prim).CreateRigidBodyEnabledAttr(True)
         UsdPhysics.MassAPI.Apply(prim).CreateMassAttr(mass)
+        # Small plastic parts slid out of parallel-jaw grippers at the 0.5 default,
+        # which PhysX averages with the pads' friction.
+        material = UsdShade.Material.Define(prim.GetStage(), f"{prim_path}/PhysicsMaterial")
+        physics_material = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
+        physics_material.CreateStaticFrictionAttr(1.0)
+        physics_material.CreateDynamicFrictionAttr(1.0)
+        physics_material.CreateRestitutionAttr(0.0)
+        PhysxSchema.PhysxMaterialAPI.Apply(material.GetPrim()).CreateFrictionCombineModeAttr("max")
         for descendant in Usd.PrimRange(prim):
             if not descendant.IsA(UsdGeom.Mesh):
                 continue
             UsdPhysics.CollisionAPI.Apply(descendant).CreateCollisionEnabledAttr(True)
+            # Bound per mesh: an all-purpose render binding on the mesh would
+            # otherwise win over a physics binding on the prop.
+            UsdShade.MaterialBindingAPI.Apply(descendant).Bind(
+                material, UsdShade.Tokens.weakerThanDescendants, "physics"
+            )
             # Not a convex decomposition: it fills a closed inside, and an open surface
             # has none, so it leaves thin hulls that gripper fingers are pushed through.
             UsdPhysics.MeshCollisionAPI.Apply(descendant).CreateApproximationAttr(
