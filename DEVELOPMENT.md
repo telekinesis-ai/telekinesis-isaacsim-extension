@@ -126,6 +126,33 @@ curl http://127.0.0.1:8766/status
 # {"status":"OK"}
 ```
 
+## Pre-merge Checks
+
+CI runs these on every PR into `develop` or `main` and fails if any of them would change a file or
+report an error. Run them locally first, from the repository root:
+
+```bash
+# Versions match CI exactly; other ruff/FastAPI versions give different results.
+pip install ruff==0.15.8 pylint fastapi==0.115.7 pydantic==2.11.3
+
+ruff check --line-length 100 --fix .
+ruff format --line-length 100 .
+pylint --max-line-length 100 --ignored-modules=omni,carb,isaacsim,pxr,usd --disable=duplicate-code,attribute-defined-outside-init,import-outside-toplevel,unused-argument,broad-exception-caught,protected-access,too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-public-methods,too-many-instance-attributes,too-many-lines,too-many-branches,too-many-statements,too-many-boolean-expressions exts/telekinesis.isaacsim.bridge/telekinesis examples
+python scripts/generate_openapi.py
+```
+
+Then commit whatever changed, including `public/openapi.json`. `ruff format` does not wrap long
+docstrings or comments; pylint reports those as `line-too-long` and they must be wrapped by hand.
+
+A PR into `main` (a release) additionally needs:
+
+- `version` in `exts/telekinesis.isaacsim.bridge/config/extension.toml` bumped to a version that
+  has no `v<VERSION>` tag yet;
+- a `## [<VERSION>]` section in `exts/telekinesis.isaacsim.bridge/docs/CHANGELOG.md`.
+
+To upgrade ruff or FastAPI, change the version in both this section and
+`.github/workflows/ci.yml`, then rerun all of the above and commit the result.
+
 ## Automated Deployment (CI)
 
 `.github/workflows/ci.yml` automates the checks and the release below.
@@ -162,15 +189,8 @@ Follow the steps below to release a new version of the extension without CI.
 
 ### 1. Linting, Static Checks and API Docs Generation
 
-Run the following before merging to main.
-```bash
-pip install ruff==0.15.8 pylint
-ruff check --line-length 100 .
-ruff format --line-length 100 .
-pylint --max-line-length 100 --ignored-modules=omni,carb,isaacsim,pxr,usd --disable=duplicate-code,attribute-defined-outside-init,import-outside-toplevel,unused-argument,broad-exception-caught,protected-access,too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-public-methods,too-many-instance-attributes,too-many-lines,too-many-branches,too-many-statements,too-many-boolean-expressions exts/telekinesis.isaacsim.bridge/telekinesis examples
-python scripts/generate_openapi.py # should exit 0 and write public/openapi.json
-```
-On succesful completion, merge to main, and proceed to release.
+Run the [Pre-merge Checks](#pre-merge-checks) before merging to main. On successful completion,
+merge to main, and proceed to release.
 <details>
 <summary>Why these Pylint checks are ignored</summary>
 
