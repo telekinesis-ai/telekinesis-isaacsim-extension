@@ -46,7 +46,9 @@ class StageService:
             raise HTTPException(status_code=400, detail=f"could not open '{uri}': {error}")
 
     async def add_to_scene(self, uri, prim_path):
-        """Reference the USD, OBJ, GLB or glTF asset at ``uri`` into the open stage at ``prim_path``.
+        """Reference the USD, OBJ, GLB or glTF asset at ``uri`` into the open stage.
+
+        The asset is referenced onto ``prim_path``.
 
         The counterpart to :meth:`open_scene` for adding one device to a stage instead
         of replacing it: the asset arrives as one prim beside what is already there,

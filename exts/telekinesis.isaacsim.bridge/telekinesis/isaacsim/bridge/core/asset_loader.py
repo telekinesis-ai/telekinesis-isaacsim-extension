@@ -4,9 +4,9 @@ Bring a robot or tool into the open stage at an exact prim path, from either of 
 two descriptions a client can hand the bridge: a URDF, which is imported to a
 self-contained USD asset first (:func:`import_urdf_at`), or a USD asset that is
 already prepared (:func:`reference_usd_at`). A plain OBJ, GLB or glTF mesh, such as a
-stage prop, is converted to USD the same way (:func:`import_mesh_at`). Both end up referencing one asset onto
-one prim path, so the device arrives as a single prim with everything it owns below
-it. Shared by the robot and gripper connect paths.
+stage prop, is converted to USD the same way (:func:`import_mesh_at`). Both end up
+referencing one asset onto one prim path, so the device arrives as a single prim with
+everything it owns below it. Shared by the robot and gripper connect paths.
 """
 
 import hashlib

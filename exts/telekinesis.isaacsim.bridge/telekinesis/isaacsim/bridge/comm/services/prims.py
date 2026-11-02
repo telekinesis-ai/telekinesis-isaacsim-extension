@@ -4,8 +4,8 @@
 ``PrimService`` reads and edits individual prims on the open stage -- poses
 (world/local, rotation-vector or quaternion), local scale, the stored "default
 pose" used to reset a prim, user metadata, visibility, physics joint enable,
-colliders and rigid bodies -- and deletes prims. Pose edits keep a prim's scale; only ``set_scale`` changes it. It
-needs the open stage, so it is composed with :class:`StageService` (one shared
+colliders and rigid bodies -- and deletes prims. Pose edits keep a prim's scale; only
+``set_scale`` changes it. It needs the open stage, so it is composed with :class:`StageService` (one shared
 instance, injected at construction) and reuses that single "409 if no stage"
 rule rather than duplicating it.
 

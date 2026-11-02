@@ -167,7 +167,7 @@ Run the following before merging to main.
 pip install ruff==0.15.8 pylint
 ruff check --line-length 100 .
 ruff format --line-length 100 .
-pylint --max-line-length 100 --ignored-modules=omni,carb,isaacsim,pxr,usd --disable=duplicate-code,attribute-defined-outside-init,import-outside-toplevel,unused-argument,broad-exception-caught,protected-access,too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-public-methods,too-many-instance-attributes,too-many-lines exts/telekinesis.isaacsim.bridge/telekinesis examples
+pylint --max-line-length 100 --ignored-modules=omni,carb,isaacsim,pxr,usd --disable=duplicate-code,attribute-defined-outside-init,import-outside-toplevel,unused-argument,broad-exception-caught,protected-access,too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-public-methods,too-many-instance-attributes,too-many-lines,too-many-branches,too-many-statements,too-many-boolean-expressions exts/telekinesis.isaacsim.bridge/telekinesis examples
 python scripts/generate_openapi.py # should exit 0 and write public/openapi.json
 ```
 On succesful completion, merge to main, and proceed to release.
@@ -197,6 +197,9 @@ Every disabled check is intentional:
 - `too-many-arguments` and `too-many-positional-arguments`: assembly functions
   genuinely require several robot, stage, mount, and offset parameters.
 - `too-many-locals`: applies to the same orchestration functions.
+- `too-many-branches`, `too-many-statements` and `too-many-boolean-expressions`: blocking joint
+  moves (`move_j`) and drive authoring (`_author_missing_drives`) validate and step through one
+  linear flow that reads clearer in one place than split into single-use helpers.
 - `too-many-public-methods` and `too-many-instance-attributes`: service classes
   intentionally mirror Isaac Sim APIs and Kit subscription state.
 - `too-many-lines`: `routers.py` intentionally keeps the full API route surface

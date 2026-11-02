@@ -295,9 +295,9 @@ class AddToSceneRequest(BaseModel):
 
     ``uri`` is a USD, OBJ, GLB or glTF asset on the machine running Isaac Sim, not a URL:
     a client fetches the asset's bundle itself and hands over the extracted asset. An
-    OBJ, GLB or glTF mesh is converted to USD first. The asset is referenced onto ``prim_path``, so it arrives
-    as one prim with everything it owns below it, beside whatever is already in the
-    stage.
+    OBJ, GLB or glTF mesh is converted to USD first. The asset is referenced onto
+    ``prim_path``, so it arrives as one prim with everything it owns below it, beside
+    whatever is already in the stage.
     """
 
     uri: str = Field(min_length=1)
