@@ -149,8 +149,10 @@ With CI, a release is:
 One-time GitHub setup, in addition to [2.1](#21-one-time-repository-setup):
 
 - **Settings ▸ Actions ▸ General ▸ Workflow permissions**: *Read and write permissions*.
-- If `develop` is branch-protected, allow `github-actions[bot]` to push to it, or the final
-  reconnect step fails (the release itself is already published by then).
+- `develop` must accept direct pushes from the workflow's `GITHUB_TOKEN`, which cannot be added
+  to a bypass list. If a branch protection rule or ruleset blocks direct pushes to `develop`, the
+  final reconnect step fails (the release itself is already published by then); run
+  `git checkout develop && git merge main && git push origin develop` by hand instead.
 - Optional: **Settings ▸ Environments ▸ `release`** ▸ add required reviewers to make every
   release wait for a manual approval.
 
@@ -162,7 +164,7 @@ Follow the steps below to release a new version of the extension without CI.
 
 Run the following before merging to main.
 ```bash
-pip install ruff pylint
+pip install ruff==0.15.8 pylint
 ruff check --line-length 100 .
 ruff format --line-length 100 .
 pylint --max-line-length 100 --ignored-modules=omni,carb,isaacsim,pxr,usd --disable=duplicate-code,attribute-defined-outside-init,import-outside-toplevel,unused-argument,broad-exception-caught,protected-access,too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-public-methods,too-many-instance-attributes,too-many-lines exts/telekinesis.isaacsim.bridge/telekinesis examples

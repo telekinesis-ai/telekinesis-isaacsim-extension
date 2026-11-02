@@ -19,7 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install ruff pylint -r requirements.txt
+      # Pinned: newer ruff releases change the default rule set, so CI must match the local version.
+      - run: pip install ruff==0.15.8 pylint -r requirements.txt
       - run: ruff check --line-length 100 .
       - run: ruff format --check --line-length 100 .
       # import-error is disabled only here: CI has no Isaac Sim, so omni/carb/pxr cannot resolve.
