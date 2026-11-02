@@ -43,7 +43,11 @@ def main():
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    params = {"prim_path": args.prim, "coordinate_system": "world", "rotation_type": "cartesian"}
+    params = {
+        "prim_path": args.prim,
+        "coordinate_system": "world",
+        "rotation_type": "cartesian",
+    }
     original_pose = _request(base, "GET", "/prims/poses", params=params)["pose"]
     print(f"pose (original): {original_pose}")
 

@@ -47,11 +47,17 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--id", required=True, dest="lightbeam_id", help="lightbeam_id from put_lightbeam.py"
+        "--id",
+        required=True,
+        dest="lightbeam_id",
+        help="lightbeam_id from put_lightbeam.py",
     )
     parser.add_argument("--num-rays", type=int, default=None, help="beams in the curtain")
     parser.add_argument(
-        "--curtain-length", type=float, default=None, help="meters the beams are spread over"
+        "--curtain-length",
+        type=float,
+        default=None,
+        help="meters the beams are spread over",
     )
     parser.add_argument(
         "--forward-axis",
@@ -86,9 +92,7 @@ def main():
     body = {key: value for key, value in body.items() if value is not None}
 
     base = f"http://{args.host}:{args.port}"
-    response = _request(
-        base, "PATCH", f"/lightbeams/{args.lightbeam_id}/configuration", body
-    )
+    response = _request(base, "PATCH", f"/lightbeams/{args.lightbeam_id}/configuration", body)
     print(f"response: {response}")
 
 

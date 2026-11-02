@@ -2,11 +2,12 @@
 """Prim service: the orchestration behind the ``/prims`` routes.
 
 ``PrimService`` reads and edits individual prims on the open stage -- poses
-(world/local, rotation-vector or quaternion), the stored "default pose" used to
-reset a prim, user metadata, visibility, physics joint enable, and colliders. It
-needs the open stage, so it is composed with :class:`StageService` (one shared
-instance, injected at construction) and reuses that single "409 if no stage"
-rule rather than duplicating it.
+(world/local, rotation-vector or quaternion), local scale, the stored "default
+pose" used to reset a prim, user metadata, visibility, physics joint enable,
+colliders and rigid bodies -- and deletes prims. Pose edits keep a prim's scale; only
+``set_scale`` changes it. It needs the open stage, so it is composed with
+:class:`StageService` (one shared instance, injected at construction) and reuses that
+single "409 if no stage" rule rather than duplicating it.
 
 The pose math is kept as pure module-level helpers (no stage, no ``self``) so the
 class stays focused on prim lookup + edits. omni/pxr imports are lazy so this
@@ -24,9 +25,16 @@ _DEFAULT_POSE_KEY = "telekinesis:default_pose"
 
 
 def _matrix_to_pose(matrix, rotation_type):
-    """Gf.Matrix4d -> {"pose": [...]} in cartesian (rotvec) or quaternion form."""
-    translation = matrix.ExtractTranslation()
-    rotation = matrix.ExtractRotation()
+    """Gf.Matrix4d -> {"pose": [...]} in cartesian (rotvec) or quaternion form.
+
+    The matrix is decomposed rather than read directly, so scale on the prim or its
+    ancestors does not leak into the rotation.
+    """
+    from pxr import Gf
+
+    transform = Gf.Transform(matrix)
+    translation = transform.GetTranslation()
+    rotation = transform.GetRotation()
     head = [translation[0], translation[1], translation[2]]
     if rotation_type == "quaternions":
         quat = rotation.GetQuat()
@@ -44,7 +52,8 @@ def _wspose_to_matrix(pose):
 
     if len(pose) != 6:
         raise HTTPException(
-            status_code=400, detail=f"expected 6 pose values (x,y,z,rx,ry,rz), got {len(pose)}"
+            status_code=400,
+            detail=f"expected 6 pose values (x,y,z,rx,ry,rz), got {len(pose)}",
         )
     x, y, z, rx, ry, rz = pose
     angle = math.sqrt(rx * rx + ry * ry + rz * rz)
@@ -71,11 +80,21 @@ def _local_matrix(prim):
 
 
 def _set_local_matrix(prim, local_matrix):
-    from pxr import UsdGeom
+    """Give the prim ``local_matrix``'s translation and rotation, keeping its own scale.
 
+    Any scale in ``local_matrix`` -- such as a scaled parent's inverse, picked up when a
+    world pose is converted to local -- is discarded, so pose edits never resize the
+    prim. Replaces the prim's xform ops with a single transform op.
+    """
+    from pxr import Gf, UsdGeom
+
+    transform = Gf.Transform(_local_matrix(prim))
+    target = Gf.Transform(local_matrix)
+    transform.SetRotation(target.GetRotation())
+    transform.SetTranslation(target.GetTranslation())
     xform = UsdGeom.Xformable(prim)
     xform.ClearXformOpOrder()
-    xform.AddTransformOp().Set(local_matrix)
+    xform.AddTransformOp().Set(transform.GetMatrix())
 
 
 def _set_world_matrix(prim, world_matrix):
@@ -99,6 +118,10 @@ class PrimService:
     def __init__(self, stage_service):
         """``stage_service`` supplies the open stage (and the 409-if-none rule)."""
         self._stage_service = stage_service
+        # Awaited after a deletion stopped and replayed the timeline, so the
+        # articulation service can repair the device handles that stop killed. Set
+        # by BridgeServer; None until then.
+        self.on_timeline_stopped = None
 
     def _prim_or_404(self, prim_path):
         """Resolve a prim path on the open stage, or raise 404."""
@@ -114,7 +137,10 @@ class PrimService:
         return _matrix_to_pose(matrix, rotation_type)
 
     def update_pose(self, prim_path, pose):
-        """Set a prim's world-space pose from a rotation-vector pose (6 floats)."""
+        """Set a prim's world-space pose from a rotation-vector pose (6 floats).
+
+        The prim's local scale is kept.
+        """
         prim = self._prim_or_404(prim_path)
         _set_world_matrix(prim, _wspose_to_matrix(pose))
 
@@ -137,13 +163,39 @@ class PrimService:
 
         ``object_first`` chooses the multiplication order: ``world * relative`` when
         true (move in the prim's own frame), ``relative * world`` otherwise (move in
-        world frame).
+        world frame). The prim's scale is kept and does not scale the offset.
         """
+        from pxr import Gf
+
         prim = self._prim_or_404(prim_path)
         relative = _wspose_to_matrix(relative_pose)
-        current = _world_matrix(prim)
+        current = Gf.Transform(_world_matrix(prim))
+        current.SetScale(Gf.Vec3d(1.0, 1.0, 1.0))
+        current = current.GetMatrix()
         new_world = (current * relative) if object_first else (relative * current)
         _set_world_matrix(prim, new_world)
+
+    def get_scale(self, prim_path):
+        """Local scale of a prim (relative to its parent) as {"scale": [sx, sy, sz]}."""
+        from pxr import Gf
+
+        scale = Gf.Transform(_local_matrix(self._prim_or_404(prim_path))).GetScale()
+        return {"scale": list(scale)}
+
+    def set_scale(self, prim_path, scale):
+        """Set a prim's local scale, keeping its local translation and rotation.
+
+        The prim's pose is unchanged; its children scale with it. Replaces the prim's
+        xform ops with a single transform op.
+        """
+        from pxr import Gf, UsdGeom
+
+        prim = self._prim_or_404(prim_path)
+        transform = Gf.Transform(_local_matrix(prim))
+        transform.SetScale(Gf.Vec3d(*scale))
+        xform = UsdGeom.Xformable(prim)
+        xform.ClearXformOpOrder()
+        xform.AddTransformOp().Set(transform.GetMatrix())
 
     def list_default_poses(self):
         """Map every prim that has a stored default pose to that pose (local rotvec)."""
@@ -219,3 +271,80 @@ class PrimService:
         if not collision:
             collision = UsdPhysics.CollisionAPI.Apply(prim)
         collision.CreateCollisionEnabledAttr(enable)
+
+    def set_rigid_body(self, prim_path, mass):
+        """Make a prim one dynamic rigid body of ``mass`` kilograms that collides.
+
+        Applies the rigid body and mass APIs to the prim, and enables collision on
+        every mesh beneath it as that mesh's convex hull. A hull is solid even when
+        the mesh is an open or multi-shell surface, as CAD exports often are, but it
+        fills the mesh's holes and concave pockets; a prop built from several meshes
+        keeps one hull per mesh. Meant for a prop with no rigid body of its own: a
+        rigid body nested beneath it would simulate separately.
+
+        Every mesh is bound to a physics material at ``<prim_path>/PhysicsMaterial``
+        with a static and dynamic friction of 1.0 and no restitution. Its friction
+        combine mode is ``max``, so the prop's friction applies against any surface
+        with lower friction, such as gripper pads that use the PhysX default of 0.5.
+        """
+        from pxr import PhysxSchema, Usd, UsdGeom, UsdPhysics, UsdShade
+
+        prim = self._prim_or_404(prim_path)
+        UsdPhysics.RigidBodyAPI.Apply(prim).CreateRigidBodyEnabledAttr(True)
+        UsdPhysics.MassAPI.Apply(prim).CreateMassAttr(mass)
+        # Small plastic parts slid out of parallel-jaw grippers at the 0.5 default,
+        # which PhysX averages with the pads' friction.
+        material = UsdShade.Material.Define(prim.GetStage(), f"{prim_path}/PhysicsMaterial")
+        physics_material = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
+        physics_material.CreateStaticFrictionAttr(1.0)
+        physics_material.CreateDynamicFrictionAttr(1.0)
+        physics_material.CreateRestitutionAttr(0.0)
+        PhysxSchema.PhysxMaterialAPI.Apply(material.GetPrim()).CreateFrictionCombineModeAttr("max")
+        for descendant in Usd.PrimRange(prim):
+            if not descendant.IsA(UsdGeom.Mesh):
+                continue
+            UsdPhysics.CollisionAPI.Apply(descendant).CreateCollisionEnabledAttr(True)
+            # Bound per mesh: an all-purpose render binding on the mesh would
+            # otherwise win over a physics binding on the prop.
+            UsdShade.MaterialBindingAPI.Apply(descendant).Bind(
+                material, UsdShade.Tokens.weakerThanDescendants, "physics"
+            )
+            # Not a convex decomposition: it fills a closed inside, and an open surface
+            # has none, so it leaves thin hulls that gripper fingers are pushed through.
+            UsdPhysics.MeshCollisionAPI.Apply(descendant).CreateApproximationAttr(
+                UsdPhysics.Tokens.convexHull
+            )
+
+    async def delete_prim(self, prim_path):
+        """Remove a prim and everything beneath it; a path with no prim is left as is.
+
+        The prim may be a link of a bound articulation -- a body fixed to an arm is --
+        and removing it while physics runs invalidates the physics view every device
+        reads through. So the timeline is stopped for the removal. A timeline that was
+        playing is played again and the device handles the stop killed are rebound in
+        this same request; otherwise it is left stopped.
+        """
+        import omni.kit.app
+        import omni.timeline
+
+        stage = self._stage_service.stage()
+        if not stage.GetPrimAtPath(prim_path).IsValid():
+            return
+
+        timeline = omni.timeline.get_timeline_interface()
+        app = omni.kit.app.get_app()
+        was_playing = timeline.is_playing()
+        timeline.stop()
+        # The stop only lands on the next updates; removing before then still
+        # pulls the prim out from under a live physics view.
+        await app.next_update_async()
+        await app.next_update_async()
+        stage.RemovePrim(prim_path)
+        if not was_playing:
+            return
+
+        timeline.play()
+        await app.next_update_async()
+        await app.next_update_async()
+        if self.on_timeline_stopped is not None:
+            await self.on_timeline_stopped()

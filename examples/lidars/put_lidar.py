@@ -52,10 +52,16 @@ def main():
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--prim", default=LIDAR_PRIM_PATH, help="lidar prim path to register")
     parser.add_argument(
-        "--rotation-rate", type=float, default=20.0, help="Hz, 0 = instantaneous full-sweep lidar"
+        "--rotation-rate",
+        type=float,
+        default=20.0,
+        help="Hz, 0 = instantaneous full-sweep lidar",
     )
     parser.add_argument(
-        "--data-types", nargs="+", default=None, help="scan outputs, e.g. point_cloud depth"
+        "--data-types",
+        nargs="+",
+        default=None,
+        help="scan outputs, e.g. point_cloud depth",
     )
     args = parser.parse_args()
 

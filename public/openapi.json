@@ -613,6 +613,57 @@
         }
       }
     },
+    "/articulations/{articulation_id}/tcp": {
+      "put": {
+        "tags": [
+          "articulations"
+        ],
+        "summary": "Set TCP",
+        "description": "Place this arm's TCP marker, an Xform under its mount link, at the given offset so\nthe active TCP can be seen and its world pose read in the stage.",
+        "operationId": "set_tcp_articulations__articulation_id__tcp_put",
+        "parameters": [
+          {
+            "name": "articulation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Articulation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTcpRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/articulations/{articulation_id}/handles_initialized": {
       "get": {
         "tags": [
@@ -7065,7 +7116,7 @@
           "stage"
         ],
         "summary": "Add To Scene",
-        "description": "Reference a USD asset into the open stage at ``prim_path`` (keeps the stage).",
+        "description": "Reference a USD, OBJ, GLB or glTF asset into the open stage at ``prim_path``.\n\nThe stage stays open; nothing already in it is replaced.",
         "operationId": "add_to_scene_stage_scene_reference_post",
         "requestBody": {
           "content": {
@@ -7277,6 +7328,46 @@
         }
       }
     },
+    "/stage/viewport/guides": {
+      "put": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Set Guides Visible",
+        "description": "Show or hide guide-purpose prims (e.g. TCP marker axes) in the viewport.\n\nSame as Display > Show By Purpose > Guide: applies to every guide prim and persists\nacross Isaac Sim restarts.",
+        "operationId": "set_guides_visible_stage_viewport_guides_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetEnabledRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/stage/configuration": {
       "get": {
         "tags": [
@@ -7382,7 +7473,7 @@
           "prims"
         ],
         "summary": "Update Pose",
-        "description": "Set a prim's world-space pose from a rotation-vector ``WSPose``.",
+        "description": "Set a prim's world-space pose from a rotation-vector ``WSPose`` (keeps its scale).",
         "operationId": "update_pose_prims_poses_put",
         "requestBody": {
           "required": true,
@@ -7390,6 +7481,85 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdatePoseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims/scale": {
+      "get": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Get Scale",
+        "description": "Local scale of a prim as ``{\"scale\": [sx, sy, sz]}``.",
+        "operationId": "get_scale_prims_scale_get",
+        "parameters": [
+          {
+            "name": "prim_path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prim Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Set Scale",
+        "description": "Set a prim's local scale, keeping its pose.",
+        "operationId": "set_scale_prims_scale_put",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetScaleRequest"
               }
             }
           }
@@ -7819,6 +7989,87 @@
           },
           "required": true
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims/physics/rigid_body": {
+      "put": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Set Rigid Body",
+        "description": "Make a prim one dynamic rigid body of ``mass`` kg, colliding through the convex\nhull of every mesh beneath it with a friction of 1.0 (``max`` combine mode). Meant\nfor a prop with no rigid body of its own.",
+        "operationId": "set_rigid_body_prims_physics_rigid_body_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRigidBodyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/prims": {
+      "delete": {
+        "tags": [
+          "prims"
+        ],
+        "summary": "Delete Prim",
+        "description": "Remove a prim and everything beneath it. A path with no prim succeeds unchanged.\n\nThe timeline is stopped for the removal and, if it was playing, played again.",
+        "operationId": "delete_prim_prims_delete",
+        "parameters": [
+          {
+            "name": "prim_path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prim Path"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -8645,7 +8896,7 @@
           "prim_path"
         ],
         "title": "AddToSceneRequest",
-        "description": "Body of POST /stage/scene/reference.\n\n``uri`` is a USD asset on the machine running Isaac Sim, not a URL: a client\nfetches the asset's bundle itself and hands over the extracted asset. It is\nreferenced onto ``prim_path``, so it arrives as one prim with everything it owns\nbelow it, beside whatever is already in the stage."
+        "description": "Body of POST /stage/scene/reference.\n\n``uri`` is a USD, OBJ, GLB or glTF asset on the machine running Isaac Sim, not a URL:\na client fetches the asset's bundle itself and hands over the extracted asset. An\nOBJ, GLB or glTF mesh is converted to USD first. The asset is referenced onto\n``prim_path``, so it arrives as one prim with everything it owns below it, beside\nwhatever is already in the stage."
       },
       "ApplyRelativePoseRequest": {
         "properties": {
@@ -9123,6 +9374,20 @@
               }
             ],
             "title": "Usd Path"
+          },
+          "default_joint_positions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Joint Positions"
           }
         },
         "type": "object",
@@ -9130,7 +9395,7 @@
           "prim_path"
         ],
         "title": "CreateArticulationRequest",
-        "description": "Body of PUT /articulations -- register (and bind) one articulation.\n\n``urdf_path`` and ``usd_path`` are the two descriptions the articulation can be\nloaded from when no prim is at ``prim_path`` yet: a URDF, which is imported, or a\nprepared USD asset, which is referenced. Either may be given, not both; a prim\nthat is already in the stage is used as it is and both are ignored."
+        "description": "Body of PUT /articulations -- register (and bind) one articulation.\n\n``urdf_path`` and ``usd_path`` are the two descriptions the articulation can be\nloaded from when no prim is at ``prim_path`` yet: a URDF, which is imported, or a\nprepared USD asset, which is referenced. Either may be given, not both; a prim\nthat is already in the stage is used as it is and both are ignored.\n\n``default_joint_positions`` (radians, one per driven joint) is the pose a\nfreshly loaded articulation is placed at and resets to on Stop+Play. It applies\nonly when this request loads the prim; a prim already in the stage keeps its\npose."
       },
       "CreateCameraRequest": {
         "properties": {
@@ -9577,6 +9842,34 @@
             "exclusiveMinimum": 0.0,
             "title": "Position Stall Duration",
             "default": 0.25
+          },
+          "joint_speeds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joint Speeds"
+          },
+          "max_efforts": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Efforts"
           }
         },
         "type": "object",
@@ -9584,7 +9877,7 @@
           "joint_positions"
         ],
         "title": "JointPositionsRequest",
-        "description": "Body of POST /articulations/{id}/move_j -- drive joints (radians).\n\n``joint_positions`` are the target angles for ``indices`` (default: the\ndevice's current driven joints, so a robot sends all of them and a gripper\nnarrowed to its driver sends one). ``asynchronous`` true applies the action and\nreturns immediately (the client decides when the move is done); false blocks\nuntil the joints reach the target or stall.\n\n``position_stall_tolerance`` opts into position-progress stall detection.\nEach commanded joint must stay within this position range for\n``position_stall_duration`` simulation seconds and five distinct sampled\nphysics updates. Tolerance uses radians for revolute joints and metres for\nprismatic joints; both tuning values must be finite and positive. Omitted or\nnull tolerance disables the check. Paused/repeated physics states cannot\ncomplete opted-in moves. Asynchronous calls do not wait.\n\nBlocking responses distinguish motion-limit expiry with ``timed_out=true``;\nexpiry is not evidence of a grasp.\n\nExample:\n    JointPositionsRequest(joint_positions=[0.7], position_stall_tolerance=0.0001)"
+        "description": "Body of POST /articulations/{id}/move_j -- drive joints (radians).\n\n``joint_positions`` are the target angles for ``indices`` (default: the\ndevice's current driven joints, so a robot sends all of them and a gripper\nnarrowed to its driver sends one). ``asynchronous`` true applies the action and\nreturns immediately (the client decides when the move is done); false blocks\nuntil the joints reach the target or stall.\n\n``position_stall_tolerance`` opts into position-progress stall detection.\nEach commanded joint must stay within this position range for\n``position_stall_duration`` simulation seconds and five distinct sampled\nphysics updates. Tolerance uses radians for revolute joints and metres for\nprismatic joints; both tuning values must be finite and positive. Omitted or\nnull tolerance disables the check. Paused/repeated physics states cannot\ncomplete opted-in moves. Asynchronous calls do not wait.\n\nBlocking responses distinguish motion-limit expiry with ``timed_out=true``;\nexpiry is not evidence of a grasp.\n\n``joint_speeds`` and ``max_efforts`` together select force-limited velocity\ncontrol to the target: positive speeds in rad/s or m/s, nonnegative limits\nin Nm or N, one finite value per selected joint. A blocked joint maintains\neffort after returning; target arrival restores position holding. Target\nmonitoring continues for asynchronous moves and after stalls. Timeout stops\nvelocity control. Omitting both uses the existing position drives.\nThis mode requires force-type joint drives; acceleration drives are rejected.\n\nExample:\n    JointPositionsRequest(joint_positions=[0.7], position_stall_tolerance=0.0001)"
       },
       "JointVelocitiesRequest": {
         "properties": {
@@ -10019,6 +10312,80 @@
         ],
         "title": "SetPrimMetadataRequest",
         "description": "Body of PUT /prims/metadata."
+      },
+      "SetRigidBodyRequest": {
+        "properties": {
+          "prim_path": {
+            "type": "string",
+            "title": "Prim Path"
+          },
+          "mass": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Mass"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prim_path",
+          "mass"
+        ],
+        "title": "SetRigidBodyRequest",
+        "description": "Body of PUT /prims/physics/rigid_body. ``mass`` is the whole body's mass in kilograms."
+      },
+      "SetScaleRequest": {
+        "properties": {
+          "prim_path": {
+            "type": "string",
+            "title": "Prim Path"
+          },
+          "scale": {
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Scale"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prim_path",
+          "scale"
+        ],
+        "title": "SetScaleRequest",
+        "description": "Body of PUT /prims/scale. ``scale`` is the prim's local ``[sx, sy, sz]``."
+      },
+      "SetTcpRequest": {
+        "properties": {
+          "arm_mount_link": {
+            "type": "string",
+            "title": "Arm Mount Link"
+          },
+          "tcp_name": {
+            "type": "string",
+            "title": "Tcp Name"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Transformation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "arm_mount_link",
+          "tcp_name"
+        ],
+        "title": "SetTcpRequest",
+        "description": "Body of PUT /articulations/{articulation_id}/tcp.\n\nPlaces the arm's TCP marker, a plain Xform named ``tcp_name`` under\n``<arm_mount_link>/tcp``, at ``offset`` in the mount link's frame (null/omitted =>\nat the mount link's origin). Setting it again replaces the previous marker."
       },
       "SetVelocityRequest": {
         "properties": {

@@ -80,7 +80,10 @@ def main():
 
     base = f"http://{args.host}:{args.port}"
     rgba = _decode(_request(base, "GET", f"/cameras/{args.camera_id}/rgba"))["rgba"]
-    print("rgba:", "null (not ready)" if rgba is None else f"shape {rgba.shape} dtype {rgba.dtype}")
+    print(
+        "rgba:",
+        "null (not ready)" if rgba is None else f"shape {rgba.shape} dtype {rgba.dtype}",
+    )
 
 
 if __name__ == "__main__":

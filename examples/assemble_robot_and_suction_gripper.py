@@ -162,7 +162,10 @@ def run(base, arm_prim, arm_urdf, gripper_prim, arm_mount_link, gripper_mount_li
     for action in ("close", "open"):
         print(f"gripper {action}")
         status = _request(
-            base, "POST", f"/surface_grippers/{gripper_id}/{action}", {"asynchronous": False}
+            base,
+            "POST",
+            f"/surface_grippers/{gripper_id}/{action}",
+            {"asynchronous": False},
         )
         print(
             f"  done={status['done']} timed_out={status['timed_out']} "
@@ -187,7 +190,9 @@ def main():
     )
     parser.add_argument("--arm-urdf", default=ARM_URDF_PATH, help="path to the arm URDF to import")
     parser.add_argument(
-        "--arm-mount-link", default=ARM_MOUNT_LINK, help="flange link (or Site) on the arm"
+        "--arm-mount-link",
+        default=ARM_MOUNT_LINK,
+        help="flange link (or Site) on the arm",
     )
     parser.add_argument(
         "--gripper-mount-link",

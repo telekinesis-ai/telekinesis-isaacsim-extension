@@ -42,12 +42,18 @@ def main():
 
     base = f"http://{args.host}:{args.port}"
     _request(
-        base, "PATCH", "/prims/physics/colliders/", body={"prim_path": args.prim, "enable": False}
+        base,
+        "PATCH",
+        "/prims/physics/colliders/",
+        body={"prim_path": args.prim, "enable": False},
     )
     print(f"collider disabled: {args.prim}")
 
     _request(
-        base, "PATCH", "/prims/physics/colliders/", body={"prim_path": args.prim, "enable": True}
+        base,
+        "PATCH",
+        "/prims/physics/colliders/",
+        body={"prim_path": args.prim, "enable": True},
     )
     print(f"collider enabled: {args.prim}")
 

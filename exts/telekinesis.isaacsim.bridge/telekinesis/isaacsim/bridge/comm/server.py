@@ -87,7 +87,11 @@ class BridgeServer:
     def start(self):
         """Schedule uvicorn's serve loop on Isaac Sim's asyncio loop (main thread)."""
         config = uvicorn.Config(
-            self._app, host=self._host, port=self._port, lifespan="off", log_level="warning"
+            self._app,
+            host=self._host,
+            port=self._port,
+            lifespan="off",
+            log_level="warning",
         )
         self._server = uvicorn.Server(config)
         # We run inside Isaac's loop on the main thread; let Isaac keep its signal
@@ -161,7 +165,11 @@ class BridgeServer:
         app.state.lightbeam_service = lightbeam_service
         app.state.conveyor_service = conveyor_service
         app.state.stage_service = stage_service
-        app.state.prim_service = PrimService(stage_service)  # composes the stage service
+        prim_service = PrimService(stage_service)  # composes the stage service
+        # Deleting a prim stops and replays the timeline, so the articulation
+        # service repairs the handles that stop invalidated.
+        prim_service.on_timeline_stopped = articulation_service.rebind_stale_devices
+        app.state.prim_service = prim_service
         app.state.general_service = GeneralService()
         self._device_services = (
             articulation_service,

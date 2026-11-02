@@ -140,7 +140,11 @@ class CameraService:
                 # (needs --enable_cameras / RTX warmup). The device stays registered, so
                 # a retry rebinds it rather than spending an id per attempt.
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
-            return {"camera_id": camera_id, "prim_path": device.prim_path, **device.info()}
+            return {
+                "camera_id": camera_id,
+                "prim_path": device.prim_path,
+                **device.info(),
+            }
 
     @staticmethod
     def _configure(device, resolution, frequency):

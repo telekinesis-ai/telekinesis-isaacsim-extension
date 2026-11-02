@@ -44,7 +44,10 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--id", required=True, dest="conveyor_id", help="conveyor_id from put_conveyor.py"
+        "--id",
+        required=True,
+        dest="conveyor_id",
+        help="conveyor_id from put_conveyor.py",
     )
     parser.add_argument(
         "--velocity",

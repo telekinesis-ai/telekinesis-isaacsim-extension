@@ -42,7 +42,11 @@ def main():
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    params = {"prim_path": args.prim, "coordinate_system": "world", "rotation_type": "cartesian"}
+    params = {
+        "prim_path": args.prim,
+        "coordinate_system": "world",
+        "rotation_type": "cartesian",
+    }
     print(f"pose (before): {_request(base, 'GET', '/prims/poses', params=params)}")
 
     # Apply a +1cm X offset relative to the prim's current pose.

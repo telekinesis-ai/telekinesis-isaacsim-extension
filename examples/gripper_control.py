@@ -116,10 +116,14 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--prim", default=GRIPPER_PRIM_PATH, help="prim path of the gripper in the stage"
+        "--prim",
+        default=GRIPPER_PRIM_PATH,
+        help="prim path of the gripper in the stage",
     )
     parser.add_argument(
-        "--urdf", default=URDF_PATH, help="optional URDF to import if the prim isn't in the stage"
+        "--urdf",
+        default=URDF_PATH,
+        help="optional URDF to import if the prim isn't in the stage",
     )
     args = parser.parse_args()
 

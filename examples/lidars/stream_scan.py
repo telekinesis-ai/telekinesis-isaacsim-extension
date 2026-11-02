@@ -55,11 +55,12 @@ def main():
     parser = argparse.ArgumentParser(description="Stream scans from a lidar.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
+    parser.add_argument("--id", required=True, dest="lidar_id", help="lidar_id from put_lidar.py")
     parser.add_argument(
-        "--id", required=True, dest="lidar_id", help="lidar_id from put_lidar.py"
-    )
-    parser.add_argument(
-        "--count", type=int, default=None, help="stop after this many frames (default: forever)"
+        "--count",
+        type=int,
+        default=None,
+        help="stop after this many frames (default: forever)",
     )
     args = parser.parse_args()
 

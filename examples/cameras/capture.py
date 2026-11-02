@@ -97,7 +97,10 @@ def main():
     base = f"http://{args.host}:{args.port}"
     frame = _decode(
         _request(
-            base, "POST", f"/cameras/{args.camera_id}/capture", {"data_types": args.data_types}
+            base,
+            "POST",
+            f"/cameras/{args.camera_id}/capture",
+            {"data_types": args.data_types},
         )
     )
 

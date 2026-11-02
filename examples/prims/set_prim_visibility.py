@@ -43,13 +43,19 @@ def main():
 
     base = f"http://{args.host}:{args.port}"
     _request(
-        base, "PATCH", "/prims/visibility", body={"prim_path": args.prim, "visibility": "hide"}
+        base,
+        "PATCH",
+        "/prims/visibility",
+        body={"prim_path": args.prim, "visibility": "hide"},
     )
     print(f"{args.prim} hidden")
     time.sleep(1)
 
     _request(
-        base, "PATCH", "/prims/visibility", body={"prim_path": args.prim, "visibility": "show"}
+        base,
+        "PATCH",
+        "/prims/visibility",
+        body={"prim_path": args.prim, "visibility": "show"},
     )
     print(f"{args.prim} shown")
 

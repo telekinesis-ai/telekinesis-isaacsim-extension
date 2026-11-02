@@ -49,6 +49,7 @@ from .models import (
     ApplyRelativePoseRequest,
     AssembleRobotRequest,
     MountPrimRequest,
+    SetTcpRequest,
     AttachmentPointPropertiesRequest,
     CameraApertureRequest,
     CameraClippingRangeRequest,
@@ -85,6 +86,8 @@ from .models import (
     SetJointPositionsRequest,
     SetJointStateRequest,
     SetPrimMetadataRequest,
+    SetRigidBodyRequest,
+    SetScaleRequest,
     SetVelocityRequest,
     SetVisibilityRequest,
     SetWorldVelocityRequest,
@@ -142,11 +145,12 @@ articulations = APIRouter(tags=["articulations"])
 
 @articulations.put("/articulations", summary="Create Articulation")
 async def create_articulation(
-    req: CreateArticulationRequest, articulation_service=Depends(get_articulation_service)
+    req: CreateArticulationRequest,
+    articulation_service=Depends(get_articulation_service),
 ):
     """Register (and bind) one articulation; returns its id, prim, dof and state."""
     return await articulation_service.create_articulation(
-        req.prim_path, req.urdf_path, req.usd_path
+        req.prim_path, req.urdf_path, req.usd_path, req.default_joint_positions
     )
 
 
@@ -180,8 +184,14 @@ async def move_j(
 ):
     """Drive the joints (radians). Blocks until reached/stalled unless asynchronous."""
     return await articulation_service.move_j(
-        articulation_id, req.joint_positions, req.indices, req.asynchronous,
-        req.position_stall_tolerance, req.position_stall_duration,
+        articulation_id,
+        req.joint_positions,
+        req.indices,
+        req.asynchronous,
+        req.position_stall_tolerance,
+        req.position_stall_duration,
+        req.joint_speeds,
+        req.max_efforts,
     )
 
 
@@ -292,7 +302,8 @@ async def get_joints_state(
 
 
 @articulations.get(
-    "/articulations/{articulation_id}/articulation_state", summary="Get Articulation State"
+    "/articulations/{articulation_id}/articulation_state",
+    summary="Get Articulation State",
 )
 async def get_articulation_state(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
@@ -423,6 +434,20 @@ async def mount_prim(
     )
 
 
+@articulations.put("/articulations/{articulation_id}/tcp", summary="Set TCP")
+async def set_tcp(
+    articulation_id: str,
+    req: SetTcpRequest,
+    articulation_service=Depends(get_articulation_service),
+):
+    """Place this arm's TCP marker, an Xform under its mount link, at the given offset so
+    the active TCP can be seen and its world pose read in the stage.
+    """
+    return articulation_service.set_tcp(
+        articulation_id, req.arm_mount_link, req.tcp_name, req.offset
+    )
+
+
 # -- articulations: extended SingleArticulation surface ---------------------
 #
 # The rest of SingleArticulation's API not covered above: joint-level extras
@@ -431,7 +456,8 @@ async def mount_prim(
 
 
 @articulations.get(
-    "/articulations/{articulation_id}/handles_initialized", summary="Get Handles Initialized"
+    "/articulations/{articulation_id}/handles_initialized",
+    summary="Get Handles Initialized",
 )
 async def get_handles_initialized(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
@@ -473,14 +499,17 @@ async def set_dof_gains(
     "/articulations/{articulation_id}/dof_index/{joint_name}", summary="Get Dof Index"
 )
 async def get_dof_index(
-    articulation_id: str, joint_name: str, articulation_service=Depends(get_articulation_service)
+    articulation_id: str,
+    joint_name: str,
+    articulation_service=Depends(get_articulation_service),
 ):
     """DOF index of joint_name within the device's driven subset."""
     return articulation_service.get_dof_index(articulation_id, joint_name)
 
 
 @articulations.get(
-    "/articulations/{articulation_id}/applied_joint_efforts", summary="Get Applied Joint Efforts"
+    "/articulations/{articulation_id}/applied_joint_efforts",
+    summary="Get Applied Joint Efforts",
 )
 async def get_applied_joint_efforts(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
@@ -490,7 +519,8 @@ async def get_applied_joint_efforts(
 
 
 @articulations.get(
-    "/articulations/{articulation_id}/measured_joint_forces", summary="Get Measured Joint Forces"
+    "/articulations/{articulation_id}/measured_joint_forces",
+    summary="Get Measured Joint Forces",
 )
 async def get_measured_joint_forces(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
@@ -500,7 +530,8 @@ async def get_measured_joint_forces(
 
 
 @articulations.get(
-    "/articulations/{articulation_id}/joints_default_state", summary="Get Joints Default State"
+    "/articulations/{articulation_id}/joints_default_state",
+    summary="Get Joints Default State",
 )
 async def get_joints_default_state(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
@@ -510,7 +541,8 @@ async def get_joints_default_state(
 
 
 @articulations.put(
-    "/articulations/{articulation_id}/joints_default_state", summary="Set Joints Default State"
+    "/articulations/{articulation_id}/joints_default_state",
+    summary="Set Joints Default State",
 )
 async def set_joints_default_state(
     articulation_id: str,
@@ -716,7 +748,8 @@ async def set_enabled_self_collisions(
 
 
 @articulations.get(
-    "/articulations/{articulation_id}/solver/sleep_threshold", summary="Get Sleep Threshold"
+    "/articulations/{articulation_id}/solver/sleep_threshold",
+    summary="Get Sleep Threshold",
 )
 async def get_sleep_threshold(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
@@ -726,7 +759,8 @@ async def get_sleep_threshold(
 
 
 @articulations.put(
-    "/articulations/{articulation_id}/solver/sleep_threshold", summary="Set Sleep Threshold"
+    "/articulations/{articulation_id}/solver/sleep_threshold",
+    summary="Set Sleep Threshold",
 )
 async def set_sleep_threshold(
     articulation_id: str,
@@ -778,7 +812,10 @@ async def open_scene(req: OpenSceneRequest, stage_service=Depends(get_stage_serv
 
 @stage.post("/scene/reference", summary="Add To Scene")
 async def add_to_scene(req: AddToSceneRequest, stage_service=Depends(get_stage_service)):
-    """Reference a USD asset into the open stage at ``prim_path`` (keeps the stage)."""
+    """Reference a USD, OBJ, GLB or glTF asset into the open stage at ``prim_path``.
+
+    The stage stays open; nothing already in it is replaced.
+    """
     return await stage_service.add_to_scene(req.uri, req.prim_path)
 
 
@@ -824,6 +861,16 @@ async def set_solve_articulation_contact_last(
     await stage_service.set_solve_articulation_contact_last(req.enabled)
 
 
+@stage.put("/viewport/guides", summary="Set Guides Visible")
+async def set_guides_visible(req: SetEnabledRequest, stage_service=Depends(get_stage_service)):
+    """Show or hide guide-purpose prims (e.g. TCP marker axes) in the viewport.
+
+    Same as Display > Show By Purpose > Guide: applies to every guide prim and persists
+    across Isaac Sim restarts.
+    """
+    stage_service.set_guides_visible(req.enabled)
+
+
 @stage.get("/configuration", summary="Export Configuration")
 async def export_configuration():
     """Mirrored from the spec; not yet implemented."""
@@ -852,8 +899,20 @@ async def get_pose(
 
 @prims.put("/poses", summary="Update Pose")
 async def update_pose(req: UpdatePoseRequest, prim_service=Depends(get_prim_service)):
-    """Set a prim's world-space pose from a rotation-vector ``WSPose``."""
+    """Set a prim's world-space pose from a rotation-vector ``WSPose`` (keeps its scale)."""
     prim_service.update_pose(req.prim_path, req.input_pose.pose)
+
+
+@prims.get("/scale", summary="Get Scale")
+async def get_scale(prim_path: str, prim_service=Depends(get_prim_service)):
+    """Local scale of a prim as ``{"scale": [sx, sy, sz]}``."""
+    return prim_service.get_scale(prim_path)
+
+
+@prims.put("/scale", summary="Set Scale")
+async def set_scale(req: SetScaleRequest, prim_service=Depends(get_prim_service)):
+    """Set a prim's local scale, keeping its pose."""
+    prim_service.set_scale(req.prim_path, req.scale)
 
 
 @prims.get("/poses/relative", summary="Get Relative Pose")
@@ -928,6 +987,24 @@ async def set_joint_state(req: SetJointStateRequest, prim_service=Depends(get_pr
 async def update_colliders(req: UpdateCollidersRequest, prim_service=Depends(get_prim_service)):
     """Enable or disable collision on a prim (applies the CollisionAPI as needed)."""
     prim_service.update_colliders(req.prim_path, req.enable)
+
+
+@prims.put("/physics/rigid_body", summary="Set Rigid Body")
+async def set_rigid_body(req: SetRigidBodyRequest, prim_service=Depends(get_prim_service)):
+    """Make a prim one dynamic rigid body of ``mass`` kg, colliding through the convex
+    hull of every mesh beneath it with a friction of 1.0 (``max`` combine mode). Meant
+    for a prop with no rigid body of its own.
+    """
+    prim_service.set_rigid_body(req.prim_path, req.mass)
+
+
+@prims.delete("", summary="Delete Prim")
+async def delete_prim(prim_path: str, prim_service=Depends(get_prim_service)):
+    """Remove a prim and everything beneath it. A path with no prim succeeds unchanged.
+
+    The timeline is stopped for the removal and, if it was playing, played again.
+    """
+    await prim_service.delete_prim(prim_path)
 
 
 @prims.put("/labels", summary="Set Semantic Label")
@@ -1120,9 +1197,7 @@ async def capture(camera_id: str, req: CaptureRequest, camera_service=Depends(ge
 async def get_rgb(camera_id: str, camera_service=Depends(get_camera_service)):
     """Latest RGB image (H, W, 3) uint8, as a binary frame (see :mod:`.binary`); the
     output is null in the frame if it is not ready."""
-    return Response(
-        binary.encode(camera_service.get_rgb(camera_id)), media_type=binary.MEDIA_TYPE
-    )
+    return Response(binary.encode(camera_service.get_rgb(camera_id)), media_type=binary.MEDIA_TYPE)
 
 
 @cameras.get(
@@ -1133,9 +1208,7 @@ async def get_rgb(camera_id: str, camera_service=Depends(get_camera_service)):
 )
 async def get_rgba(camera_id: str, camera_service=Depends(get_camera_service)):
     """Latest RGBA image (H, W, 4) uint8, as a binary frame (see :mod:`.binary`)."""
-    return Response(
-        binary.encode(camera_service.get_rgba(camera_id)), media_type=binary.MEDIA_TYPE
-    )
+    return Response(binary.encode(camera_service.get_rgba(camera_id)), media_type=binary.MEDIA_TYPE)
 
 
 @cameras.get(
@@ -1159,7 +1232,9 @@ async def get_depth(camera_id: str, camera_service=Depends(get_camera_service)):
     responses=binary.OCTET_STREAM_RESPONSES,
 )
 async def get_pointcloud(
-    camera_id: str, world_frame: bool = Query(False), camera_service=Depends(get_camera_service)
+    camera_id: str,
+    world_frame: bool = Query(False),
+    camera_service=Depends(get_camera_service),
 ):
     """Latest pointcloud (N, 3) in camera (default) or world frame, as a binary frame
     (see :mod:`.binary`)."""
@@ -1171,7 +1246,9 @@ async def get_pointcloud(
 
 @cameras.get("/cameras/{camera_id}/world_pose", summary="Get World Pose")
 async def get_camera_world_pose(
-    camera_id: str, camera_axes: str = Query("world"), camera_service=Depends(get_camera_service)
+    camera_id: str,
+    camera_axes: str = Query("world"),
+    camera_service=Depends(get_camera_service),
 ):
     """World-frame pose {position, orientation}. camera_axes: world/ros/usd."""
     return camera_service.get_world_pose(camera_id, camera_axes)
@@ -1179,7 +1256,9 @@ async def get_camera_world_pose(
 
 @cameras.put("/cameras/{camera_id}/world_pose", summary="Set World Pose")
 async def set_camera_world_pose(
-    camera_id: str, req: CameraWorldPoseRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraWorldPoseRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set the world-frame pose; returns the resulting pose."""
     return camera_service.set_world_pose(camera_id, req.position, req.orientation, req.camera_axes)
@@ -1187,7 +1266,9 @@ async def set_camera_world_pose(
 
 @cameras.get("/cameras/{camera_id}/local_pose", summary="Get Local Pose")
 async def get_camera_local_pose(
-    camera_id: str, camera_axes: str = Query("world"), camera_service=Depends(get_camera_service)
+    camera_id: str,
+    camera_axes: str = Query("world"),
+    camera_service=Depends(get_camera_service),
 ):
     """Local-frame (parent-relative) pose {translation, orientation}."""
     return camera_service.get_local_pose(camera_id, camera_axes)
@@ -1195,7 +1276,9 @@ async def get_camera_local_pose(
 
 @cameras.put("/cameras/{camera_id}/local_pose", summary="Set Local Pose")
 async def set_camera_local_pose(
-    camera_id: str, req: CameraLocalPoseRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraLocalPoseRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set the local-frame pose; returns the resulting pose."""
     return camera_service.set_local_pose(
@@ -1211,7 +1294,9 @@ async def get_camera_resolution(camera_id: str, camera_service=Depends(get_camer
 
 @cameras.put("/cameras/{camera_id}/resolution", summary="Set Resolution")
 async def set_camera_resolution(
-    camera_id: str, req: CameraResolutionRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraResolutionRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set [width, height] in pixels; returns the resulting resolution."""
     return camera_service.set_resolution(camera_id, req.width, req.height)
@@ -1225,7 +1310,9 @@ async def get_focal_length(camera_id: str, camera_service=Depends(get_camera_ser
 
 @cameras.put("/cameras/{camera_id}/focal_length", summary="Set Focal Length")
 async def set_focal_length(
-    camera_id: str, req: CameraFloatValueRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraFloatValueRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set the focal length (stage units)."""
     return camera_service.set_focal_length(camera_id, req.value)
@@ -1239,7 +1326,9 @@ async def get_focus_distance(camera_id: str, camera_service=Depends(get_camera_s
 
 @cameras.put("/cameras/{camera_id}/focus_distance", summary="Set Focus Distance")
 async def set_focus_distance(
-    camera_id: str, req: CameraFloatValueRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraFloatValueRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set the focus distance (stage units)."""
     return camera_service.set_focus_distance(camera_id, req.value)
@@ -1253,7 +1342,9 @@ async def get_lens_aperture(camera_id: str, camera_service=Depends(get_camera_se
 
 @cameras.put("/cameras/{camera_id}/lens_aperture", summary="Set Lens Aperture")
 async def set_lens_aperture(
-    camera_id: str, req: CameraFloatValueRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraFloatValueRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set the fStop value."""
     return camera_service.set_lens_aperture(camera_id, req.value)
@@ -1267,7 +1358,9 @@ async def get_horizontal_aperture(camera_id: str, camera_service=Depends(get_cam
 
 @cameras.put("/cameras/{camera_id}/horizontal_aperture", summary="Set Horizontal Aperture")
 async def set_horizontal_aperture(
-    camera_id: str, req: CameraApertureRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraApertureRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set the horizontal aperture (stage units)."""
     return camera_service.set_horizontal_aperture(camera_id, req.value, req.maintain_square_pixels)
@@ -1281,7 +1374,9 @@ async def get_vertical_aperture(camera_id: str, camera_service=Depends(get_camer
 
 @cameras.put("/cameras/{camera_id}/vertical_aperture", summary="Set Vertical Aperture")
 async def set_vertical_aperture(
-    camera_id: str, req: CameraApertureRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraApertureRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set the vertical aperture (stage units)."""
     return camera_service.set_vertical_aperture(camera_id, req.value, req.maintain_square_pixels)
@@ -1295,7 +1390,9 @@ async def get_clipping_range(camera_id: str, camera_service=Depends(get_camera_s
 
 @cameras.put("/cameras/{camera_id}/clipping_range", summary="Set Clipping Range")
 async def set_clipping_range(
-    camera_id: str, req: CameraClippingRangeRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraClippingRangeRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set near/far clipping distances; either may be null to leave unchanged."""
     return camera_service.set_clipping_range(camera_id, req.near_distance, req.far_distance)
@@ -1309,7 +1406,9 @@ async def get_camera_frequency(camera_id: str, camera_service=Depends(get_camera
 
 @cameras.put("/cameras/{camera_id}/frequency", summary="Set Frequency")
 async def set_camera_frequency(
-    camera_id: str, req: CameraFloatValueRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraFloatValueRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set the acquisition frequency (Hz). Must divide the rendering frequency."""
     return camera_service.set_frequency(camera_id, req.value)
@@ -1323,7 +1422,9 @@ async def get_projection_mode(camera_id: str, camera_service=Depends(get_camera_
 
 @cameras.put("/cameras/{camera_id}/projection_mode", summary="Set Projection Mode")
 async def set_projection_mode(
-    camera_id: str, req: CameraStringValueRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraStringValueRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set the projection mode (perspective/orthographic)."""
     return camera_service.set_projection_mode(camera_id, req.value)
@@ -1337,7 +1438,9 @@ async def get_stereo_role(camera_id: str, camera_service=Depends(get_camera_serv
 
 @cameras.put("/cameras/{camera_id}/stereo_role", summary="Set Stereo Role")
 async def set_stereo_role(
-    camera_id: str, req: CameraStringValueRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraStringValueRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set the stereo role (mono/left/right)."""
     return camera_service.set_stereo_role(camera_id, req.value)
@@ -1351,7 +1454,9 @@ async def get_lens_distortion_model(camera_id: str, camera_service=Depends(get_c
 
 @cameras.put("/cameras/{camera_id}/lens_distortion_model", summary="Set Lens Distortion Model")
 async def set_lens_distortion_model(
-    camera_id: str, req: CameraStringValueRequest, camera_service=Depends(get_camera_service)
+    camera_id: str,
+    req: CameraStringValueRequest,
+    camera_service=Depends(get_camera_service),
 ):
     """Set the lens distortion model (applies the matching schema)."""
     return camera_service.set_lens_distortion_model(camera_id, req.value)
@@ -1897,9 +2002,7 @@ async def get_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbe
 
 
 @lightbeams.delete("/lightbeams/{lightbeam_id}", summary="Delete Lightbeam")
-async def delete_lightbeam(
-    lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)
-):
+async def delete_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
     """Unregister the sensor (the USD prim is left in the stage)."""
     return lightbeam_service.delete_lightbeam(lightbeam_id)
 
@@ -1948,17 +2051,13 @@ async def pause_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_light
 
 
 @lightbeams.post("/lightbeams/{lightbeam_id}/resume", summary="Resume Lightbeam")
-async def resume_lightbeam(
-    lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)
-):
+async def resume_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
     """Resume sensor computation."""
     return lightbeam_service.resume(lightbeam_id)
 
 
 @lightbeams.get("/lightbeams/{lightbeam_id}/is_paused", summary="Get Is Paused")
-async def is_lightbeam_paused(
-    lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)
-):
+async def is_lightbeam_paused(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
     """Whether sensor computation is currently paused."""
     return lightbeam_service.is_paused(lightbeam_id)
 
@@ -1987,14 +2086,17 @@ async def create_surface_gripper(
 
 
 @surface_grippers.get("/surface_grippers", summary="List Surface Grippers")
-async def list_surface_grippers(surface_gripper_service=Depends(get_surface_gripper_service)):
+async def list_surface_grippers(
+    surface_gripper_service=Depends(get_surface_gripper_service),
+):
     """Every registered surface gripper id mapped to its prim path."""
     return surface_gripper_service.list_surface_grippers()
 
 
 @surface_grippers.get("/surface_grippers/{surface_gripper_id}", summary="Get Surface Gripper")
 async def get_surface_gripper(
-    surface_gripper_id: str, surface_gripper_service=Depends(get_surface_gripper_service)
+    surface_gripper_id: str,
+    surface_gripper_service=Depends(get_surface_gripper_service),
 ):
     """Id + description (prims, attachment points, properties, state). 404 if unknown."""
     return surface_gripper_service.get_surface_gripper(surface_gripper_id)
@@ -2002,7 +2104,8 @@ async def get_surface_gripper(
 
 @surface_grippers.delete("/surface_grippers/{surface_gripper_id}", summary="Delete Surface Gripper")
 async def delete_surface_gripper(
-    surface_gripper_id: str, surface_gripper_service=Depends(get_surface_gripper_service)
+    surface_gripper_id: str,
+    surface_gripper_service=Depends(get_surface_gripper_service),
 ):
     """Unregister the surface gripper (the USD prim is left in the stage)."""
     return surface_gripper_service.delete_surface_gripper(surface_gripper_id)
@@ -2030,7 +2133,8 @@ async def open_gripper(
 
 @surface_grippers.get("/surface_grippers/{surface_gripper_id}/status", summary="Get Gripper Status")
 async def get_gripper_status(
-    surface_gripper_id: str, surface_gripper_service=Depends(get_surface_gripper_service)
+    surface_gripper_id: str,
+    surface_gripper_service=Depends(get_surface_gripper_service),
 ):
     """Current status (Open/Closing/Closed), gripped objects and grip distance."""
     return surface_gripper_service.get_status(surface_gripper_id)
@@ -2038,7 +2142,8 @@ async def get_gripper_status(
 
 @surface_grippers.get("/surface_grippers/{surface_gripper_id}/properties", summary="Get Properties")
 async def get_surface_gripper_properties(
-    surface_gripper_id: str, surface_gripper_service=Depends(get_surface_gripper_service)
+    surface_gripper_id: str,
+    surface_gripper_service=Depends(get_surface_gripper_service),
 ):
     """The gripper's grip-behaviour properties (force limits, reach, retry, forward axis)."""
     return surface_gripper_service.get_properties(surface_gripper_id)
@@ -2066,10 +2171,12 @@ async def set_surface_gripper_properties(
 
 
 @surface_grippers.get(
-    "/surface_grippers/{surface_gripper_id}/attachment_points", summary="Get Attachment Points"
+    "/surface_grippers/{surface_gripper_id}/attachment_points",
+    summary="Get Attachment Points",
 )
 async def get_attachment_points(
-    surface_gripper_id: str, surface_gripper_service=Depends(get_surface_gripper_service)
+    surface_gripper_id: str,
+    surface_gripper_service=Depends(get_surface_gripper_service),
 ):
     """Per-attachment-point properties (bodies, local poses, drive, limits, clearance)."""
     return surface_gripper_service.get_attachment_points(surface_gripper_id)

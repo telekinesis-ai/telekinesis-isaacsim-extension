@@ -46,19 +46,26 @@ class StageService:
             raise HTTPException(status_code=400, detail=f"could not open '{uri}': {error}")
 
     async def add_to_scene(self, uri, prim_path):
-        """Reference the USD asset at ``uri`` into the open stage at ``prim_path``.
+        """Reference the USD, OBJ, GLB or glTF asset at ``uri`` into the open stage.
+
+        The asset is referenced onto ``prim_path``.
 
         The counterpart to :meth:`open_scene` for adding one device to a stage instead
         of replacing it: the asset arrives as one prim beside what is already there,
         so a cell someone has built survives bringing a conveyor or a sensor into it.
+        An OBJ, GLB or glTF mesh is converted to USD first and arrives without physics.
 
         ``uri`` names an asset on the machine running Isaac Sim, not a URL. Returns the
         prim path the asset arrived at, and leaves the timeline stopped.
         """
-        from ...core.asset_loader import reference_usd_at
+        from pathlib import Path
 
+        from ...core.asset_loader import import_mesh_at, reference_usd_at
+
+        is_mesh = Path(uri).suffix.lower() in {".obj", ".glb", ".gltf"}
+        load = import_mesh_at if is_mesh else reference_usd_at
         try:
-            return await reference_usd_at(self.stage(), uri, prim_path)
+            return await load(self.stage(), uri, prim_path)
         except RuntimeError as exc:
             # 422: well-formed request, but loading the asset itself failed.
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -123,7 +130,7 @@ class StageService:
         """
         import omni.kit.app
         import omni.timeline
-        from pxr import PhysxSchema, UsdPhysics
+        from pxr import PhysxSchema, UsdPhysics, Sdf
 
         stage = self.stage()
         # PhysX reads this immutable scene flag when simulation is initialized.
@@ -133,4 +140,24 @@ class StageService:
         if not scenes:
             scenes = [UsdPhysics.Scene.Define(stage, "/physicsScene").GetPrim()]
         for prim in scenes:
-            PhysxSchema.PhysxSceneAPI.Apply(prim).CreateSolveArticulationContactLastAttr(enabled)
+            scene_api = PhysxSchema.PhysxSceneAPI.Apply(prim)
+            if hasattr(scene_api, "CreateSolveArticulationContactLastAttr"):
+                scene_api.CreateSolveArticulationContactLastAttr(enabled)
+            else:
+                # Isaac Sim 5.1 exposes this setting as a custom USD attribute.
+                prim.CreateAttribute(
+                    "physxScene:solveArticulationContactLast",
+                    Sdf.ValueTypeNames.Bool,
+                    custom=True,
+                ).Set(enabled)
+
+    def set_guides_visible(self, visible: bool) -> None:
+        """Show or hide guide-purpose prims, such as the TCP marker axes, in the viewport.
+
+        This is the viewport's Display > Show By Purpose > Guide toggle, so it applies
+        to every guide prim in the stage, not only the TCP markers. The setting is
+        persistent and survives an Isaac Sim restart.
+        """
+        import carb.settings
+
+        carb.settings.get_settings().set("/persistent/app/hydra/displayPurpose/guide", visible)

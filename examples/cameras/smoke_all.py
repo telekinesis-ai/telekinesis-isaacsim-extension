@@ -211,9 +211,17 @@ def _exercise_property_routes(base, root):
     _roundtrip(base, f"{root}/focus_distance", f"{root}/focus_distance", "focus_distance")
     _roundtrip(base, f"{root}/lens_aperture", f"{root}/lens_aperture", "lens_aperture")
     _roundtrip(
-        base, f"{root}/horizontal_aperture", f"{root}/horizontal_aperture", "horizontal_aperture"
+        base,
+        f"{root}/horizontal_aperture",
+        f"{root}/horizontal_aperture",
+        "horizontal_aperture",
     )
-    _roundtrip(base, f"{root}/vertical_aperture", f"{root}/vertical_aperture", "vertical_aperture")
+    _roundtrip(
+        base,
+        f"{root}/vertical_aperture",
+        f"{root}/vertical_aperture",
+        "vertical_aperture",
+    )
     _roundtrip(base, f"{root}/frequency", f"{root}/frequency", "frequency")
 
     clip = _get(base, f"GET {root}/clipping_range", f"{root}/clipping_range")
@@ -222,7 +230,10 @@ def _exercise_property_routes(base, root):
         _record(
             f"PUT {root}/clipping_range",
             *_call(
-                base, "PUT", f"{root}/clipping_range", {"near_distance": near, "far_distance": far}
+                base,
+                "PUT",
+                f"{root}/clipping_range",
+                {"near_distance": near, "far_distance": far},
             ),
         )
 
@@ -254,9 +265,7 @@ def _exercise_collection_routes(base, root):
 
 def _exercise_routes(base, args):
     """Create a camera and exercise the exposed camera routes."""
-    ok, status, payload = _call(
-        base, "PUT", "/cameras", {"prim_path": args.prim}
-    )
+    ok, status, payload = _call(base, "PUT", "/cameras", {"prim_path": args.prim})
     created = _record("PUT /cameras (create)", ok, status, payload)
     if not created or "camera_id" not in created:
         print(

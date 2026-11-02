@@ -42,7 +42,9 @@ def main():
 
     base = f"http://{args.host}:{args.port}"
     response = _request(
-        base, "GET", f"/articulations/{args.articulation_id}/solver/velocity_iteration_count"
+        base,
+        "GET",
+        f"/articulations/{args.articulation_id}/solver/velocity_iteration_count",
     )
     print(f"response: {response}")
 

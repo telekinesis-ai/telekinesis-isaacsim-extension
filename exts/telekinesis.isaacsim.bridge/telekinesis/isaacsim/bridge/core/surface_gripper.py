@@ -383,21 +383,29 @@ class SurfaceGripper:
         prim = self._gripper_prim()
         if coaxial_force_limit is not None:
             _set_attribute(
-                prim, robot_schema.Attributes.COAXIAL_FORCE_LIMIT, float(coaxial_force_limit)
+                prim,
+                robot_schema.Attributes.COAXIAL_FORCE_LIMIT,
+                float(coaxial_force_limit),
             )
         if shear_force_limit is not None:
             _set_attribute(
-                prim, robot_schema.Attributes.SHEAR_FORCE_LIMIT, float(shear_force_limit)
+                prim,
+                robot_schema.Attributes.SHEAR_FORCE_LIMIT,
+                float(shear_force_limit),
             )
         if max_grip_distance is not None:
             _set_attribute(
-                prim, robot_schema.Attributes.MAX_GRIP_DISTANCE, float(max_grip_distance)
+                prim,
+                robot_schema.Attributes.MAX_GRIP_DISTANCE,
+                float(max_grip_distance),
             )
         if retry_interval is not None:
             _set_attribute(prim, robot_schema.Attributes.RETRY_INTERVAL, float(retry_interval))
         if forward_axis is not None:
             _set_attribute(
-                prim, robot_schema.Attributes.FORWARD_AXIS, self._validate_axis(forward_axis)
+                prim,
+                robot_schema.Attributes.FORWARD_AXIS,
+                self._validate_axis(forward_axis),
             )
         if rotation_limits is not None or translation_limits is not None:
             self.set_attachment_point_properties(
@@ -477,11 +485,15 @@ class SurfaceGripper:
                 _apply_axis_limits(prim, "trans", translation_limits)
             if clearance_offset is not None:
                 _set_attribute(
-                    prim, robot_schema.Attributes.CLEARANCE_OFFSET, float(clearance_offset)
+                    prim,
+                    robot_schema.Attributes.CLEARANCE_OFFSET,
+                    float(clearance_offset),
                 )
             if forward_axis is not None:
                 _set_attribute(
-                    prim, robot_schema.Attributes.FORWARD_AXIS, self._validate_axis(forward_axis)
+                    prim,
+                    robot_schema.Attributes.FORWARD_AXIS,
+                    self._validate_axis(forward_axis),
                 )
         return self.get_attachment_points()
 

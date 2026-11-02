@@ -28,6 +28,7 @@ import time
 
 import numpy as np
 import omni.kit.app
+import omni.physx
 import omni.timeline
 from isaacsim.core import prims
 from isaacsim.core.utils.types import ArticulationAction
@@ -39,13 +40,18 @@ from .robot_assembler import get_articulation_base_link_name
 # A PhysX position drive settles with a small steady-state offset (gravity, drive
 # stiffness, the URDF importer's default gains), so an over-tight position
 # tolerance is never satisfied and a move looks "never done". A move is done when
-# the joints are within _REACH_TOLERANCE_RAD of target (reached cleanly), OR when
+# every joint is within its reach tolerance of target (reached cleanly), OR when
 # they have stopped moving for _SETTLED_FRAMES consecutive frames (stalled --
 # either settled at a steady-state offset, or blocked by a grasped object). The
 # consecutive-frame requirement keeps the stall test from firing before the drive
 # has accelerated the joints. The frame cap is a ~30 s backstop at 60 fps.
+# Revolute and prismatic joints get separate thresholds because their positions
+# are in radians and metres: 0.01 read as metres is 10 mm, most of a gripper's
+# stroke, which would report a closing finger as arrived long before it is.
 _REACH_TOLERANCE_RAD = 0.01  # ~0.5 deg: target reached cleanly
+_REACH_TOLERANCE_M = 5e-4  # 0.5 mm: target reached cleanly
 _SETTLED_VELOCITY_RAD_S = 5e-3  # joints no longer moving
+_SETTLED_VELOCITY_M_S = 5e-4
 _SETTLED_FRAMES = 5  # consecutive low-velocity frames => stalled
 _BIND_RETRIES = 60
 _MOTION_MAX_FRAMES = 1800
@@ -128,6 +134,10 @@ class SingleArticulation:
         self._move_lock = asyncio.Lock()
         self._start_time = time.monotonic()
         self._target = None  # last commanded joint target (rad)
+        self._velocity_motion = None
+        self._velocity_completed = None
+        self._saved_drive_properties = None
+        self._velocity_subscription = None
 
     async def bind(self):
         """(Re)initialize the articulation against the current physics view.
@@ -140,6 +150,7 @@ class SingleArticulation:
         (a stale handle returns None from get_joint_positions). Only reports bound
         once joint state actually reads back non-None.
         """
+        self.stop_velocity_drive()
         omni.timeline.get_timeline_interface().play()
         app = omni.kit.app.get_app()
         await app.next_update_async()
@@ -199,12 +210,25 @@ class SingleArticulation:
         than pulled back. The velocities are zeroed so nothing carries over from a
         previous run's motion.
 
+        The measured positions are clamped into each joint's limits first. A
+        freshly imported joint starts at zero even when its range excludes zero,
+        and adopting that pose would leave the articulation -- and the reset pose
+        recorded from it -- outside its own limits, which a client reading the
+        state treats as invalid.
+
         This covers every DOF of the underlying handle rather than just this
         device's driven subset: the stale targets are a property of the
         articulation, and the joints this device does not drive would otherwise
         still be pulled.
         """
-        positions = self._articulation.get_joint_positions()
+        limits = self._articulation._articulation_view.get_dof_limits()
+        if limits.ndim == 3:
+            limits = limits[0]
+        positions = np.clip(
+            self._articulation.get_joint_positions(),
+            np.asarray(limits[:, 0]),
+            np.asarray(limits[:, 1]),
+        )
         self._articulation.set_joint_positions(positions)
         self._articulation.set_joint_velocities(np.zeros_like(positions))
         self._articulation.apply_action(ArticulationAction(joint_positions=positions))
@@ -326,6 +350,7 @@ class SingleArticulation:
         current handle; forgets any pending move target.
 
         """
+        self.stop_velocity_drive()
         self.joint_names = list(joint_names)
         self._resolve_driven_joints()
         self._target = None
@@ -349,6 +374,7 @@ class SingleArticulation:
         the time the merged articulation arrives and is applied again here. Drive
         gains survive on their own, because they are authored in the asset's USD.
         """
+        self.stop_velocity_drive()
         self._articulation = articulation
         self.joint_names = list(joint_names)
         self._resolve_driven_joints()
@@ -382,8 +408,14 @@ class SingleArticulation:
         }
 
     async def move_j(
-        self, positions, indices=None, asynchronous=False,
-        position_stall_tolerance=None, position_stall_duration=0.25,
+        self,
+        positions,
+        indices=None,
+        asynchronous=False,
+        position_stall_tolerance=None,
+        position_stall_duration=0.25,
+        joint_speeds=None,
+        max_efforts=None,
     ):
         """Drive the selected joints until the target is reached or motion stalls.
 
@@ -412,6 +444,18 @@ class SingleArticulation:
         limit expires without reaching the target or detecting a stall. A stall
         does not establish object presence. The position drive retains its target
         on completion, including timeout. Invalid tuning values raise ValueError.
+
+        Supplying both ``joint_speeds`` and ``max_efforts`` uses force-limited
+        velocity drives until the requested positions are reached. Speeds are
+        positive radians/s or metres/s; effort limits are nonnegative Nm or N.
+        At an obstruction, the drives keep applying the requested effort even
+        after this call returns. Target arrival restores position holding.
+        Physics-step monitoring also runs for asynchronous moves and continues
+        after a stall, so a released obstruction still stops at the target.
+        A timeout stops velocity control. Omitting both preserves position-drive
+        behavior. Arrays must match the selected joints and contain finite values.
+        Velocity control requires force-type drives; acceleration drives raise
+        ValueError because their gains do not specify actuator effort.
         """
         if position_stall_tolerance is not None and (
             not np.isfinite(position_stall_tolerance) or position_stall_tolerance <= 0
@@ -425,16 +469,94 @@ class SingleArticulation:
             raise ValueError(f"expected {len(idx)} joint positions, got {target.shape[0]}")
         self._validate_indices(idx)
 
+        if (joint_speeds is None) != (max_efforts is None):
+            raise ValueError("joint_speeds and max_efforts must be supplied together")
+        if joint_speeds is not None:
+            joint_speeds = np.asarray(joint_speeds, dtype=float)
+            max_efforts = np.asarray(max_efforts, dtype=float)
+            if (
+                joint_speeds.shape != target.shape
+                or max_efforts.shape != target.shape
+                or not np.all(np.isfinite(target))
+                or not np.all(np.isfinite(joint_speeds))
+                or np.any(joint_speeds <= 0)
+                or not np.all(np.isfinite(max_efforts))
+                or np.any(max_efforts < 0)
+            ):
+                raise ValueError(
+                    "expected finite targets, positive speeds and nonnegative efforts per joint"
+                )
+            joints = joint_prims(self._articulation.prim.GetStage(), self.prim_path)
+            for index in idx:
+                joint = joints.get(self._articulation.dof_names[index])
+                if joint is None:
+                    raise ValueError("velocity control requires a joint belonging to this device")
+                kind = "linear" if joint.IsA(UsdPhysics.PrismaticJoint) else "angular"
+                if UsdPhysics.DriveAPI.Get(joint, kind).GetTypeAttr().Get() != "force":
+                    raise ValueError(
+                        "force-limited velocity control requires force-type joint drives"
+                    )
+
         app = omni.kit.app.get_app()
         async with self._move_lock:
+            self.stop_velocity_drive()
             self._target = target
-            self._articulation.apply_action(
-                ArticulationAction(joint_positions=target, joint_indices=idx)
-            )
+            if joint_speeds is None:
+                self._articulation.apply_action(
+                    ArticulationAction(joint_positions=target, joint_indices=idx)
+                )
+            else:
+                view = self._articulation._articulation_view
+                stiffness, damping = view.get_gains(joint_indices=idx)
+                self._saved_drive_properties = (
+                    stiffness,
+                    damping,
+                    view.get_max_efforts(joint_indices=idx),
+                )
+                velocities = (
+                    np.sign(target - self._articulation.get_joint_positions()[idx]) * joint_speeds
+                )
+                self._velocity_motion = ArticulationAction(
+                    joint_positions=target,
+                    joint_velocities=velocities,
+                    joint_indices=idx,
+                )
+                self._velocity_completed = np.zeros(len(idx), dtype=bool)
+                # With no position spring, a blocked motor applies damping * speed.
+                view.set_gains(
+                    kps=np.zeros((1, len(idx))),
+                    kds=(max_efforts / joint_speeds)[None, :],
+                    joint_indices=idx,
+                )
+                view.set_max_efforts(max_efforts[None, :], joint_indices=idx)
+                self._velocity_subscription = (
+                    omni.physx.get_physx_interface().subscribe_physics_step_events(
+                        self._update_velocity_drive
+                    )
+                )
+                self._update_velocity_drive(0.0)
 
             if asynchronous:
                 # Fire-and-forget: the action is queued; the client owns "done".
-                return {"done": False, "reached": False, "applied": True, "target": target.tolist()}
+                return {
+                    "done": False,
+                    "reached": False,
+                    "applied": True,
+                    "target": target.tolist(),
+                }
+
+            # Joint type comes from the USD schema: dof_properties["type"] repeats the
+            # first DOF's type for every DOF, so it cannot tell a finger from an arm joint.
+            joints = joint_prims(self._articulation.prim.GetStage(), self.prim_path)
+            dof_names = self._articulation.dof_names
+            linear = np.array(
+                [
+                    dof_names[i] in joints and joints[dof_names[i]].IsA(UsdPhysics.PrismaticJoint)
+                    for i in idx
+                ]
+            )
+            reach_tolerance = np.where(linear, _REACH_TOLERANCE_M, _REACH_TOLERANCE_RAD)
+            settled_speed = np.where(linear, _SETTLED_VELOCITY_M_S, _SETTLED_VELOCITY_RAD_S)
 
             reached = False
             timed_out = False
@@ -449,10 +571,12 @@ class SingleArticulation:
                 previous_time = stable_since = SimulationManager.get_simulation_time()
                 best_error = np.abs(q - target)
                 stable_samples = 0
-            for _ in range(_MOTION_MAX_FRAMES):
+            exit_reason = "timed out: no reach or stall within the update limit"
+            for frame in range(_MOTION_MAX_FRAMES):
                 await app.next_update_async()
                 q = self._articulation.get_joint_positions()[idx]
-                max_error = float(np.max(np.abs(q - target)))
+                error = np.abs(q - target)
+                max_error = float(np.max(error))
                 position_stalled = False
                 if position_stall_tolerance is not None:
                     step = SimulationManager.get_num_physics_steps()
@@ -468,7 +592,6 @@ class SingleArticulation:
                     previous_step, previous_time = step, now
                     # Progress toward the target, not stillness: a jammed grip
                     # jitters around its blocked pose without ever getting closer.
-                    error = np.abs(q - target)
                     if np.any(error < best_error - position_stall_tolerance):
                         best_error = np.minimum(best_error, error)
                         stable_since = now
@@ -479,18 +602,39 @@ class SingleArticulation:
                         stable_samples >= _SETTLED_FRAMES
                         and now - stable_since >= position_stall_duration
                     )
-                if max_error < _REACH_TOLERANCE_RAD:
+                if np.all(error < reach_tolerance):
                     reached = True
+                    exit_reason = "reached: every joint within its reach tolerance"
                     break
                 velocities = self._articulation.get_joint_velocities()
-                max_speed = (
-                    float(np.max(np.abs(velocities[idx]))) if velocities is not None else 0.0
-                )
-                stalled_frames = stalled_frames + 1 if max_speed < _SETTLED_VELOCITY_RAD_S else 0
-                if stalled_frames >= _SETTLED_FRAMES or position_stalled:
+                settled = velocities is None or np.all(np.abs(velocities[idx]) < settled_speed)
+                stalled_frames = stalled_frames + 1 if settled else 0
+                if position_stalled:
+                    exit_reason = (
+                        f"position stalled: no progress beyond {position_stall_tolerance} "
+                        f"for {position_stall_duration} s"
+                    )
+                    break
+                if stalled_frames >= _SETTLED_FRAMES:
+                    exit_reason = (
+                        f"velocity settled: speed under {settled_speed.tolist()} "
+                        f"for {_SETTLED_FRAMES} updates"
+                    )
                     break
             else:
                 timed_out = True
+                if joint_speeds is not None:
+                    self.stop_velocity_drive()
+
+            velocities = self._articulation.get_joint_velocities()
+            carb.log_warn(
+                f"[bridge] move_j {self.prim_path} returned after {frame + 1} updates, "
+                f"{exit_reason}; joints {[dof_names[i] for i in idx]}, "
+                f"prismatic {linear.tolist()}, target {target.tolist()}, "
+                f"position {q.tolist()}, error {error.tolist()}, "
+                f"reach tolerance {reach_tolerance.tolist()}, "
+                f"velocity {None if velocities is None else velocities[idx].tolist()}"
+            )
 
         return {
             "done": True,
@@ -500,6 +644,77 @@ class SingleArticulation:
             "joint_positions": q.tolist(),
             "target": target.tolist(),
         }
+
+    def stop_velocity_drive(self):
+        """Release motion monitoring and restore position holding at the current pose.
+
+        Called before replacing a command, rebinding, or unregistering the device.
+        An invalidated physics handle needs no restoration; its runtime drives
+        have already been discarded. Returns None.
+        """
+        self._velocity_subscription = None
+        motion = self._velocity_motion
+        self._velocity_motion = None
+        self._velocity_completed = None
+        saved_properties = self._saved_drive_properties
+        self._saved_drive_properties = None
+        if motion is None or not self.handles_initialized():
+            return
+        view = self._articulation._articulation_view
+        view.set_gains(
+            kps=saved_properties[0],
+            kds=saved_properties[1],
+            joint_indices=motion.joint_indices,
+        )
+        view.set_max_efforts(saved_properties[2], joint_indices=motion.joint_indices)
+        self._articulation.apply_action(
+            ArticulationAction(
+                joint_positions=self._articulation.get_joint_positions()[motion.joint_indices],
+                joint_velocities=np.zeros(len(motion.joint_indices)),
+                joint_indices=motion.joint_indices,
+            )
+        )
+
+    def _update_velocity_drive(self, time_step):
+        """On each physics step, maintain motor speed until the position is crossed.
+
+        The motor keeps its speed target when contact blocks motion, preserving
+        gripping force. Once the target is crossed, position holding takes over.
+        Returns None. ``time_step`` is supplied by the physics subscription.
+        """
+        motion = self._velocity_motion
+        if motion is None:
+            return
+        if not self.handles_initialized():
+            self.stop_velocity_drive()
+            return
+        positions = self._articulation.get_joint_positions()[motion.joint_indices]
+        remaining = np.sign(motion.joint_velocities) * (motion.joint_positions - positions)
+        newly_completed = (remaining <= 0) & ~self._velocity_completed
+        self._velocity_completed |= newly_completed
+        if np.all(self._velocity_completed):
+            self.stop_velocity_drive()
+            self._articulation.apply_action(
+                ArticulationAction(
+                    joint_positions=motion.joint_positions,
+                    joint_velocities=np.zeros(len(motion.joint_indices)),
+                    joint_indices=motion.joint_indices,
+                )
+            )
+            return
+        if np.any(newly_completed):
+            self._articulation._articulation_view.set_gains(
+                kps=self._saved_drive_properties[0][:, newly_completed],
+                kds=self._saved_drive_properties[1][:, newly_completed],
+                joint_indices=np.asarray(motion.joint_indices)[newly_completed],
+            )
+        self._articulation.apply_action(
+            ArticulationAction(
+                joint_positions=motion.joint_positions,
+                joint_velocities=np.where(self._velocity_completed, 0.0, motion.joint_velocities),
+                joint_indices=motion.joint_indices,
+            )
+        )
 
     async def set_j(self, positions, indices=None):
         """Teleport the chosen joint ``indices`` directly to ``positions`` (radians).
@@ -522,6 +737,7 @@ class SingleArticulation:
         self._validate_indices(idx)
 
         async with self._move_lock:
+            self.stop_velocity_drive()
             self._articulation.set_joint_positions(target, joint_indices=idx)
             self._articulation.set_joint_velocities(
                 np.zeros(len(idx), dtype=float), joint_indices=idx
@@ -565,6 +781,7 @@ class SingleArticulation:
             raise ValueError(f"expected {len(idx)} joint positions, got {target.shape[0]}")
         self._validate_indices(idx)
 
+        self.stop_velocity_drive()
         self._articulation.apply_action(
             ArticulationAction(joint_positions=target, joint_indices=idx)
         )
@@ -592,6 +809,7 @@ class SingleArticulation:
             raise ValueError(f"expected {len(idx)} joint velocities, got {target.shape[0]}")
         self._validate_indices(idx)
 
+        self.stop_velocity_drive()
         self._articulation.apply_action(
             ArticulationAction(joint_velocities=target, joint_indices=idx)
         )
@@ -779,12 +997,17 @@ class SingleArticulation:
         # prims.SingleArticulation exposes no setter, the same gap get_dof_limits
         # works around. Its arrays carry a leading per-environment dimension.
         view = self._articulation._articulation_view
+        self.stop_velocity_drive()
         if stiffness_row is not None or damping_row is not None:
             view.set_gains(kps=stiffness_row, kds=damping_row, joint_indices=idx)
         if effort_row is not None:
             view.set_max_efforts(effort_row, joint_indices=idx)
 
-        return {"applied": True, "indices": idx, "dof_properties": self.dof_properties()}
+        return {
+            "applied": True,
+            "indices": idx,
+            "dof_properties": self.dof_properties(),
+        }
 
     def get_applied_joint_efforts(self):
         """Efforts last commanded via :meth:`set_joint_efforts` on the driven
@@ -871,7 +1094,11 @@ class SingleArticulation:
         normal starting state of a freshly bound device."""
         action = self._articulation.get_applied_action()
         if action is None:
-            return {"joint_positions": None, "joint_velocities": None, "joint_efforts": None}
+            return {
+                "joint_positions": None,
+                "joint_velocities": None,
+                "joint_efforts": None,
+            }
         return {
             "joint_positions": action.joint_positions.tolist()
             if action.joint_positions is not None
@@ -896,6 +1123,7 @@ class SingleArticulation:
         if target.shape != (len(idx),):
             raise ValueError(f"expected {len(idx)} joint efforts, got {target.shape[0]}")
         self._validate_indices(idx)
+        self.stop_velocity_drive()
         self._articulation.set_joint_efforts(target, joint_indices=idx)
         return {"applied": True, "joint_efforts": target.tolist(), "indices": idx}
 

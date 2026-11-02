@@ -123,7 +123,9 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--prim", default="/World/LightBeam_Sensor", help="lightbeam sensor prim path to register"
+        "--prim",
+        default="/World/LightBeam_Sensor",
+        help="lightbeam sensor prim path to register",
     )
     parser.add_argument("--keep", action="store_true", help="don't delete the sensor at the end")
     args = parser.parse_args()

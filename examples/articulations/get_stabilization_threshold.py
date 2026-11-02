@@ -40,7 +40,9 @@ def main():
 
     base = f"http://{args.host}:{args.port}"
     response = _request(
-        base, "GET", f"/articulations/{args.articulation_id}/solver/stabilization_threshold"
+        base,
+        "GET",
+        f"/articulations/{args.articulation_id}/solver/stabilization_threshold",
     )
     print(f"response: {response}")
 

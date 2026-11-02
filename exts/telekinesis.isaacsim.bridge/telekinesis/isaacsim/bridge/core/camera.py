@@ -225,9 +225,7 @@ def discover_camera_prims(prim_path):
     root = omni.usd.get_context().get_stage().GetPrimAtPath(prim_path)
     if not root.IsValid():
         raise ValueError(f"prim {prim_path!r} not found in the open stage")
-    return [
-        prim.GetPath().pathString for prim in Usd.PrimRange(root) if prim.IsA(UsdGeom.Camera)
-    ]
+    return [prim.GetPath().pathString for prim in Usd.PrimRange(root) if prim.IsA(UsdGeom.Camera)]
 
 
 async def capture_cameras(cameras_with_data_types, world_frame=False):
@@ -253,8 +251,7 @@ async def capture_cameras(cameras_with_data_types, world_frame=False):
 
     out = {
         key: {
-            data_type: camera._read(data_type, world_frame=world_frame)
-            for data_type in data_types
+            data_type: camera._read(data_type, world_frame=world_frame) for data_type in data_types
         }
         for key, (camera, data_types) in requested.items()
     }
@@ -352,8 +349,7 @@ class Camera:
 
         await self._wait_for_warmup(["rgb"])
         carb.log_info(
-            f"[bridge] bound camera {self.prim_path}: "
-            f"{self.resolution} {self.active_data_types}"
+            f"[bridge] bound camera {self.prim_path}: {self.resolution} {self.active_data_types}"
         )
 
     def _is_warmed_up(self, data_type):
@@ -407,9 +403,7 @@ class Camera:
                 absent.append(data_type)
 
         if empty:
-            carb.log_warn(
-                f"[bridge] camera {self.prim_path}: {empty} still empty after warmup"
-            )
+            carb.log_warn(f"[bridge] camera {self.prim_path}: {empty} still empty after warmup")
         if not absent:
             return
 
@@ -491,10 +485,7 @@ class Camera:
         )
         await self._attach_data_types(requested)
         await omni.kit.app.get_app().next_update_async()
-        out = {
-            data_type: self._read(data_type, world_frame=world_frame)
-            for data_type in requested
-        }
+        out = {data_type: self._read(data_type, world_frame=world_frame) for data_type in requested}
         out["rendering_frame"] = _to_json(self._camera.get_current_frame().get("rendering_frame"))
         out["timestamp"] = time.monotonic() - self._start_time
         return out
@@ -646,7 +637,10 @@ class Camera:
         """Local-frame (parent-relative) pose, same shape as :meth:`get_world_pose`."""
         self._check_axes(camera_axes)
         translation, orientation = self._camera.get_local_pose(camera_axes=camera_axes)
-        return {"translation": _to_json(translation), "orientation": _to_json(orientation)}
+        return {
+            "translation": _to_json(translation),
+            "orientation": _to_json(orientation),
+        }
 
     def set_local_pose(self, translation=None, orientation=None, camera_axes="world"):
         """Set the local-frame pose. See :meth:`set_world_pose`."""
@@ -962,11 +956,22 @@ class Camera:
     # -- lens distortion models ------------------------------------------------
 
     def set_fisheye_polynomial_properties(
-        self, nominal_width, nominal_height, optical_centre_x, optical_centre_y, max_fov, polynomial
+        self,
+        nominal_width,
+        nominal_height,
+        optical_centre_x,
+        optical_centre_y,
+        max_fov,
+        polynomial,
     ):
         """[Deprecated in isaacsim] Set fisheye-polynomial distortion parameters."""
         self._camera.set_fisheye_polynomial_properties(
-            nominal_width, nominal_height, optical_centre_x, optical_centre_y, max_fov, polynomial
+            nominal_width,
+            nominal_height,
+            optical_centre_x,
+            optical_centre_y,
+            max_fov,
+            polynomial,
         )
 
     def set_matching_fisheye_polynomial_properties(
@@ -1045,7 +1050,11 @@ class Camera:
     ):
         """Apply the F-theta lens distortion model and set its parameters."""
         self._camera.set_ftheta_properties(
-            nominal_height, nominal_width, optical_center, max_fov, distortion_coefficients
+            nominal_height,
+            nominal_width,
+            optical_center,
+            max_fov,
+            distortion_coefficients,
         )
 
     def get_ftheta_properties(self):
@@ -1062,7 +1071,11 @@ class Camera:
     ):
         """Apply the Kannala-Brandt K3 lens distortion model and set its parameters."""
         self._camera.set_kannala_brandt_k3_properties(
-            nominal_height, nominal_width, optical_center, max_fov, distortion_coefficients
+            nominal_height,
+            nominal_width,
+            optical_center,
+            max_fov,
+            distortion_coefficients,
         )
 
     def get_kannala_brandt_k3_properties(self):
@@ -1080,7 +1093,11 @@ class Camera:
         """Apply the Radial-Tangential Thin-Prism lens distortion model and set its
         parameters."""
         self._camera.set_rad_tan_thin_prism_properties(
-            nominal_height, nominal_width, optical_center, max_fov, distortion_coefficients
+            nominal_height,
+            nominal_width,
+            optical_center,
+            max_fov,
+            distortion_coefficients,
         )
 
     def get_rad_tan_thin_prism_properties(self):

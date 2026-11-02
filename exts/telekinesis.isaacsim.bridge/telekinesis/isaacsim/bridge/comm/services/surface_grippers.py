@@ -140,9 +140,7 @@ class SurfaceGripperService:
         if not usd_path:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    f"'{prim_path}' is not in the stage and no usd_path was given to load it"
-                ),
+                detail=(f"'{prim_path}' is not in the stage and no usd_path was given to load it"),
             )
         try:
             await reference_usd_at(stage, usd_path, prim_path)

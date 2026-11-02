@@ -27,9 +27,7 @@ def main():
     parser = argparse.ArgumentParser(description="Pause a lidar's sensor computation.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument(
-        "--id", required=True, dest="lidar_id", help="lidar_id from put_lidar.py"
-    )
+    parser.add_argument("--id", required=True, dest="lidar_id", help="lidar_id from put_lidar.py")
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

@@ -374,9 +374,7 @@ class Lidar:
                 # Find the horizontal-column axis. For the point cloud you are
                 # currently seeing (cols, rows, xyz), this will be axis 0.
                 matching_axes = [
-                    axis
-                    for axis, size in enumerate(array.shape)
-                    if size == cols_ticked
+                    axis for axis, size in enumerate(array.shape) if size == cols_ticked
                 ]
 
                 if not matching_axes:
@@ -413,9 +411,7 @@ class Lidar:
             column_axis = data_chunks[0][1]
             arrays = [array for array, _ in data_chunks]
 
-            out[data_type] = _to_json(
-                np.concatenate(arrays, axis=column_axis)
-            )
+            out[data_type] = _to_json(np.concatenate(arrays, axis=column_axis))
 
         out["timestamp"] = time.monotonic() - self._start_time
         return out
@@ -488,7 +484,10 @@ class Lidar:
         """Local-frame (parent-relative) pose, same shape as :meth:`get_world_pose`
         but keyed ``translation`` instead of ``position``."""
         translation, orientation = self._xform.get_local_pose()
-        return {"translation": _to_json(translation), "orientation": _to_json(orientation)}
+        return {
+            "translation": _to_json(translation),
+            "orientation": _to_json(orientation),
+        }
 
     def set_local_pose(self, translation=None, orientation=None):
         """Set the local-frame pose. See :meth:`set_world_pose`."""

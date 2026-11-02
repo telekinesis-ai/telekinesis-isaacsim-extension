@@ -125,7 +125,8 @@ class LightBeamService:
         device = self._devices.get(lightbeam_id)
         if device is None:
             raise HTTPException(
-                status_code=404, detail=f"no lightbeam registered with id '{lightbeam_id}'"
+                status_code=404,
+                detail=f"no lightbeam registered with id '{lightbeam_id}'",
             )
         self._safe_destroy(device)
         del self._devices[lightbeam_id]
@@ -137,10 +138,7 @@ class LightBeamService:
 
     def list_lightbeams(self):
         """Return a ``{lightbeam_id: prim_path}`` map of every registered sensor."""
-        return {
-            lightbeam_id: device.prim_path
-            for lightbeam_id, device in self._devices.items()
-        }
+        return {lightbeam_id: device.prim_path for lightbeam_id, device in self._devices.items()}
 
     # -- readings --------------------------------------------------------------
 

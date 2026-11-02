@@ -110,8 +110,7 @@ class Conveyor:
             self.drive = CONVEYOR_NODE_DRIVE
             self._connect_conveyor_node(stage, node_prim)
         carb.log_info(
-            f"[bridge] bound conveyor {self.prim_path} ({self.drive}) at "
-            f"{self._nominal_speed} m/s"
+            f"[bridge] bound conveyor {self.prim_path} ({self.drive}) at {self._nominal_speed} m/s"
         )
 
     @property

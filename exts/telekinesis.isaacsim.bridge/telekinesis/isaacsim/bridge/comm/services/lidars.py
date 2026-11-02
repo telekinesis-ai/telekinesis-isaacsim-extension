@@ -147,7 +147,11 @@ class LidarService:
                 self._safe_destroy(previous)
             self._id_by_prim[prim_path] = lidar_id  # no-op on re-PUT; commits a fresh id
             self._devices[lidar_id] = device
-            return {"lidar_id": lidar_id, "prim_path": device.prim_path, **device.info()}
+            return {
+                "lidar_id": lidar_id,
+                "prim_path": device.prim_path,
+                **device.info(),
+            }
 
     def get_lidar(self, lidar_id):
         """Info for one registered lidar (id, prim, config), or 404."""

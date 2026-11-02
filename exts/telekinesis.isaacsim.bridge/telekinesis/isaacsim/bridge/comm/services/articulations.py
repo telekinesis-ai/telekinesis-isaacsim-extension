@@ -25,13 +25,14 @@ import asyncio
 
 from fastapi import HTTPException
 
-from ...core.articulation import SingleArticulation, find_driver_joint
+from ...core.articulation import SingleArticulation, find_driver_joint, joint_prims
 from ...core.asset_loader import import_urdf_at, reference_usd_at
 from ...core.robot_assembler import (
     assemble_tool,
     attach_surface_gripper,
     bind_shared_articulation,
     mount_prim,
+    place_tcp,
 )
 
 
@@ -62,6 +63,8 @@ class ArticulationService:
 
     def clear(self):
         """Drop every bound device (called when the bridge stops or the stage changes)."""
+        for device in self._devices.values():
+            device.stop_velocity_drive()
         self._devices = {}
         self._id_by_prim = {}
         self._count = 0
@@ -69,7 +72,9 @@ class ArticulationService:
         self._create_locks = {}
         self._assembly_locks = {}
 
-    async def create_articulation(self, prim_path, urdf_path, usd_path=None):
+    async def create_articulation(
+        self, prim_path, urdf_path, usd_path=None, default_joint_positions=None
+    ):
         """Register (and bind) the articulation at ``prim_path`` and return its info.
 
         One articulation per *requested* prim; PUTting the same prim again returns
@@ -80,6 +85,11 @@ class ArticulationService:
         ``articulation2``, ... The bind runs every time: a new client session may
         follow a timeline stop/replay, which invalidates the cached articulation
         handle.
+
+        ``default_joint_positions`` (radians) is applied only when this request
+        loaded the prim: the joints are teleported there and it becomes the reset
+        pose. A loaded asset starts every joint at zero, which may lie outside a
+        joint's range; a prim already in the stage keeps the pose it stands in.
         """
         # Normalize a trailing slash so "/World/ur10e" and "/World/ur10e/" register as
         # the same articulation (USD paths are case-sensitive, so case is left alone).
@@ -108,6 +118,12 @@ class ArticulationService:
                 # 422: the request was well-formed but the prim couldn't actually
                 # be bound (semantic/runtime failure, not a bad input value).
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
+            if prim_source != "isaac_usd" and default_joint_positions is not None:
+                try:
+                    await device.set_j(default_joint_positions)
+                    device.set_joints_default_state(joint_positions=default_joint_positions)
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
             await self.rebind_stale_devices()
             return {
                 "articulation_id": articulation_id,
@@ -168,7 +184,11 @@ class ArticulationService:
     def get_articulation(self, articulation_id):
         """Info for one registered articulation (id, prim, dof, state), or 404."""
         device = self.get_device(articulation_id)
-        return {"articulation_id": articulation_id, "prim_path": device.prim_path, **device.info()}
+        return {
+            "articulation_id": articulation_id,
+            "prim_path": device.prim_path,
+            **device.info(),
+        }
 
     def delete_articulation(self, articulation_id):
         """Unregister the articulation (counterpart to ``create_articulation``).
@@ -181,6 +201,7 @@ class ArticulationService:
                 status_code=404,
                 detail=f"no articulation registered with id '{articulation_id}'",
             )
+        self._devices[articulation_id].stop_velocity_drive()
         del self._devices[articulation_id]
         for prim, registered_id in list(self._id_by_prim.items()):
             if registered_id == articulation_id:
@@ -207,8 +228,15 @@ class ArticulationService:
     # -- driving + introspection ------------------------------------------------
 
     async def move_j(
-        self, articulation_id, positions, indices, asynchronous,
-        position_stall_tolerance=None, position_stall_duration=0.25,
+        self,
+        articulation_id,
+        positions,
+        indices,
+        asynchronous,
+        position_stall_tolerance=None,
+        position_stall_duration=0.25,
+        joint_speeds=None,
+        max_efforts=None,
     ):
         """Drive joint ``positions`` (radians) onto the device's chosen joints.
 
@@ -218,8 +246,13 @@ class ArticulationService:
         """
         try:
             return await self.get_device(articulation_id).move_j(
-                positions, indices, asynchronous,
-                position_stall_tolerance, position_stall_duration,
+                positions,
+                indices,
+                asynchronous,
+                position_stall_tolerance,
+                position_stall_duration,
+                joint_speeds,
+                max_efforts,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -280,7 +313,11 @@ class ArticulationService:
             device.set_driven_joints(joint_names)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {"articulation_id": articulation_id, "prim_path": device.prim_path, **device.info()}
+        return {
+            "articulation_id": articulation_id,
+            "prim_path": device.prim_path,
+            **device.info(),
+        }
 
     # -- extended introspection / physics tuning ---------------------------
 
@@ -466,21 +503,38 @@ class ArticulationService:
         return {"threshold": device.get_sleep_threshold()}
 
     def get_driver_joint(self, articulation_id):
-        """Discover the gripper's actuated driver joint: its name and DOF index.
+        """Return the driver name, DOF index, maximum speed and effort.
 
         A USD/PhysX schema walk (mimic vs DriveAPI) the client cannot do itself.
         The index is into the device's current ``dof_names`` (so it is valid both
         standalone and after assembly).
+        Speed is rad/s or m/s; effort is Nm or N. The URDF speed is used when
+        recorded, because solver velocity limits can be lifted for mimic joints.
         """
         device = self.get_device(articulation_id)
         try:
             name = find_driver_joint(self._stage(), device.prim_path, device.dof_names)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {"name": name, "index": device.dof_names.index(name)}
+        index = device.dof_names.index(name)
+        properties = device.dof_properties()[index]
+        prim = joint_prims(self._stage(), device.prim_path)[name]
+        velocity = prim.GetAttribute("urdf:limit:velocity").Get()
+        return {
+            "name": name,
+            "index": index,
+            "max_velocity": velocity if velocity is not None else properties["max_velocity"],
+            "max_effort": properties["max_effort"],
+        }
 
     async def assemble_robot(
-        self, arm_id, gripper_id, arm_mount_link, gripper_mount_link, offset, mask_collisions
+        self,
+        arm_id,
+        gripper_id,
+        arm_mount_link,
+        gripper_mount_link,
+        offset,
+        mask_collisions,
     ):
         """Assemble a gripper onto the arm, whichever kind of gripper it is.
 
@@ -587,6 +641,19 @@ class ArticulationService:
                 "arm_mount_link": arm_mount_link,
                 "fixed_joint": fixed_joint,
             }
+
+    def set_tcp(self, arm_id, arm_mount_link, tcp_name, offset):
+        """Place the arm's TCP marker, named ``tcp_name``, at ``offset`` in its mount link's frame.
+
+        See :func:`..core.robot_assembler.place_tcp`. The marker carries no physics, so
+        the timeline keeps playing and no articulation handle is invalidated.
+        """
+        arm = self.get_device(arm_id)  # 404 early if the arm itself is unknown
+        try:
+            prim_path = place_tcp(self._stage(), arm.prim_path, arm_mount_link, tcp_name, offset)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {"prim_path": prim_path, "arm_mount_link": arm_mount_link}
 
     async def _merge_articulated_gripper(
         self, arm_id, gripper_id, arm_mount_link, gripper_mount_link, offset
@@ -737,7 +804,10 @@ class ArticulationService:
             device = self._surface_gripper_service.get_device(gripper_id)
             gripper_info = {"surface_gripper_id": gripper_id, **device.info()}
         else:
-            gripper_info = {"articulation_id": gripper_id, **self.get_device(gripper_id).info()}
+            gripper_info = {
+                "articulation_id": gripper_id,
+                **self.get_device(gripper_id).info(),
+            }
         return {
             "articulation": arm.prim_path,
             "num_dof": shared["num_dof"],

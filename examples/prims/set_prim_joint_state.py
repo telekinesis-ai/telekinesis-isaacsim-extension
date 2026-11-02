@@ -41,10 +41,20 @@ def main():
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    _request(base, "PATCH", "/prims/physics/joints", body={"prim_path": args.prim, "enable": False})
+    _request(
+        base,
+        "PATCH",
+        "/prims/physics/joints",
+        body={"prim_path": args.prim, "enable": False},
+    )
     print(f"joint disabled: {args.prim}")
 
-    _request(base, "PATCH", "/prims/physics/joints", body={"prim_path": args.prim, "enable": True})
+    _request(
+        base,
+        "PATCH",
+        "/prims/physics/joints",
+        body={"prim_path": args.prim, "enable": True},
+    )
     print(f"joint enabled: {args.prim}")
 
 

@@ -95,7 +95,10 @@ def _exercise_property_routes(base, root):
     if not properties:
         _skip(f"PATCH {root}/properties", "no properties to echo back")
         return
-    _record(f"PATCH {root}/properties", *_call(base, "PATCH", f"{root}/properties", properties))
+    _record(
+        f"PATCH {root}/properties",
+        *_call(base, "PATCH", f"{root}/properties", properties),
+    )
 
 
 def _exercise_attachment_point_routes(base, root):

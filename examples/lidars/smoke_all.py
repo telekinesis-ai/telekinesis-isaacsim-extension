@@ -160,7 +160,10 @@ def _exercise_config_routes(base, root):
         "horizontal_resolution",
     )
     _roundtrip(
-        base, f"{root}/vertical_resolution", f"{root}/vertical_resolution", "vertical_resolution"
+        base,
+        f"{root}/vertical_resolution",
+        f"{root}/vertical_resolution",
+        "vertical_resolution",
     )
     _roundtrip(base, f"{root}/rotation_rate", f"{root}/rotation_rate", "rotation_rate")
     _roundtrip(base, f"{root}/yaw_offset", f"{root}/yaw_offset", "yaw_offset")
@@ -191,7 +194,10 @@ def _exercise_collection_routes(base, root):
 def _exercise_routes(base, args):
     """Create a lidar and exercise the exposed lidar routes."""
     ok, status, payload = _call(
-        base, "PUT", "/lidars", {"prim_path": args.prim, "data_types": ["point_cloud", "depth"]}
+        base,
+        "PUT",
+        "/lidars",
+        {"prim_path": args.prim, "data_types": ["point_cloud", "depth"]},
     )
     created = _record("PUT /lidars (create)", ok, status, payload)
     if not created or "lidar_id" not in created:

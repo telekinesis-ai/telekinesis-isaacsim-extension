@@ -18,8 +18,8 @@ Two kinds of gripper, two paths:
   own device.
 
 Any other prim, such as a camera, is bolted on the suction way by :func:`mount_prim`,
-minus the attachment points: it becomes a rigid body if it is not one and is fixed
-to the mount link.
+minus the attachment points: it becomes a rigid body if it is not one, gets a mass
+from its bounds when it has none, and is fixed to the mount link.
 
 omni/isaac imports live at module top (only imported inside Isaac Sim), matching
 :mod:`.asset_loader`. ``RobotAssembler`` ships as its own Kit extension, so it is
@@ -32,12 +32,18 @@ import omni.timeline
 import omni.usd
 from isaacsim.core.prims import SingleArticulation
 import carb
-from pxr import Gf, PhysxSchema, Sdf, Usd, UsdGeom, UsdPhysics
+from pxr import Gf, PhysxSchema, Sdf, Tf, Usd, UsdGeom, UsdPhysics
 
 _BIND_RETRIES = 60
 # Name of the fixed joint the suction path authors, matched on to clear out the ones
 # an earlier assembly of the same gripper left behind.
 _MOUNT_JOINT_NAME = "AssemblerFixedJoint"
+# PhysX's default density, in kg/m^3, used to weigh a mounted prim that has no mass.
+_MOUNTED_PRIM_DENSITY = 1000.0
+_TCP_XFORM_NAME = "tcp"
+# Size of the TCP marker's axes, in meters.
+_TCP_AXIS_LENGTH = 0.05
+_TCP_AXIS_RADIUS = 0.002
 
 
 def find_prim_by_name(stage, root_path, name):
@@ -306,12 +312,17 @@ async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_co
     two, leaving the arm's DOF unchanged.
 
     A fixed joint needs a rigid body on both ends, so a prim that is not one gets
-    ``RigidBodyAPI`` with gravity off: the joint is then all that holds it, and
-    gravity would only make the arm carry its default mass. A kinematic prim is
-    made dynamic for the same reason.
+    ``RigidBodyAPI`` with gravity off: the joint is then all that holds it. A
+    kinematic prim is made dynamic for the same reason. A prim with neither mass
+    nor colliders anywhere beneath it gets the mass of a solid box filling its
+    bounds (see :func:`_set_mass_from_bounds`); one that has either keeps it.
 
     Edits USD, so the timeline is stopped throughout; the caller plays it again
     and re-binds the arm. Returns the path of the fixed joint.
+
+    Raises:
+        RuntimeError: If the arm, its mount link or the prim is missing, or the
+            prim needs a mass but has no extent to derive one from.
     """
     ext_manager = omni.kit.app.get_app().get_extension_manager()
     ext_manager.set_extension_enabled_immediate("isaacsim.robot_setup.assembler", True)
@@ -339,6 +350,13 @@ async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_co
         PhysxSchema.PhysxRigidBodyAPI.Apply(prim).CreateDisableGravityAttr(True)
     if prim.HasAttribute("physics:kinematicEnabled"):
         prim.GetAttribute("physics:kinematicEnabled").Set(False)
+    # Checked apart from the rigid body: a stage kept from an earlier mount already
+    # holds the prim as a rigid body, possibly without a mass.
+    if not any(
+        descendant.HasAPI(UsdPhysics.MassAPI) or descendant.HasAPI(UsdPhysics.CollisionAPI)
+        for descendant in Usd.PrimRange(prim, Usd.TraverseInstanceProxies())
+    ):
+        _set_mass_from_bounds(prim)
 
     await app.next_update_async()
     fixed_joint = _create_mount_joint(stage, arm_mount, prim_path, offset)
@@ -352,6 +370,47 @@ async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_co
     await app.next_update_async()
 
     return fixed_joint.GetPath().pathString
+
+
+def place_tcp(stage, arm_prim, arm_mount_link, tcp_name, offset):
+    """Place the arm's TCP marker, named ``tcp_name``, at ``offset`` in the mount link's frame.
+
+    The marker is a plain Xform at ``<mount link>/_TCP_XFORM_NAME/<tcp_name>`` with no
+    physics API, so it is drawn with the link like the link's visuals rather than
+    simulated -- the fixed-joint bolt-on :func:`mount_prim` needs for a rigid body is
+    not needed. The fixed parent keeps the TCP name from colliding with the arm's own
+    prims, and is emptied on every call so only the most recently set TCP is shown.
+
+    The marker carries red/green/blue X/Y/Z axes with guide purpose, so they are
+    drawn only while the viewport shows guides (``StageService.set_guides_visible``).
+    Returns the marker's path.
+    """
+    if not stage.GetPrimAtPath(arm_prim).IsValid():
+        raise RuntimeError(f"arm prim {arm_prim!r} not found in the open stage")
+    arm_mount = find_prim_by_name(stage, arm_prim, arm_mount_link)
+
+    parent = UsdGeom.Xform.Define(stage, f"{arm_mount}/{_TCP_XFORM_NAME}").GetPrim()
+    for child in list(parent.GetChildren()):
+        stage.RemovePrim(child.GetPath())
+
+    marker = UsdGeom.Xform.Define(
+        stage, parent.GetPath().AppendChild(Tf.MakeValidIdentifier(tcp_name))
+    )
+    marker.MakeMatrixXform().Set(offset_matrix(offset))
+
+    for axis, color in (("X", (1, 0, 0)), ("Y", (0, 1, 0)), ("Z", (0, 0, 1))):
+        cylinder = UsdGeom.Cylinder.Define(stage, marker.GetPath().AppendChild(f"axis_{axis}"))
+        cylinder.CreateAxisAttr(axis)
+        cylinder.CreateHeightAttr(_TCP_AXIS_LENGTH)
+        cylinder.CreateRadiusAttr(_TCP_AXIS_RADIUS)
+        cylinder.CreateDisplayColorAttr([Gf.Vec3f(*color)])
+        cylinder.CreatePurposeAttr(UsdGeom.Tokens.guide)
+        # A cylinder is centred on its origin; shift it so the axis starts at the TCP.
+        shift = Gf.Vec3d(0, 0, 0)
+        shift["XYZ".index(axis)] = _TCP_AXIS_LENGTH / 2
+        cylinder.AddTranslateOp().Set(shift)
+
+    return marker.GetPath().pathString
 
 
 def _remove_previous_mount_joints(stage, gripper_prim):
@@ -393,9 +452,7 @@ def _place_at_mount(stage, arm_mount_path, gripper_prim, gripper_mount_path, off
     gripper = stage.GetPrimAtPath(gripper_prim)
     gripper_world = omni.usd.get_world_transform_matrix(gripper)
     parent_world = omni.usd.get_world_transform_matrix(gripper.GetParent())
-    arm_mount_world = omni.usd.get_world_transform_matrix(
-        stage.GetPrimAtPath(arm_mount_path)
-    )
+    arm_mount_world = omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(arm_mount_path))
     gripper_mount_world = omni.usd.get_world_transform_matrix(
         stage.GetPrimAtPath(gripper_mount_path)
     )
@@ -409,6 +466,44 @@ def _place_at_mount(stage, arm_mount_path, gripper_prim, gripper_mount_path, off
         path=gripper.GetPath(),
         new_transform_matrix=target_world * parent_world.GetInverse(),
         old_transform_matrix=omni.usd.get_local_transform_matrix(gripper),
+    )
+
+
+def _set_mass_from_bounds(prim):
+    """Give ``prim`` the mass, center of mass and inertia of a solid box filling its bounds.
+
+    Without colliders PhysX cannot derive a body's mass and falls back to 1 kg with
+    an inertia unrelated to the prim -- for a camera, many times the real device,
+    which the mount joint then makes the arm's last link swing. The box is weighed
+    at PhysX's default density, so the prim gets the mass PhysX would infer from a
+    box collider of its size. The bounds are the prim's own, without its transform,
+    in stage units taken as meters like the mount offset.
+
+    Raises:
+        RuntimeError: If the prim has no extent, which would give it a zero mass
+            that PhysX treats as infinite.
+    """
+    bounds = (
+        UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
+        .ComputeUntransformedBound(prim)
+        .ComputeAlignedRange()
+    )
+    if bounds.IsEmpty() or min(bounds.GetSize()) <= 0.0:
+        raise RuntimeError(
+            f"prim {prim.GetPath().pathString!r} has no mass, colliders or extent to "
+            "derive a mass from; author a MassAPI on it before mounting it"
+        )
+    x, y, z = bounds.GetSize()
+    mass = _MOUNTED_PRIM_DENSITY * x * y * z
+    mass_api = UsdPhysics.MassAPI.Apply(prim)
+    mass_api.CreateMassAttr(mass)
+    mass_api.CreateCenterOfMassAttr(Gf.Vec3f(bounds.GetMidpoint()))
+    mass_api.CreateDiagonalInertiaAttr(
+        Gf.Vec3f(
+            mass / 12.0 * (y * y + z * z),
+            mass / 12.0 * (x * x + z * z),
+            mass / 12.0 * (x * x + y * y),
+        )
     )
 
 
@@ -427,9 +522,7 @@ def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
 
     The joint is excluded from the articulation, so the arm's DOF are unchanged.
     """
-    joint = UsdPhysics.FixedJoint.Define(
-        stage, f"{gripper_mount_path}/{_MOUNT_JOINT_NAME}"
-    )
+    joint = UsdPhysics.FixedJoint.Define(stage, f"{gripper_mount_path}/{_MOUNT_JOINT_NAME}")
     joint.CreateBody0Rel().SetTargets([Sdf.Path(arm_mount_path)])
     joint.CreateBody1Rel().SetTargets([Sdf.Path(gripper_mount_path)])
 
@@ -438,7 +531,6 @@ def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
     joint.CreateLocalRot0Attr().Set(Gf.Quatf(mount_pose.GetRotation().GetQuat()))
     joint.CreateLocalPos1Attr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
     joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
-    joint.CreateExcludeFromArticulationAttr(True)
     return joint
 
 

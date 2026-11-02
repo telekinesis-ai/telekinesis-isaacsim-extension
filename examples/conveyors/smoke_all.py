@@ -58,7 +58,12 @@ def _exercise_routes(base, args):
     """Register a conveyor and exercise every exposed conveyor route."""
     created = _record(
         "PUT /conveyors (create)",
-        *_call(base, "PUT", "/conveyors", {"prim_path": args.prim, "cargo_root": args.cargo_root}),
+        *_call(
+            base,
+            "PUT",
+            "/conveyors",
+            {"prim_path": args.prim, "cargo_root": args.cargo_root},
+        ),
     )
     if not created or "conveyor_id" not in created:
         print(
@@ -91,7 +96,10 @@ def _exercise_routes(base, args):
     # attribute, which is the one its travel direction was read from, so a
     # re-register has to reuse the capture rather than read it again.
     ok, status, rebound = _call(
-        base, "PUT", "/conveyors", {"prim_path": args.prim, "cargo_root": args.cargo_root}
+        base,
+        "PUT",
+        "/conveyors",
+        {"prim_path": args.prim, "cargo_root": args.cargo_root},
     )
     _record("PUT /conveyors (re-register)", ok, status, rebound)
     if ok:
@@ -136,7 +144,9 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--prim", default="/World/ConveyorBelt_A08", help="conveyor prim path to register"
+        "--prim",
+        default="/World/ConveyorBelt_A08",
+        help="conveyor prim path to register",
     )
     parser.add_argument(
         "--cargo-root",

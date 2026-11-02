@@ -1,4 +1,45 @@
 # Changelog
+## [0.8.1] - 2026-11-02
+### Added
+- A "Telekinesis Isaac Sim Bridge" entry in the right-click Create menu of the Stage panel and
+  viewport. It is a placeholder that only prints the right-clicked prims to the terminal.
+
+### Changed
+- `PUT /prims/physics/rigid_body` makes each mesh collide as its convex hull instead of a
+  convex decomposition. Decomposing open, multi-shell CAD meshes left thin hulls that gripper
+  fingers were pushed through. A hull is solid, but fills holes and concave pockets.
+- `PUT /prims/physics/rigid_body` binds the prop's meshes to a physics material with a static
+  and dynamic friction of 1.0 and the `max` friction combine mode. At the PhysX default of 0.5,
+  small parts slid out of parallel-jaw grippers.
+
+### Fixed
+- `POST /articulations/{id}/mount_prim` mounted a prim with no mass and no colliders, such as a
+  camera, as a body PhysX weighs at its 1 kg default with an inertia unrelated to the prim, which
+  shook the arm. Such a prim now gets the mass and inertia of a solid box filling its bounds at
+  1000 kg/m³; a prim with no extent is refused with 422.
+- `PUT /stage/physics/solve_articulation_contact_last` failed on an Isaac Sim whose
+  `PhysxSceneAPI` has no `CreateSolveArticulationContactLastAttr`, after already writing the
+  setting as a custom attribute.
+- Blocking joint moves on prismatic joints (the Robotiq Hand-E fingers) reported `reached`
+  while still up to 10 mm from target, so a gripper `close` returned mid-stroke. Reach and
+  settle thresholds were radian values applied to metres; prismatic joints now use 0.5 mm
+  and 0.5 mm/s.
+
+## [0.7.0] - 2026-10-20
+### Added
+- `GET /prims/scale` and `PUT /prims/scale` read and set a prim's local scale, keeping its pose.
+- `POST /stage/scene/reference` accepts an OBJ, GLB or glTF mesh, converted to USD in metres with
+  `omni.kit.asset_converter`. The converted asset carries no colliders or rigid body.
+- `PUT /prims/physics/rigid_body {prim_path, mass}` makes a prop one dynamic rigid body that
+  collides through convex decompositions of its meshes.
+- `DELETE /prims?prim_path=` removes a prim and everything beneath it; a missing path succeeds.
+
+### Fixed
+- Pose edits (`PUT /prims/poses`, `POST /prims/poses/relative`, `POST /prims/poses/default/reset`)
+  wiped the prim's scale. They now keep it.
+- Poses read from a scaled prim, or a prim under a scaled parent, reported a rotation
+  distorted by the scale.
+
 ## [0.6.0] - 2026-10-19
 ### Added
 - Support for editing physics of the scene

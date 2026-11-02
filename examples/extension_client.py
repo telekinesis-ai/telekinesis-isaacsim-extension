@@ -31,7 +31,11 @@ DEFAULT_TIMEOUT = 30.0
 def _request(base_url, method, path, params=None, body=None):
     """Send one request and return the decoded JSON, or None for an empty body."""
     response = requests.request(
-        method, base_url.rstrip("/") + path, params=params, json=body, timeout=DEFAULT_TIMEOUT
+        method,
+        base_url.rstrip("/") + path,
+        params=params,
+        json=body,
+        timeout=DEFAULT_TIMEOUT,
     )
     response.raise_for_status()
     return response.json() if response.content else None
@@ -114,7 +118,11 @@ def get_relative_pose(base_url, prim_path_1, prim_path_2, mode="normal", rotatio
 
 def apply_relative_pose(base_url, prim_path, pose, object_first=False):
     """POST /prims/poses/relative -> nudge a prim by a relative pose."""
-    body = {"prim_path": prim_path, "relative_pose": {"pose": pose}, "object_first": object_first}
+    body = {
+        "prim_path": prim_path,
+        "relative_pose": {"pose": pose},
+        "object_first": object_first,
+    }
     return _request(base_url, "POST", "/prims/poses/relative", body=body)
 
 

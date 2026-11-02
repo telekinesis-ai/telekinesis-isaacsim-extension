@@ -41,7 +41,9 @@ def main():
 
     base = f"http://{args.host}:{args.port}"
     response = _request(
-        base, "GET", f"/articulations/{args.articulation_id}/dof_index/{args.joint_name}"
+        base,
+        "GET",
+        f"/articulations/{args.articulation_id}/dof_index/{args.joint_name}",
     )
     print(f"response: {response}")
 

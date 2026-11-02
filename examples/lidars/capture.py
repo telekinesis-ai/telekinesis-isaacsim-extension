@@ -47,15 +47,16 @@ def main():
     parser = argparse.ArgumentParser(description="Capture a scan from a lidar.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument(
-        "--id", required=True, dest="lidar_id", help="lidar_id from put_lidar.py"
-    )
+    parser.add_argument("--id", required=True, dest="lidar_id", help="lidar_id from put_lidar.py")
     parser.add_argument("--data-types", nargs="+", default=None, help="subset to capture")
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
     response = _request(
-        base, "POST", f"/lidars/{args.lidar_id}/capture", {"data_types": args.data_types}
+        base,
+        "POST",
+        f"/lidars/{args.lidar_id}/capture",
+        {"data_types": args.data_types},
     )
 
     for key, value in response.items():

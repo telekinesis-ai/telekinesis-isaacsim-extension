@@ -12,7 +12,7 @@ the client, which maps them to joint angles before calling these routes.
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PositiveFloat
 
 
 class CreateArticulationRequest(BaseModel):
@@ -22,11 +22,17 @@ class CreateArticulationRequest(BaseModel):
     loaded from when no prim is at ``prim_path`` yet: a URDF, which is imported, or a
     prepared USD asset, which is referenced. Either may be given, not both; a prim
     that is already in the stage is used as it is and both are ignored.
+
+    ``default_joint_positions`` (radians, one per driven joint) is the pose a
+    freshly loaded articulation is placed at and resets to on Stop+Play. It applies
+    only when this request loads the prim; a prim already in the stage keeps its
+    pose.
     """
 
     prim_path: str = Field(min_length=1)
     urdf_path: str | None = None
     usd_path: str | None = None
+    default_joint_positions: list[float] | None = None
 
 
 class JointPositionsRequest(BaseModel):
@@ -49,6 +55,14 @@ class JointPositionsRequest(BaseModel):
     Blocking responses distinguish motion-limit expiry with ``timed_out=true``;
     expiry is not evidence of a grasp.
 
+    ``joint_speeds`` and ``max_efforts`` together select force-limited velocity
+    control to the target: positive speeds in rad/s or m/s, nonnegative limits
+    in Nm or N, one finite value per selected joint. A blocked joint maintains
+    effort after returning; target arrival restores position holding. Target
+    monitoring continues for asynchronous moves and after stalls. Timeout stops
+    velocity control. Omitting both uses the existing position drives.
+    This mode requires force-type joint drives; acceleration drives are rejected.
+
     Example:
         JointPositionsRequest(joint_positions=[0.7], position_stall_tolerance=0.0001)
     """
@@ -58,6 +72,8 @@ class JointPositionsRequest(BaseModel):
     asynchronous: bool = False
     position_stall_tolerance: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     position_stall_duration: float = Field(default=0.25, gt=0, allow_inf_nan=False)
+    joint_speeds: list[float] | None = None
+    max_efforts: list[float] | None = None
 
 
 class SetJointPositionsRequest(BaseModel):
@@ -252,6 +268,19 @@ class MountPrimRequest(BaseModel):
     mask_collisions: bool = True
 
 
+class SetTcpRequest(BaseModel):
+    """Body of PUT /articulations/{articulation_id}/tcp.
+
+    Places the arm's TCP marker, a plain Xform named ``tcp_name`` under
+    ``<arm_mount_link>/tcp``, at ``offset`` in the mount link's frame (null/omitted =>
+    at the mount link's origin). Setting it again replaces the previous marker.
+    """
+
+    arm_mount_link: str
+    tcp_name: str
+    offset: Transformation | None = None
+
+
 # -- Stage (mirrors the extension's Omniservice schemas) --------------------
 
 
@@ -264,10 +293,11 @@ class OpenSceneRequest(BaseModel):
 class AddToSceneRequest(BaseModel):
     """Body of POST /stage/scene/reference.
 
-    ``uri`` is a USD asset on the machine running Isaac Sim, not a URL: a client
-    fetches the asset's bundle itself and hands over the extracted asset. It is
-    referenced onto ``prim_path``, so it arrives as one prim with everything it owns
-    below it, beside whatever is already in the stage.
+    ``uri`` is a USD, OBJ, GLB or glTF asset on the machine running Isaac Sim, not a URL:
+    a client fetches the asset's bundle itself and hands over the extracted asset. An
+    OBJ, GLB or glTF mesh is converted to USD first. The asset is referenced onto
+    ``prim_path``, so it arrives as one prim with everything it owns below it, beside
+    whatever is already in the stage.
     """
 
     uri: str = Field(min_length=1)
@@ -307,6 +337,13 @@ class UpdatePoseRequest(BaseModel):
 
     input_pose: WSPose
     prim_path: str
+
+
+class SetScaleRequest(BaseModel):
+    """Body of PUT /prims/scale. ``scale`` is the prim's local ``[sx, sy, sz]``."""
+
+    prim_path: str
+    scale: list[PositiveFloat] = Field(min_length=3, max_length=3)
 
 
 class ApplyRelativePoseRequest(BaseModel):
@@ -359,6 +396,13 @@ class UpdateCollidersRequest(BaseModel):
 
     enable: bool
     prim_path: str
+
+
+class SetRigidBodyRequest(BaseModel):
+    """Body of PUT /prims/physics/rigid_body. ``mass`` is the whole body's mass in kilograms."""
+
+    prim_path: str
+    mass: PositiveFloat
 
 
 # -- Cameras (device registry, analogous to articulations) ------------------

@@ -126,21 +126,71 @@ curl http://127.0.0.1:8766/status
 # {"status":"OK"}
 ```
 
+## Pre-merge Checks
+
+CI runs these on every PR into `develop` or `main` and fails if any of them would change a file or
+report an error. Run them locally first, from the repository root:
+
+```bash
+# Versions match CI exactly; other ruff/FastAPI versions give different results.
+pip install ruff==0.15.8 pylint fastapi==0.115.7 pydantic==2.11.3
+
+ruff check --line-length 100 --fix .
+ruff format --line-length 100 .
+pylint --max-line-length 100 --ignored-modules=omni,carb,isaacsim,pxr,usd --disable=duplicate-code,attribute-defined-outside-init,import-outside-toplevel,unused-argument,broad-exception-caught,protected-access,too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-public-methods,too-many-instance-attributes,too-many-lines,too-many-branches,too-many-statements,too-many-boolean-expressions exts/telekinesis.isaacsim.bridge/telekinesis examples
+python scripts/generate_openapi.py
+```
+
+Then commit whatever changed, including `public/openapi.json`. `ruff format` does not wrap long
+docstrings or comments; pylint reports those as `line-too-long` and they must be wrapped by hand.
+
+A PR into `main` (a release) additionally needs:
+
+- `version` in `exts/telekinesis.isaacsim.bridge/config/extension.toml` bumped to a version that
+  has no `v<VERSION>` tag yet;
+- a `## [<VERSION>]` section in `exts/telekinesis.isaacsim.bridge/docs/CHANGELOG.md`.
+
+To upgrade ruff or FastAPI, change the version in both this section and
+`.github/workflows/ci.yml`, then rerun all of the above and commit the result.
+
+## Automated Deployment (CI)
+
+`.github/workflows/ci.yml` automates the checks and the release below.
+
+| Trigger | Job | What it does |
+|---|---|---|
+| PR into `develop` or `main` | `verify-lint` | `ruff check`, `ruff format --check`, `pylint`, and fails if `public/openapi.json` is not regenerated and committed |
+| PR into `main` | `verify-release-version` | Fails if tag `v<VERSION>` already exists or `CHANGELOG.md` has no `## [<VERSION>]` section |
+| Push to `main` | `release` | Packages the ZIP, creates tag `v<VERSION>` on the pushed commit, publishes the GitHub release with the changelog section and ZIP, then merges `main` back into `develop` |
+
+The `release` job does nothing if tag `v<VERSION>` already exists, so pushes to `main` without a
+version bump are safe.
+
+With CI, a release is:
+
+1. On `develop`: bump `version` in `extension.toml`, add the `## [<VERSION>]` changelog section,
+   regenerate `public/openapi.json`, push.
+2. Open a PR `develop` → `main` and **squash merge** it once checks pass.
+3. CI tags, releases and reconnects `develop`. NVIDIA's crawler picks the release up nightly.
+
+One-time GitHub setup, in addition to [2.1](#21-one-time-repository-setup):
+
+- **Settings ▸ Actions ▸ General ▸ Workflow permissions**: *Read and write permissions*.
+- `develop` must accept direct pushes from the workflow's `GITHUB_TOKEN`, which cannot be added
+  to a bypass list. If a branch protection rule or ruleset blocks direct pushes to `develop`, the
+  final reconnect step fails (the release itself is already published by then); run
+  `git checkout develop && git merge main && git push origin develop` by hand instead.
+- Optional: **Settings ▸ Environments ▸ `release`** ▸ add required reviewers to make every
+  release wait for a manual approval.
+
 ## Manual Deployment
 
-Follow the steps below to release a new version of the extension.
+Follow the steps below to release a new version of the extension without CI.
 
 ### 1. Linting, Static Checks and API Docs Generation
 
-Run the following before merging to main.
-```bash
-pip install ruff pylint
-ruff check --line-length 100 .
-ruff format --line-length 100 .
-pylint --max-line-length 100 --ignored-modules=omni,carb,isaacsim,pxr,usd --disable=duplicate-code,attribute-defined-outside-init,import-outside-toplevel,unused-argument,broad-exception-caught,protected-access,too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-public-methods,too-many-instance-attributes,too-many-lines exts/telekinesis.isaacsim.bridge/telekinesis examples
-python scripts/generate_openapi.py # should exit 0 and write public/openapi.json
-```
-On succesful completion, merge to main, and proceed to release.
+Run the [Pre-merge Checks](#pre-merge-checks) before merging to main. On successful completion,
+merge to main, and proceed to release.
 <details>
 <summary>Why these Pylint checks are ignored</summary>
 
@@ -167,6 +217,9 @@ Every disabled check is intentional:
 - `too-many-arguments` and `too-many-positional-arguments`: assembly functions
   genuinely require several robot, stage, mount, and offset parameters.
 - `too-many-locals`: applies to the same orchestration functions.
+- `too-many-branches`, `too-many-statements` and `too-many-boolean-expressions`: blocking joint
+  moves (`move_j`) and drive authoring (`_author_missing_drives`) validate and step through one
+  linear flow that reads clearer in one place than split into single-use helpers.
 - `too-many-public-methods` and `too-many-instance-attributes`: service classes
   intentionally mirror Isaac Sim APIs and Kit subscription state.
 - `too-many-lines`: `routers.py` intentionally keeps the full API route surface
@@ -176,7 +229,8 @@ Every disabled check is intentional:
 `ruff format` formats the code.
 `pylint` performs broader static checks.
 
-There is currently no CI for these checks, so run them manually before each PR.
+CI runs these checks on every PR (see **Automated Deployment (CI)**). CI additionally disables
+`import-error`, since Isaac Sim is not installed on the runner.
 
 </details>
 

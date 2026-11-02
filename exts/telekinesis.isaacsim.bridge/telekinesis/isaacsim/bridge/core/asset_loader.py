@@ -3,9 +3,10 @@
 Bring a robot or tool into the open stage at an exact prim path, from either of the
 two descriptions a client can hand the bridge: a URDF, which is imported to a
 self-contained USD asset first (:func:`import_urdf_at`), or a USD asset that is
-already prepared (:func:`reference_usd_at`). Both end up referencing one asset onto
-one prim path, so the device arrives as a single prim with everything it owns below
-it. Shared by the robot and gripper connect paths.
+already prepared (:func:`reference_usd_at`). A plain OBJ, GLB or glTF mesh, such as a
+stage prop, is converted to USD the same way (:func:`import_mesh_at`). Both end up
+referencing one asset onto one prim path, so the device arrives as a single prim with
+everything it owns below it. Shared by the robot and gripper connect paths.
 """
 
 import hashlib
@@ -14,6 +15,7 @@ from pathlib import Path
 
 import carb
 import omni.kit.app
+import omni.kit.asset_converter
 import omni.kit.commands
 import omni.timeline
 from isaacsim.asset.importer import urdf as urdf_importer
@@ -84,6 +86,40 @@ async def reference_usd_at(stage, usd_path, dest_prim_path):
         raise RuntimeError(f"cannot find the usd asset '{usd_path}'")
 
     return await _reference_asset_at(stage, usd_path, dest_prim_path)
+
+
+async def import_mesh_at(stage, mesh_path, dest_prim_path):
+    """Convert the OBJ, GLB or glTF mesh at ``mesh_path`` to USD and reference it onto
+    ``dest_prim_path``.
+
+    USD cannot reference these formats directly, so the mesh is converted into its own
+    USD asset under :data:`ASSET_ROOT` first, read in metres. Every call re-converts, so
+    an edited mesh always reaches the stage. The asset is visual only: it carries no
+    collider or rigid body. A ``.gltf`` needs the buffer and texture files it names
+    beside it; a ``.glb`` is self-contained.
+
+    Returns ``dest_prim_path`` and otherwise behaves like :func:`reference_usd_at`.
+    Raises ``RuntimeError`` when the mesh is missing or the conversion fails.
+    """
+    mesh_path = Path(mesh_path)
+    if not mesh_path.is_file():
+        raise RuntimeError(f"cannot find the mesh '{mesh_path}'")
+
+    asset_directory = _asset_directory_for(mesh_path)
+    asset_directory.mkdir(parents=True, exist_ok=True)
+    asset_path = asset_directory / f"{mesh_path.stem}.usd"
+
+    context = omni.kit.asset_converter.AssetConverterContext()
+    # OBJ carries no unit and glTF is defined in metres; the bridge's stages are in metres.
+    context.use_meter_as_world_unit = True
+    task = omni.kit.asset_converter.get_instance().create_converter_task(
+        mesh_path.as_posix(), asset_path.as_posix(), None, context
+    )
+    if not await task.wait_until_finished():
+        raise RuntimeError(f"failed to convert the mesh '{mesh_path}': {task.get_error_message()}")
+
+    carb.log_info(f"[bridge] converted '{mesh_path}' to asset {asset_path}")
+    return await _reference_asset_at(stage, asset_path, dest_prim_path)
 
 
 async def _reference_asset_at(stage, asset_path, dest_prim_path):
@@ -166,14 +202,17 @@ def _park_clear_of_existing_robots(stage, dest_prim_path):
     # modelled asset arrives with its own xform ops, and adding a second translate op
     # to a prim that already has one is an error.
     xformable = UsdGeom.Xformable(prim)
-    translate = next(
-        (
-            op
-            for op in xformable.GetOrderedXformOps()
-            if op.GetOpType() == UsdGeom.XformOp.TypeTranslate
-        ),
-        None,
-    ) or xformable.AddTranslateOp()
+    translate = (
+        next(
+            (
+                op
+                for op in xformable.GetOrderedXformOps()
+                if op.GetOpType() == UsdGeom.XformOp.TypeTranslate
+            ),
+            None,
+        )
+        or xformable.AddTranslateOp()
+    )
     authored = translate.Get()
     if authored is None:
         translate.Set(Gf.Vec3d(shift, 0.0, 0.0))
@@ -244,17 +283,17 @@ def _author_missing_drives(asset_path):
     motion, at twice the remaining error per second, so lifting the wall changes what
     the solver is allowed to correct, not how fast the gripper moves.
 
-    Only joints whose composed stiffness is zero or absent are touched, so an asset
-    that authors real drives keeps them. Mimic joints are skipped: the mimic constraint
-    moves them, and a drive would fight it. Written as overs on the asset's root layer,
-    which outweighs the importer's internal layers regardless of the asset's variant
-    structure.
+    Existing nonzero stiffness is preserved. For assets without mimic joints,
+    missing or zero damping on a positive-stiffness drive is completed using the
+    arm damping factor. Mimic joints are skipped. Overrides are written to the
+    asset's root layer.
     """
     stage = Usd.Stage.Open(asset_path.as_posix())
     if stage is None:
         raise RuntimeError(f"cannot open the urdf asset at '{asset_path}'")
 
-    if any(_is_mimic(prim) for prim in stage.Traverse()):
+    has_mimic_joints = any(_is_mimic(prim) for prim in stage.Traverse())
+    if has_mimic_joints:
         # A mimic linkage: gram-scale links behind one driver commanded in steps.
         angular_stiffness = 3.75  # USD degrees; the OnRobot RG6's authored figure
         linear_stiffness = 1.0e4  # per metre
@@ -286,6 +325,13 @@ def _author_missing_drives(asset_path):
         drive = UsdPhysics.DriveAPI.Get(prim, kind)
         authored = drive.GetStiffnessAttr().Get() if drive else None
         if authored:
+            if (
+                not has_mimic_joints
+                and authored > 0.0
+                and drive.GetDampingAttr().Get() in (None, 0.0)
+            ):
+                drive.CreateDampingAttr(authored * damping_ratio)
+                completed.append(prim.GetName())
             continue
 
         drive = UsdPhysics.DriveAPI.Apply(prim, kind)
@@ -319,10 +365,8 @@ def _author_missing_drives(asset_path):
     if completed:
         stage.GetRootLayer().Save()
         carb.log_warn(
-            f"[bridge] asset {asset_path}: authored position-drive values for joint(s) the "
-            f"import left without any: {completed}. The drives clamp at the URDF's effort "
-            "limits, so a joint that misbehaves under these gains has a wrong effort limit "
-            "in its URDF."
+            f"[bridge] asset {asset_path}: completed missing or zero "
+            f"position-drive settings for joints: {completed}"
         )
 
 
@@ -337,9 +381,9 @@ def _is_mimic(prim):
 
 
 def _asset_directory_for(urdf_path):
-    """Directory holding the USD asset built from ``urdf_path``.
+    """Directory holding the USD asset built from ``urdf_path`` (a URDF or a mesh).
 
-    Keyed on the URDF's absolute path, so two robots that happen to share a file name
+    Keyed on the source's absolute path, so two assets that happen to share a file name
     get their own directory, and re-importing the same URDF always lands on the same
     one.
     """

@@ -30,7 +30,10 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
-        "--id", required=True, dest="lightbeam_id", help="lightbeam_id from put_lightbeam.py"
+        "--id",
+        required=True,
+        dest="lightbeam_id",
+        help="lightbeam_id from put_lightbeam.py",
     )
     args = parser.parse_args()
 

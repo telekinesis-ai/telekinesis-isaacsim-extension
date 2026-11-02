@@ -36,7 +36,10 @@ def main():
 
     base = f"http://{args.host}:{args.port}"
     response = _request(
-        base, "PUT", f"/cameras/{args.camera_id}/lens_distortion_model", {"value": args.value}
+        base,
+        "PUT",
+        f"/cameras/{args.camera_id}/lens_distortion_model",
+        {"value": args.value},
     )
     print(f"response: {response}")
 

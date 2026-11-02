@@ -25,6 +25,7 @@ import gc
 
 import omni
 import omni.kit.commands
+import omni.kit.context_menu
 import omni.physx as _physx
 import omni.timeline
 import omni.usd
@@ -110,12 +111,26 @@ class Extension(omni.ext.IExt):
         # exists while the window is visible, but the bridge runs regardless.
         self._bridge_stage_event_sub = (
             self._usd_context.get_stage_event_stream().create_subscription_to_pop(
-                self._on_bridge_stage_event, name="telekinesis bridge device-registry reset"
+                self._on_bridge_stage_event,
+                name="telekinesis bridge device-registry reset",
             )
+        )
+
+        # Shown under right-click -> Create in the Stage panel and viewport. The returned
+        # subscription keeps the entry alive; dropping it in on_shutdown removes it.
+        extension_path = omni.kit.app.get_app().get_extension_manager().get_extension_path(ext_id)
+        self._create_context_menu = omni.kit.context_menu.add_menu(
+            {
+                "name": "Telekinesis Isaac Sim Bridge",
+                "glyph": f"{extension_path}/data/icon.png",
+                "onclick_fn": self._on_create_context_menu_clicked,
+            },
+            "CREATE",
         )
 
     def on_shutdown(self):
         """Stop the bridge server and release all subscriptions, menu items, and UI resources."""
+        self._create_context_menu = None
         self._bridge_stage_event_sub = None
         if getattr(self, "_bridge_server", None) is not None:
             self._bridge_server.stop()
@@ -204,6 +219,15 @@ class Extension(omni.ext.IExt):
         if event.type == int(StageEventType.OPENED) or event.type == int(StageEventType.CLOSED):
             if getattr(self, "_bridge_server", None) is not None:
                 self._bridge_server.reset_devices()
+
+    def _on_create_context_menu_clicked(self, objects: dict):
+        """Handle a click on the Telekinesis Isaac Sim Bridge entry in the right-click Create menu.
+
+        Args:
+            objects: Kit context-menu payload. ``prim_list`` holds the right-clicked prims and is
+                empty when the click was on empty space in the Stage panel.
+        """
+        carb.log_info(f"[{EXTENSION_TITLE}] Create menu clicked, prims: {objects.get('prim_list')}")
 
     def _on_stage_event(self, event):
         """Clean up physics subscription on stage open/close; forward event to UIBuilder."""

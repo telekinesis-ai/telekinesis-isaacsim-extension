@@ -145,8 +145,7 @@ class LightBeamSensor:
                 if _values(self._sensor.get_beam_hit_data(self.prim_path), bool) is not None:
                     self._initialized = True
                     carb.log_info(
-                        f"[bridge] bound lightbeam {self.prim_path}: "
-                        f"{self.get_num_rays()} beam(s)"
+                        f"[bridge] bound lightbeam {self.prim_path}: {self.get_num_rays()} beam(s)"
                     )
                     return
             except Exception as exc:  # buffers not ready yet -> keep pumping frames
@@ -228,9 +227,7 @@ class LightBeamSensor:
         # Then validate against the configuration the sensor will end up with rather
         # than only against the fields given, so a partial write cannot leave it in a
         # combination it cannot scan with.
-        resulting = {
-            field: writes.get(field, self._get_config(field)) for field in _CONFIG_ATTRS
-        }
+        resulting = {field: writes.get(field, self._get_config(field)) for field in _CONFIG_ATTRS}
 
         if resulting["num_rays"] < 1:
             raise ValueError("a lightbeam sensor needs at least one beam")
