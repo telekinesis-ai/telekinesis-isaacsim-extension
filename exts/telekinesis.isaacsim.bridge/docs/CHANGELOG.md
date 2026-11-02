@@ -1,5 +1,5 @@
 # Changelog
-## [Unreleased]
+## [0.8.1] - 2026-11-02
 ### Added
 - A "Telekinesis Isaac Sim Bridge" entry in the right-click Create menu of the Stage panel and
   viewport. It is a placeholder that only prints the right-clicked prims to the terminal.
