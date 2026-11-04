@@ -1480,7 +1480,7 @@
     {
       "manufacturer": "universal_robots",
       "model": "ur10",
-      "bundle": "usd/robots/manipulators/universal_robots/ur10.zip",
+      "bundle": "urdf/robots/manipulators/universal_robots/ur10.zip",
       "default_joint_configuration": [
         0.0,
         -90.0,
@@ -1494,7 +1494,7 @@
     {
       "manufacturer": "universal_robots",
       "model": "ur10e",
-      "bundle": "urdf/robots/manipulators/universal_robots/ur10e.zip",
+      "bundle": "usd/robots/manipulators/universal_robots/ur10e.zip",
       "default_joint_configuration": [
         0.0,
         -90.0,
