@@ -59,14 +59,18 @@ class AddToolWindow(AddAssetWindow):
 
     async def add_fetched_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Load the gripper and, when ``attaching_prim_path`` is part of a robot, assemble it on."""
-        robot_id = await self._articulation_service.find_robot_for_prim(attaching_prim_path)
+        robot_id = await self._articulation_service.find_robot_for_prim(
+            attaching_prim_path
+        )
         robot_prim_path = None
         if robot_id is not None:
             # Checked before anything is loaded, so a robot that stores no mount link
             # fails the add without leaving a gripper behind.
             self._articulation_service.resolve_arm_mount_link(robot_id)
             robot_prim_path = self._articulation_service.get_device(robot_id).prim_path
-        tool_path = self._free_destination_path(attaching_prim_path, asset["model"], robot_prim_path)
+        tool_path = self._free_destination_path(
+            attaching_prim_path, asset["model"], robot_prim_path
+        )
 
         if asset["category"] == SUCTION_GRIPPER_CATEGORY:
             tool = await self._surface_gripper_service.create_surface_gripper(
@@ -85,7 +89,12 @@ class AddToolWindow(AddAssetWindow):
         if robot_id is None:
             return f"Added {tool_id} at {tool['prim_path']}."
         assembly = await self._articulation_service.assemble_robot(
-            robot_id, tool_id, None, None, self._mount_offset_fields.transformation(), True
+            robot_id,
+            tool_id,
+            None,
+            None,
+            self._mount_offset_fields.transformation(),
+            True,
         )
         return (
             f"Added {tool_id} at {tool['prim_path']} and attached it to {robot_id} "

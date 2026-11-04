@@ -34,7 +34,9 @@ def _request(base, method, path, params=None, body=None):
 
 def main():
     """Disable collision on a prim, then re-enable it."""
-    parser = argparse.ArgumentParser(description="Enable or disable collision on a prim.")
+    parser = argparse.ArgumentParser(
+        description="Enable or disable collision on a prim."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--prim", required=True, help="prim path, e.g. /World/Cube")

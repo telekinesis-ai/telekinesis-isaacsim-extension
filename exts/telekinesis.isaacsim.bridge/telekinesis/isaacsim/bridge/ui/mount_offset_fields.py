@@ -24,7 +24,9 @@ class MountOffsetFields:
             for axis in "XYZ"
         ]
         self._rotation_fields = [
-            element_wrappers.FloatField(f"Rotation {axis} (deg)", format="%.1f", step=1.0)
+            element_wrappers.FloatField(
+                f"Rotation {axis} (deg)", format="%.1f", step=1.0
+            )
             for axis in "XYZ"
         ]
 

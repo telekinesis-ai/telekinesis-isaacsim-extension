@@ -44,7 +44,9 @@ def _brief(payload):
 def _call(base, method, path, body=None):
     """Return (ok, status, payload). payload is JSON on success, else the detail."""
     try:
-        resp = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+        resp = requests.request(
+            method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+        )
     except requests.exceptions.RequestException as exc:
         return False, "ERR", str(exc)
     payload = resp.json() if resp.content else None
@@ -151,7 +153,9 @@ def _exercise_config_routes(base, root):
     """Exercise scan-configuration GET/PUT routes via round-trips."""
     _roundtrip(base, f"{root}/min_range", f"{root}/min_range", "min_range")
     _roundtrip(base, f"{root}/max_range", f"{root}/max_range", "max_range")
-    _roundtrip(base, f"{root}/horizontal_fov", f"{root}/horizontal_fov", "horizontal_fov")
+    _roundtrip(
+        base, f"{root}/horizontal_fov", f"{root}/horizontal_fov", "horizontal_fov"
+    )
     _roundtrip(base, f"{root}/vertical_fov", f"{root}/vertical_fov", "vertical_fov")
     _roundtrip(
         base,
@@ -170,7 +174,9 @@ def _exercise_config_routes(base, root):
     _roundtrip(base, f"{root}/high_lod", f"{root}/high_lod", "high_lod")
     _roundtrip(base, f"{root}/draw_points", f"{root}/draw_points", "draw_points")
     _roundtrip(base, f"{root}/draw_lines", f"{root}/draw_lines", "draw_lines")
-    _roundtrip(base, f"{root}/enable_semantics", f"{root}/enable_semantics", "enable_semantics")
+    _roundtrip(
+        base, f"{root}/enable_semantics", f"{root}/enable_semantics", "enable_semantics"
+    )
 
 
 def _exercise_introspection_routes(base, root):
@@ -228,7 +234,9 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--prim", required=True, help="lidar prim path to register")
-    parser.add_argument("--keep", action="store_true", help="don't delete the lidar at the end")
+    parser.add_argument(
+        "--keep", action="store_true", help="don't delete the lidar at the end"
+    )
     args = parser.parse_args()
     base = f"http://{args.host}:{args.port}"
     _exercise_routes(base, args)
@@ -240,7 +248,9 @@ def _summary():
     for _, verdict, _detail in _results:
         counts[verdict] += 1
     print("\n" + "=" * 60)
-    print(f"SUMMARY: {counts['PASS']} passed, {counts['FAIL']} failed, {counts['SKIP']} skipped")
+    print(
+        f"SUMMARY: {counts['PASS']} passed, {counts['FAIL']} failed, {counts['SKIP']} skipped"
+    )
     if counts["FAIL"]:
         print("\nFailures:")
         for label, verdict, detail in _results:

@@ -67,7 +67,9 @@ ATTACH_OFFSET = None
 try:
     robot_description = telekinesis_urdfs.load("UniversalRobotsUR10e")
     if not robot_description.urdf_path.is_file():
-        raise ValueError(f"No urdf found, i.e. {robot_description.urdf_path} is not a file")
+        raise ValueError(
+            f"No urdf found, i.e. {robot_description.urdf_path} is not a file"
+        )
 except Exception as e:
     raise RuntimeError(
         "Failed to load robot description 'UniversalRobotsUR10e'. "
@@ -87,7 +89,9 @@ DEFAULT_TIMEOUT = 120.0
 
 def _request(base, method, path, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
-    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+    response = requests.request(
+        method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+    )
     response.raise_for_status()
     return response.json() if response.content else None
 
@@ -104,7 +108,9 @@ def run(
 ):
     """Create the arm and gripper, assemble them, then drive both on the shared rig."""
     # 1) Create the arm (urdf_path imports it if arm_prim isn't in the stage).
-    arm = _request(base, "PUT", "/articulations", {"prim_path": arm_prim, "urdf_path": arm_urdf})
+    arm = _request(
+        base, "PUT", "/articulations", {"prim_path": arm_prim, "urdf_path": arm_urdf}
+    )
     arm_id = arm["articulation_id"]
     print(
         f"created arm: articulation_id={arm_id} prim_path={arm['prim_path']} dof={arm['num_dof']}"
@@ -125,9 +131,9 @@ def run(
         f"/articulations/{gripper_id}/driven_joints",
         {"joint_names": [driver["name"]]},
     )
-    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{gripper_id}/dof_limits")[
-        "limits"
-    ][0]
+    opened_rad, closed_rad = _request(
+        base, "GET", f"/articulations/{gripper_id}/dof_limits"
+    )["limits"][0]
     print(
         f"created gripper: articulation_id={gripper_id} prim_path={gripper['prim_path']} "
         f"driver='{driver['name']}'"
@@ -154,7 +160,9 @@ def run(
         f"  mounts: arm={merged['arm_mount_link']} "
         f"gripper={merged['gripper_mount_link']} (resolved)"
     )
-    print(f"  arm drives {merged['robot']['num_dof']} dof: {merged['robot']['dof_names']}")
+    print(
+        f"  arm drives {merged['robot']['num_dof']} dof: {merged['robot']['dof_names']}"
+    )
 
     # 4) Move the arm with the same 6-value payload as a standalone arm.
     print(f"move arm target (deg): {TARGET_DEG}")
@@ -200,7 +208,9 @@ def main():
         default=GRIPPER_PRIM_PATH,
         help="prim path of the gripper in the stage",
     )
-    parser.add_argument("--arm-urdf", default=ARM_URDF_PATH, help="path to the arm URDF to import")
+    parser.add_argument(
+        "--arm-urdf", default=ARM_URDF_PATH, help="path to the arm URDF to import"
+    )
     parser.add_argument(
         "--gripper-urdf", default=None, help="optional URDF to import the gripper from"
     )

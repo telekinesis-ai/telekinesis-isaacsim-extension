@@ -75,7 +75,9 @@ def get_stage_units(base_url):
 
 def update_stage_units(base_url, meters_per_unit):
     """PUT /stage/units -> set the stage scale."""
-    return _request(base_url, "PUT", "/stage/units", body={"meters_per_unit": meters_per_unit})
+    return _request(
+        base_url, "PUT", "/stage/units", body={"meters_per_unit": meters_per_unit}
+    )
 
 
 def timeline_action(base_url, action):
@@ -105,7 +107,9 @@ def update_pose(base_url, prim_path, pose):
     return _request(base_url, "PUT", "/prims/poses", body=body)
 
 
-def get_relative_pose(base_url, prim_path_1, prim_path_2, mode="normal", rotation_type="cartesian"):
+def get_relative_pose(
+    base_url, prim_path_1, prim_path_2, mode="normal", rotation_type="cartesian"
+):
     """GET /prims/poses/relative -> pose of prim 2 in prim 1's frame."""
     params = {
         "prim_path_1": prim_path_1,
@@ -133,7 +137,9 @@ def list_default_poses(base_url):
 
 def assign_default_poses(base_url, prim_path):
     """PUT /prims/poses/default -> record a prim's current pose as its default."""
-    return _request(base_url, "PUT", "/prims/poses/default", body={"prim_path": prim_path})
+    return _request(
+        base_url, "PUT", "/prims/poses/default", body={"prim_path": prim_path}
+    )
 
 
 def clear_default_poses(base_url):
@@ -143,7 +149,9 @@ def clear_default_poses(base_url):
 
 def reset_to_default_poses(base_url, prim_path):
     """POST /prims/poses/default/reset -> restore a prim to its default pose."""
-    return _request(base_url, "POST", "/prims/poses/default/reset", body={"prim_path": prim_path})
+    return _request(
+        base_url, "POST", "/prims/poses/default/reset", body={"prim_path": prim_path}
+    )
 
 
 def set_prim_metadata(base_url, prim_path, category, type_):
@@ -154,7 +162,9 @@ def set_prim_metadata(base_url, prim_path, category, type_):
 
 def remove_prim_metadata(base_url, prim_path):
     """DELETE /prims/metadata -> remove a prim's stored metadata."""
-    return _request(base_url, "DELETE", "/prims/metadata", params={"prim_path": prim_path})
+    return _request(
+        base_url, "DELETE", "/prims/metadata", params={"prim_path": prim_path}
+    )
 
 
 def set_prim_visibility(base_url, prim_path, visibility="show"):
@@ -210,7 +220,9 @@ def test_prims(base_url, prim_path):
     update_pose(base_url, prim_path, nudged_pose)
     print("  pose (after move +X):  ", get_pose(base_url, prim_path, "world"))
 
-    print("  relative pose (self):  ", get_relative_pose(base_url, prim_path, prim_path))
+    print(
+        "  relative pose (self):  ", get_relative_pose(base_url, prim_path, prim_path)
+    )
 
     apply_relative_pose(base_url, prim_path, [0.01, 0, 0, 0, 0, 0])
     print("  pose (after nudge):    ", get_pose(base_url, prim_path, "world"))
@@ -254,7 +266,9 @@ def test_prims(base_url, prim_path):
 
 def main():
     """Parse CLI args and exercise every implemented route end-to-end."""
-    parser = argparse.ArgumentParser(description="Call the implemented bridge extension routes.")
+    parser = argparse.ArgumentParser(
+        description="Call the implemented bridge extension routes."
+    )
     parser.add_argument(
         "--base_url", default=DEFAULT_BASE_URL, help="Base URL of the running bridge"
     )

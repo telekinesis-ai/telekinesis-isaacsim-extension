@@ -1691,7 +1691,7 @@
     {
       "manufacturer": "robotiq",
       "model": "robotiqhande",
-      "bundle": "urdf/tools/parallel_grippers/robotiq/robotiqhande.zip"
+      "bundle": "usd/tools/parallel_grippers/robotiq/Robotiq_Hand_E.zip"
     },
     {
       "manufacturer": "schunk",

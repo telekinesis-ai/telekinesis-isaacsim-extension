@@ -155,7 +155,9 @@ def _quaternion_to_rotation(quaternion):
 
 def _rotation_to_quaternion(rotation_deg):
     """USD quaternion (``Gf.Quatf``) for XYZ Euler degrees."""
-    rotation = transform.Rotation.from_euler(_EULER_SEQUENCE, rotation_deg, degrees=True)
+    rotation = transform.Rotation.from_euler(
+        _EULER_SEQUENCE, rotation_deg, degrees=True
+    )
     x, y, z, w = rotation.as_quat()
     return Gf.Quatf(float(w), Gf.Vec3f(float(x), float(y), float(z)))
 
@@ -216,10 +218,14 @@ class SurfaceGripper:
         for _ in range(_BIND_RETRIES):
             try:
                 stage = self._stage()
-                self.gripper_prim_path = find_surface_gripper_prim(stage, self.prim_path)
+                self.gripper_prim_path = find_surface_gripper_prim(
+                    stage, self.prim_path
+                )
                 self.attachment_point_paths = self._resolve_attachment_points(stage)
                 if self.attachment_point_paths:
-                    self._interface = _surface_gripper.acquire_surface_gripper_interface()
+                    self._interface = (
+                        _surface_gripper.acquire_surface_gripper_interface()
+                    )
                     # Mirror the runtime status and gripped objects into USD. Worth
                     # doing for its own sake (isaac:status becomes readable while
                     # stopped), but also necessary: the gripper component re-reads
@@ -309,9 +315,13 @@ class SurfaceGripper:
         simulated = omni.timeline.get_timeline_interface().is_playing()
         if simulated:
             status = self._interface.get_gripper_status(self.gripper_prim_path).name
-            gripped_objects = list(self._interface.get_gripped_objects(self.gripper_prim_path))
+            gripped_objects = list(
+                self._interface.get_gripped_objects(self.gripper_prim_path)
+            )
         else:
-            authored = self._gripper_prim().GetAttribute(robot_schema.Attributes.STATUS.name)
+            authored = self._gripper_prim().GetAttribute(
+                robot_schema.Attributes.STATUS.name
+            )
             status = authored.Get() if authored else None
             gripped_objects = []
         return {
@@ -350,7 +360,9 @@ class SurfaceGripper:
             "max_grip_distance": _float_attribute(
                 prim, robot_schema.Attributes.MAX_GRIP_DISTANCE.name
             ),
-            "retry_interval": _float_attribute(prim, robot_schema.Attributes.RETRY_INTERVAL.name),
+            "retry_interval": _float_attribute(
+                prim, robot_schema.Attributes.RETRY_INTERVAL.name
+            ),
             "forward_axis": forward_axis.Get() if forward_axis else None,
         }
 
@@ -400,7 +412,9 @@ class SurfaceGripper:
                 float(max_grip_distance),
             )
         if retry_interval is not None:
-            _set_attribute(prim, robot_schema.Attributes.RETRY_INTERVAL, float(retry_interval))
+            _set_attribute(
+                prim, robot_schema.Attributes.RETRY_INTERVAL, float(retry_interval)
+            )
         if forward_axis is not None:
             _set_attribute(
                 prim,
@@ -430,7 +444,9 @@ class SurfaceGripper:
         open; the gripper replaces it with the gripped object on close, so a
         reading taken during a grip reports that object instead.
         """
-        return [self._attachment_point_info(path) for path in self.attachment_point_paths]
+        return [
+            self._attachment_point_info(path) for path in self.attachment_point_paths
+        ]
 
     def set_attachment_point_properties(
         self,
@@ -476,9 +492,13 @@ class SurfaceGripper:
             ):
                 drive = UsdPhysics.DriveAPI.Apply(prim, _SUCTION_DRIVE)
                 if z_axis_translation_drive_stiffness is not None:
-                    drive.CreateStiffnessAttr().Set(float(z_axis_translation_drive_stiffness))
+                    drive.CreateStiffnessAttr().Set(
+                        float(z_axis_translation_drive_stiffness)
+                    )
                 if z_axis_translation_drive_damping is not None:
-                    drive.CreateDampingAttr().Set(float(z_axis_translation_drive_damping))
+                    drive.CreateDampingAttr().Set(
+                        float(z_axis_translation_drive_damping)
+                    )
             if rotation_limits is not None:
                 _apply_axis_limits(prim, "rot", rotation_limits)
             if translation_limits is not None:
@@ -531,7 +551,11 @@ class SurfaceGripper:
 
         app = omni.kit.app.get_app()
         async with self._action_lock:
-            command = self._interface.close_gripper if closing else self._interface.open_gripper
+            command = (
+                self._interface.close_gripper
+                if closing
+                else self._interface.open_gripper
+            )
             if not command(self.gripper_prim_path):
                 raise RuntimeError(
                     f"the simulation did not accept the command for surface gripper "
@@ -562,7 +586,9 @@ class SurfaceGripper:
                     return {"done": True, "timed_out": False, **state}
                 if state["gripped_objects"]:
                     settled_frames = (
-                        settled_frames + 1 if state["gripped_objects"] == previous_grip else 0
+                        settled_frames + 1
+                        if state["gripped_objects"] == previous_grip
+                        else 0
                     )
                     if settled_frames >= _SETTLED_FRAMES:
                         return {"done": True, "timed_out": False, **state}
@@ -617,7 +643,9 @@ class SurfaceGripper:
         """
         if joint_paths is None:
             return list(self.attachment_point_paths)
-        unknown = [path for path in joint_paths if path not in self.attachment_point_paths]
+        unknown = [
+            path for path in joint_paths if path not in self.attachment_point_paths
+        ]
         if unknown:
             raise ValueError(
                 f"{unknown} are not attachment points of surface gripper "
@@ -632,8 +660,12 @@ class SurfaceGripper:
         forward_axis = prim.GetAttribute(robot_schema.Attributes.FORWARD_AXIS.name)
         return {
             "prim_path": path,
-            "body_0": [target.pathString for target in joint.GetBody0Rel().GetTargets()],
-            "body_1": [target.pathString for target in joint.GetBody1Rel().GetTargets()],
+            "body_0": [
+                target.pathString for target in joint.GetBody0Rel().GetTargets()
+            ],
+            "body_1": [
+                target.pathString for target in joint.GetBody1Rel().GetTargets()
+            ],
             "local_pose_0": self._local_pose(prim, 0),
             "local_pose_1": self._local_pose(prim, 1),
             "z_axis_translation_drive_stiffness": _float_attribute(
@@ -661,8 +693,12 @@ class SurfaceGripper:
         rotation = prim.GetAttribute(f"physics:localRot{body}")
         quaternion = rotation.Get() if rotation else None
         return {
-            "translation": list(position.Get()) if position and position.Get() else None,
-            "rotation": _quaternion_to_rotation(quaternion) if quaternion is not None else None,
+            "translation": list(position.Get())
+            if position and position.Get()
+            else None,
+            "rotation": _quaternion_to_rotation(quaternion)
+            if quaternion is not None
+            else None,
         }
 
     @staticmethod
@@ -674,14 +710,22 @@ class SurfaceGripper:
                 raise ValueError(
                     f"expected an [x, y, z] translation, got {len(pose.translation)} value(s)"
                 )
-            attribute = joint.CreateLocalPos0Attr() if body == 0 else joint.CreateLocalPos1Attr()
+            attribute = (
+                joint.CreateLocalPos0Attr()
+                if body == 0
+                else joint.CreateLocalPos1Attr()
+            )
             attribute.Set(Gf.Vec3f(*(float(value) for value in pose.translation)))
         if pose.rotation is not None:
             if len(pose.rotation) != 3:
                 raise ValueError(
                     f"expected [rx, ry, rz] Euler degrees, got {len(pose.rotation)} value(s)"
                 )
-            attribute = joint.CreateLocalRot0Attr() if body == 0 else joint.CreateLocalRot1Attr()
+            attribute = (
+                joint.CreateLocalRot0Attr()
+                if body == 0
+                else joint.CreateLocalRot1Attr()
+            )
             attribute.Set(_rotation_to_quaternion(pose.rotation))
 
     @staticmethod
@@ -713,5 +757,7 @@ class SurfaceGripper:
         """One attachment-point joint prim, or ``ValueError`` if it left the stage."""
         prim = self._stage().GetPrimAtPath(Sdf.Path(path))
         if not prim.IsValid() or not prim.IsA(UsdPhysics.Joint):
-            raise ValueError(f"attachment point {path!r} is not a physics joint in the open stage")
+            raise ValueError(
+                f"attachment point {path!r} is not a physics joint in the open stage"
+            )
         return prim

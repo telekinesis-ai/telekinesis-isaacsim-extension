@@ -78,14 +78,17 @@ class AssetLibraryService:
                 entries = await self._list_bucket_category(category)
             if not entries:
                 raise HTTPException(
-                    status_code=404, detail=f"asset category '{category}' holds no assets"
+                    status_code=404,
+                    detail=f"asset category '{category}' holds no assets",
                 )
             self._entries_by_category[category] = sorted(
                 entries, key=lambda entry: (entry["manufacturer"] or "", entry["model"])
             )
         return self._entries_by_category[category]
 
-    async def fetch_asset(self, category: str, manufacturer: str | None, model: str) -> dict:
+    async def fetch_asset(
+        self, category: str, manufacturer: str | None, model: str
+    ) -> dict:
         """Make the asset available locally and return its catalogue entry.
 
         The bundle is downloaded and extracted on first use only. The returned entry
@@ -105,7 +108,8 @@ class AssetLibraryService:
             (
                 candidate
                 for candidate in entries
-                if candidate["manufacturer"] == manufacturer and candidate["model"] == model
+                if candidate["manufacturer"] == manufacturer
+                and candidate["model"] == model
             ),
             None,
         )
@@ -118,7 +122,9 @@ class AssetLibraryService:
         # TODO: a cached bundle is never refreshed, so a bundle replaced on S3 keeps serving
         # the old copy until its cache folder is deleted by hand. Re-download when the bucket's
         # version differs (e.g. the listing's ETag / modified time, stored beside the extraction).
-        bundle_directory = self._cache_directory / pathlib.PurePosixPath(entry["bundle"]).with_suffix("")
+        bundle_directory = self._cache_directory / pathlib.PurePosixPath(
+            entry["bundle"]
+        ).with_suffix("")
         async with self._fetch_locks.setdefault(entry["bundle"], asyncio.Lock()):
             if not bundle_directory.is_dir():
                 url = f"{ASSET_LIBRARY_URL or LEGACY_BUNDLE_URL}/{entry['bundle']}"
@@ -129,14 +135,20 @@ class AssetLibraryService:
                         detail=f"failed to download asset bundle {url}: {result.name}",
                     )
                 await asyncio.to_thread(
-                    self._extract_bundle, memoryview(content).tobytes(), bundle_directory
+                    self._extract_bundle,
+                    memoryview(content).tobytes(),
+                    bundle_directory,
                 )
 
         main_file_suffixes = (
-            URDF_SUFFIXES | USD_SUFFIXES if category.startswith("urdf/") else USD_OR_MESH_SUFFIXES
+            URDF_SUFFIXES | USD_SUFFIXES
+            if category.startswith("urdf/")
+            else USD_OR_MESH_SUFFIXES
         )
         main_files = [
-            path for path in bundle_directory.rglob("*") if path.suffix.lower() in main_file_suffixes
+            path
+            for path in bundle_directory.rglob("*")
+            if path.suffix.lower() in main_file_suffixes
         ]
         if not main_files:
             raise HTTPException(
@@ -162,7 +174,9 @@ class AssetLibraryService:
             if not manufacturer_folder.flags & omni.client.ItemFlags.CAN_HAVE_CHILDREN:
                 continue
             manufacturer = manufacturer_folder.relative_path.rstrip("/")
-            for bundle_file in await self._list_bucket_folder(f"{category}/{manufacturer}/"):
+            for bundle_file in await self._list_bucket_folder(
+                f"{category}/{manufacturer}/"
+            ):
                 if bundle_file.relative_path.endswith(".zip"):
                     entries.append(
                         {
@@ -187,11 +201,15 @@ class AssetLibraryService:
                 omni.client.list_async(url), timeout=LISTING_TIMEOUT_SECONDS
             )
         except asyncio.TimeoutError as exc:
-            raise HTTPException(status_code=502, detail=f"listing {url} timed out") from exc
+            raise HTTPException(
+                status_code=502, detail=f"listing {url} timed out"
+            ) from exc
         if result == omni.client.Result.ERROR_NOT_FOUND:
             return []
         if result != omni.client.Result.OK:
-            raise HTTPException(status_code=502, detail=f"failed to list {url}: {result.name}")
+            raise HTTPException(
+                status_code=502, detail=f"failed to list {url}: {result.name}"
+            )
         return list(entries)
 
     # TODO: delete when the S3 bucket is public (see LOCAL_ASSET_INDEX_FILE).
@@ -212,7 +230,9 @@ class AssetLibraryService:
             .get_extension_manager()
             .get_extension_path_by_module("telekinesis.isaacsim.bridge")
         )
-        index = json.loads(pathlib.Path(extension_path, LOCAL_ASSET_INDEX_FILE).read_text())
+        index = json.loads(
+            pathlib.Path(extension_path, LOCAL_ASSET_INDEX_FILE).read_text()
+        )
         return index.get(category, [])
 
     @staticmethod
@@ -227,7 +247,9 @@ class AssetLibraryService:
         Raises:
             HTTPException: 502 if the archive is not a valid ZIP.
         """
-        partial_directory = bundle_directory.with_name(bundle_directory.name + ".partial")
+        partial_directory = bundle_directory.with_name(
+            bundle_directory.name + ".partial"
+        )
         shutil.rmtree(partial_directory, ignore_errors=True)
         partial_directory.mkdir(parents=True)
         try:
@@ -235,6 +257,7 @@ class AssetLibraryService:
                 archive.extractall(partial_directory)
         except zipfile.BadZipFile as exc:
             raise HTTPException(
-                status_code=502, detail=f"asset bundle for '{bundle_directory.name}' is not a ZIP: {exc}"
+                status_code=502,
+                detail=f"asset bundle for '{bundle_directory.name}' is not a ZIP: {exc}",
             ) from exc
         partial_directory.rename(bundle_directory)

@@ -50,7 +50,9 @@ def main():
     parser = argparse.ArgumentParser(description="Register a prim as a lidar.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument("--prim", default=LIDAR_PRIM_PATH, help="lidar prim path to register")
+    parser.add_argument(
+        "--prim", default=LIDAR_PRIM_PATH, help="lidar prim path to register"
+    )
     parser.add_argument(
         "--rotation-rate",
         type=float,

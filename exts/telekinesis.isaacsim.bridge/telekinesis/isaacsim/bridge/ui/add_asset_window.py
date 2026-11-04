@@ -118,7 +118,9 @@ class AddAssetWindow(abc.ABC):
         if self._add_button.enabled:
             self.reset_extra_fields()
         self._window.visible = True
-        if not self._assets and (self._catalogue_load is None or self._catalogue_load.done()):
+        if not self._assets and (
+            self._catalogue_load is None or self._catalogue_load.done()
+        ):
             self._catalogue_load = asyncio.ensure_future(self._load_catalogue())
 
     def destroy(self):
@@ -142,7 +144,8 @@ class AddAssetWindow(abc.ABC):
             assets.extend({**entry, "category": category} for entry in entries)
         self._assets = assets
         self._manufacturer_dropdown.set_items(
-            sorted({self._manufacturer_label(asset) for asset in self._assets}), select_index=0
+            sorted({self._manufacturer_label(asset) for asset in self._assets}),
+            select_index=0,
         )
         self._model_dropdown.repopulate()
         self._status_label.text = "; ".join(errors)
@@ -151,7 +154,9 @@ class AddAssetWindow(abc.ABC):
         """Return the models of the manufacturer selected in the Manufacturer dropdown."""
         manufacturer = self._manufacturer_dropdown.get_selection()
         return sorted(
-            asset["model"] for asset in self._assets if self._manufacturer_label(asset) == manufacturer
+            asset["model"]
+            for asset in self._assets
+            if self._manufacturer_label(asset) == manufacturer
         )
 
     def _on_add_clicked(self):
@@ -167,7 +172,8 @@ class AddAssetWindow(abc.ABC):
             (
                 candidate
                 for candidate in self._assets
-                if self._manufacturer_label(candidate) == manufacturer and candidate["model"] == model
+                if self._manufacturer_label(candidate) == manufacturer
+                and candidate["model"] == model
             ),
             None,
         )
@@ -176,7 +182,9 @@ class AddAssetWindow(abc.ABC):
             return
         attaching_prim_path = self._attaching_prim_field.get_value()
         if not omni.usd.get_context().get_stage().GetPrimAtPath(attaching_prim_path):
-            self._status_label.text = f"'{attaching_prim_path}' is not a prim in the stage."
+            self._status_label.text = (
+                f"'{attaching_prim_path}' is not a prim in the stage."
+            )
             return
 
         self._status_label.text = ""
@@ -212,7 +220,9 @@ class AddAssetWindow(abc.ABC):
             f"Adding {asset_label} failed: {reason}",
             hide_after_timeout=False,
             status=notification_manager.NotificationStatus.WARNING,
-            button_infos=[notification_manager.NotificationButtonInfo("OK", on_complete=None)],
+            button_infos=[
+                notification_manager.NotificationButtonInfo("OK", on_complete=None)
+            ],
         )
 
     @staticmethod
@@ -234,7 +244,9 @@ class AddAssetWindow(abc.ABC):
         if robot_prim_path is None:
             path = f"{attaching_prim_path.rstrip('/')}/{prim_name}"
         else:
-            path = asset_loader.path_beside_clear_of_rigid_bodies(stage, robot_prim_path, prim_name)
+            path = asset_loader.path_beside_clear_of_rigid_bodies(
+                stage, robot_prim_path, prim_name
+            )
         return omni.usd.get_stage_next_free_path(stage, path, False)
 
     @staticmethod

@@ -47,7 +47,9 @@ DEFAULT_TIMEOUT = 120.0
 
 def _request(base, method, path, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
-    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+    response = requests.request(
+        method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+    )
     response.raise_for_status()
     return response.json() if response.content else None
 
@@ -80,15 +82,21 @@ def wait_until_reached(
         if max_error < tolerance_rad:
             return {"reached": True, "max_error": max_error}
         time.sleep(poll_s)
-    q = _request(base, "GET", f"/articulations/{articulation_id}/joints_state")["joint_positions"]
+    q = _request(base, "GET", f"/articulations/{articulation_id}/joints_state")[
+        "joint_positions"
+    ]
     return {"reached": False, "max_error": max(abs(a - b) for a, b in zip(q, target))}
 
 
 def run(base, prim_path):
     """Register the robot, then drive it through all three move_j styles in turn."""
-    info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": None})
+    info = _request(
+        base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": None}
+    )
     articulation_id = info["articulation_id"]
-    print(f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
+    print(
+        f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}"
+    )
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
 
     # 1) asynchronous, fire-and-forget -------------------------------------------
@@ -97,15 +105,21 @@ def run(base, prim_path):
     result = move_j(base, articulation_id, target_a, asynchronous=True)
     print(f"  returned immediately: {result}")
     time.sleep(2)
-    q = _request(base, "GET", f"/articulations/{articulation_id}/joints_state")["joint_positions"]
-    print(f"  state shortly after (still moving): joint_positions={[round(v, 3) for v in q]}")
+    q = _request(base, "GET", f"/articulations/{articulation_id}/joints_state")[
+        "joint_positions"
+    ]
+    print(
+        f"  state shortly after (still moving): joint_positions={[round(v, 3) for v in q]}"
+    )
 
     # 2) asynchronous, then wait client-side for a tolerance ---------------------
     print(f"\n[2] async + client-side wait -> {TARGET_B_DEG}")
     target_b = np.deg2rad(TARGET_B_DEG).tolist()
     move_j(base, articulation_id, target_b, asynchronous=True)
     status = wait_until_reached(base, articulation_id, target_b, tolerance_rad=5e-3)
-    print(f"  client saw reached={status['reached']} (max_error={status['max_error']:.2e} rad)")
+    print(
+        f"  client saw reached={status['reached']} (max_error={status['max_error']:.2e} rad)"
+    )
 
     # 3) blocking ----------------------------------------------------------------
     print(f"\n[3] blocking -> {TARGET_C_DEG}")

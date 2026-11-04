@@ -145,7 +145,9 @@ class LidarService:
             previous = self._devices.get(lidar_id)
             if previous is not None and previous is not device:
                 self._safe_destroy(previous)
-            self._id_by_prim[prim_path] = lidar_id  # no-op on re-PUT; commits a fresh id
+            self._id_by_prim[prim_path] = (
+                lidar_id  # no-op on re-PUT; commits a fresh id
+            )
             self._devices[lidar_id] = device
             return {
                 "lidar_id": lidar_id,
@@ -162,7 +164,9 @@ class LidarService:
         """Unregister the lidar (the USD prim is left in the stage). 404 if unknown."""
         device = self._devices.get(lidar_id)
         if device is None:
-            raise HTTPException(status_code=404, detail=f"no lidar registered with id '{lidar_id}'")
+            raise HTTPException(
+                status_code=404, detail=f"no lidar registered with id '{lidar_id}'"
+            )
         self._safe_destroy(device)
         del self._devices[lidar_id]
         for prim, registered_id in list(self._id_by_prim.items()):
@@ -173,7 +177,9 @@ class LidarService:
 
     def list_lidars(self):
         """Return a ``{lidar_id: prim_path}`` map of every registered lidar."""
-        return {lidar_id: device.prim_path for lidar_id, device in self._devices.items()}
+        return {
+            lidar_id: device.prim_path for lidar_id, device in self._devices.items()
+        }
 
     # -- capture ---------------------------------------------------------------
 
@@ -285,7 +291,11 @@ class LidarService:
 
     def get_horizontal_resolution(self, lidar_id):
         """Horizontal angular resolution (degrees per column)."""
-        return {"horizontal_resolution": self.get_device(lidar_id).get_horizontal_resolution()}
+        return {
+            "horizontal_resolution": self.get_device(
+                lidar_id
+            ).get_horizontal_resolution()
+        }
 
     def set_horizontal_resolution(self, lidar_id, value):
         """Set the horizontal angular resolution (degrees per column)."""
@@ -295,7 +305,9 @@ class LidarService:
 
     def get_vertical_resolution(self, lidar_id):
         """Vertical angular resolution (degrees per row)."""
-        return {"vertical_resolution": self.get_device(lidar_id).get_vertical_resolution()}
+        return {
+            "vertical_resolution": self.get_device(lidar_id).get_vertical_resolution()
+        }
 
     def set_vertical_resolution(self, lidar_id, value):
         """Set the vertical angular resolution (degrees per row)."""

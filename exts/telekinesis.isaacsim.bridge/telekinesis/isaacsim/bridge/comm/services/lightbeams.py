@@ -111,7 +111,9 @@ class LightBeamService:
             previous = self._devices.get(lightbeam_id)
             if previous is not None and previous is not device:
                 self._safe_destroy(previous)
-            self._id_by_prim[prim_path] = lightbeam_id  # no-op on re-PUT; commits a fresh id
+            self._id_by_prim[prim_path] = (
+                lightbeam_id  # no-op on re-PUT; commits a fresh id
+            )
             self._devices[lightbeam_id] = device
             return {"lightbeam_id": lightbeam_id, **device.info()}
 
@@ -138,7 +140,10 @@ class LightBeamService:
 
     def list_lightbeams(self):
         """Return a ``{lightbeam_id: prim_path}`` map of every registered sensor."""
-        return {lightbeam_id: device.prim_path for lightbeam_id, device in self._devices.items()}
+        return {
+            lightbeam_id: device.prim_path
+            for lightbeam_id, device in self._devices.items()
+        }
 
     # -- readings --------------------------------------------------------------
 

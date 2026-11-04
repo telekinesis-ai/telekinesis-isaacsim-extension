@@ -38,7 +38,9 @@ def _brief(payload):
 def _call(base, method, path, body=None):
     """Return (ok, status, payload). payload is JSON on success, else the detail."""
     try:
-        resp = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+        resp = requests.request(
+            method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+        )
     except requests.exceptions.RequestException as exc:
         return False, "ERR", str(exc)
     payload = resp.json() if resp.content else None
@@ -116,8 +118,12 @@ def _exercise_attachment_point_routes(base, root):
             f"{root}/attachment_points",
             {
                 "joint_paths": [first["prim_path"]],
-                "z_axis_translation_drive_stiffness": first["z_axis_translation_drive_stiffness"],
-                "z_axis_translation_drive_damping": first["z_axis_translation_drive_damping"],
+                "z_axis_translation_drive_stiffness": first[
+                    "z_axis_translation_drive_stiffness"
+                ],
+                "z_axis_translation_drive_damping": first[
+                    "z_axis_translation_drive_damping"
+                ],
                 "rotation_limits": first["rotation_limits"] or None,
                 "translation_limits": first["translation_limits"] or None,
                 "clearance_offset": first["clearance_offset"],
@@ -129,7 +135,9 @@ def _exercise_attachment_point_routes(base, root):
 
 def _exercise_routes(base, args):
     """Register a surface gripper and exercise every exposed surface gripper route."""
-    ok, status, payload = _call(base, "PUT", "/surface_grippers", {"prim_path": args.prim})
+    ok, status, payload = _call(
+        base, "PUT", "/surface_grippers", {"prim_path": args.prim}
+    )
     created = _record("PUT /surface_grippers (create)", ok, status, payload)
     if not created or "surface_gripper_id" not in created:
         print(
@@ -155,7 +163,9 @@ def _summary():
     for _, verdict, _detail in _results:
         counts[verdict] += 1
     print("\n" + "=" * 60)
-    print(f"SUMMARY: {counts['PASS']} passed, {counts['FAIL']} failed, {counts['SKIP']} skipped")
+    print(
+        f"SUMMARY: {counts['PASS']} passed, {counts['FAIL']} failed, {counts['SKIP']} skipped"
+    )
     if counts["FAIL"]:
         print("\nFailures:")
         for label, verdict, detail in _results:
@@ -165,7 +175,9 @@ def _summary():
 
 def main():
     """Smoke-test the surface gripper routes exposed by the bridge."""
-    parser = argparse.ArgumentParser(description="Smoke-test every /surface_grippers route.")
+    parser = argparse.ArgumentParser(
+        description="Smoke-test every /surface_grippers route."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
@@ -173,7 +185,9 @@ def main():
         default="/World/defitech_modelled_surface_gripper",
         help="suction gripper prim path to register",
     )
-    parser.add_argument("--keep", action="store_true", help="don't delete the gripper at the end")
+    parser.add_argument(
+        "--keep", action="store_true", help="don't delete the gripper at the end"
+    )
     args = parser.parse_args()
     base = f"http://{args.host}:{args.port}"
     _exercise_routes(base, args)

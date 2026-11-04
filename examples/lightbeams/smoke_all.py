@@ -39,7 +39,9 @@ _results = []  # (label, "PASS" | "FAIL" | "SKIP", detail)
 def _call(base, method, path, body=None):
     """Return (ok, status, payload). payload is JSON on success, else the detail."""
     try:
-        resp = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+        resp = requests.request(
+            method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+        )
     except requests.exceptions.RequestException as exc:
         return False, "ERR", str(exc)
     payload = resp.json() if resp.content else None
@@ -109,7 +111,9 @@ def _summary():
     for _, verdict, _detail in _results:
         counts[verdict] += 1
     print("\n" + "=" * 60)
-    print(f"SUMMARY: {counts['PASS']} passed, {counts['FAIL']} failed, {counts['SKIP']} skipped")
+    print(
+        f"SUMMARY: {counts['PASS']} passed, {counts['FAIL']} failed, {counts['SKIP']} skipped"
+    )
     if counts["FAIL"]:
         print("\nFailures:")
         for label, verdict, detail in _results:
@@ -127,7 +131,9 @@ def main():
         default="/World/LightBeam_Sensor",
         help="lightbeam sensor prim path to register",
     )
-    parser.add_argument("--keep", action="store_true", help="don't delete the sensor at the end")
+    parser.add_argument(
+        "--keep", action="store_true", help="don't delete the sensor at the end"
+    )
     args = parser.parse_args()
     base = f"http://{args.host}:{args.port}"
     _exercise_routes(base, args)

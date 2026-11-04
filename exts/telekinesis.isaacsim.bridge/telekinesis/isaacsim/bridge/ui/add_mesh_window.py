@@ -55,7 +55,9 @@ class AddMeshWindow(AddAssetWindow):
 
     async def add_fetched_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Add the mesh and, when ``attaching_prim_path`` is part of a robot, mount it there."""
-        robot_id = await self._articulation_service.find_robot_for_prim(attaching_prim_path)
+        robot_id = await self._articulation_service.find_robot_for_prim(
+            attaching_prim_path
+        )
         robot_prim_path = None
         if robot_id is not None:
             # Checked before anything is loaded, so a robot that stores no mount link
@@ -64,7 +66,9 @@ class AddMeshWindow(AddAssetWindow):
             robot_prim_path = self._articulation_service.get_device(robot_id).prim_path
         mesh_path = await self._stage_service.add_to_scene(
             asset["local_path"],
-            self._free_destination_path(attaching_prim_path, asset["model"], robot_prim_path),
+            self._free_destination_path(
+                attaching_prim_path, asset["model"], robot_prim_path
+            ),
         )
 
         if robot_id is None:

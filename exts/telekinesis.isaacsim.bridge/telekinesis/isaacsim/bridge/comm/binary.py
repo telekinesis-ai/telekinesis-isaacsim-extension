@@ -96,9 +96,9 @@ def encode(payload):
         )
         offset += len(raw)
 
-    manifest = json.dumps({"structure": structure, "arrays": descriptors}, allow_nan=False).encode(
-        "utf-8"
-    )
+    manifest = json.dumps(
+        {"structure": structure, "arrays": descriptors}, allow_nan=False
+    ).encode("utf-8")
     return b"".join([MAGIC, struct.pack("<I", len(manifest)), manifest, *chunks])
 
 

@@ -45,10 +45,14 @@ def main():
 
     # Record one, so there's something to clear.
     _request(base, "PUT", "/prims/poses/default", body={"prim_path": args.prim})
-    print(f"default poses (before clear): {_request(base, 'GET', '/prims/poses/default')}")
+    print(
+        f"default poses (before clear): {_request(base, 'GET', '/prims/poses/default')}"
+    )
 
     _request(base, "DELETE", "/prims/poses/default")
-    print(f"default poses (after clear):  {_request(base, 'GET', '/prims/poses/default')}")
+    print(
+        f"default poses (after clear):  {_request(base, 'GET', '/prims/poses/default')}"
+    )
 
 
 if __name__ == "__main__":

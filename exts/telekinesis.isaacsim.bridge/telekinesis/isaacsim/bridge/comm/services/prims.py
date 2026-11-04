@@ -39,7 +39,9 @@ def _matrix_to_pose(matrix, rotation_type):
     if rotation_type == "quaternions":
         quat = rotation.GetQuat()
         imaginary = quat.GetImaginary()
-        return {"pose": head + [quat.GetReal(), imaginary[0], imaginary[1], imaginary[2]]}
+        return {
+            "pose": head + [quat.GetReal(), imaginary[0], imaginary[1], imaginary[2]]
+        }
     # cartesian: rotation vector = axis * angle (radians)
     axis = rotation.GetAxis()
     angle = math.radians(rotation.GetAngle())
@@ -58,7 +60,9 @@ def _wspose_to_matrix(pose):
     x, y, z, rx, ry, rz = pose
     angle = math.sqrt(rx * rx + ry * ry + rz * rz)
     if angle:
-        rotation = Gf.Rotation(Gf.Vec3d(rx / angle, ry / angle, rz / angle), math.degrees(angle))
+        rotation = Gf.Rotation(
+            Gf.Vec3d(rx / angle, ry / angle, rz / angle), math.degrees(angle)
+        )
     else:
         rotation = Gf.Rotation(Gf.Vec3d(1, 0, 0), 0)
     matrix = Gf.Matrix4d(1.0)
@@ -133,7 +137,9 @@ class PrimService:
     def get_pose(self, prim_path, coordinate_system, rotation_type):
         """Pose of a prim, in world or local space, as rotvec or quaternion."""
         prim = self._prim_or_404(prim_path)
-        matrix = _world_matrix(prim) if coordinate_system == "world" else _local_matrix(prim)
+        matrix = (
+            _world_matrix(prim) if coordinate_system == "world" else _local_matrix(prim)
+        )
         return _matrix_to_pose(matrix, rotation_type)
 
     def update_pose(self, prim_path, pose):
@@ -228,7 +234,9 @@ class PrimService:
         prim = self._prim_or_404(prim_path)
         stored = prim.GetCustomDataByKey(_DEFAULT_POSE_KEY)
         if stored is None:
-            raise HTTPException(status_code=404, detail=f"prim '{prim_path}' has no default pose")
+            raise HTTPException(
+                status_code=404, detail=f"prim '{prim_path}' has no default pose"
+            )
         _set_local_matrix(prim, _wspose_to_matrix(list(stored)))
 
     def set_metadata(self, prim_path, metadata):
@@ -294,12 +302,16 @@ class PrimService:
         UsdPhysics.MassAPI.Apply(prim).CreateMassAttr(mass)
         # Small plastic parts slid out of parallel-jaw grippers at the 0.5 default,
         # which PhysX averages with the pads' friction.
-        material = UsdShade.Material.Define(prim.GetStage(), f"{prim_path}/PhysicsMaterial")
+        material = UsdShade.Material.Define(
+            prim.GetStage(), f"{prim_path}/PhysicsMaterial"
+        )
         physics_material = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
         physics_material.CreateStaticFrictionAttr(1.0)
         physics_material.CreateDynamicFrictionAttr(1.0)
         physics_material.CreateRestitutionAttr(0.0)
-        PhysxSchema.PhysxMaterialAPI.Apply(material.GetPrim()).CreateFrictionCombineModeAttr("max")
+        PhysxSchema.PhysxMaterialAPI.Apply(
+            material.GetPrim()
+        ).CreateFrictionCombineModeAttr("max")
         for descendant in Usd.PrimRange(prim):
             if not descendant.IsA(UsdGeom.Mesh):
                 continue

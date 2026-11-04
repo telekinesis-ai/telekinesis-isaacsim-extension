@@ -41,7 +41,9 @@ try:
     gripper_name = "OnRobotRG6"  # pylint: disable=invalid-name
     robot_description = telekinesis_urdfs.load(gripper_name)
     if not robot_description.urdf_path.is_file():
-        raise ValueError(f"No urdf found, i.e. {robot_description.urdf_path} is not a file")
+        raise ValueError(
+            f"No urdf found, i.e. {robot_description.urdf_path} is not a file"
+        )
 
 except Exception as e:
     raise RuntimeError(
@@ -63,16 +65,22 @@ DEFAULT_TIMEOUT = 120.0
 
 def _request(base, method, path, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
-    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+    response = requests.request(
+        method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+    )
     response.raise_for_status()
     return response.json() if response.content else None
 
 
 def run_gripper(base, prim_path, urdf_path):
     """Register the gripper, narrow it to its driver joint, then open/close it."""
-    info = _request(base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": urdf_path})
+    info = _request(
+        base, "PUT", "/articulations", {"prim_path": prim_path, "urdf_path": urdf_path}
+    )
     articulation_id = info["articulation_id"]
-    print(f"created gripper: articulation_id={articulation_id} prim_path={info['prim_path']}")
+    print(
+        f"created gripper: articulation_id={articulation_id} prim_path={info['prim_path']}"
+    )
 
     # Discover the actuated joint (the bridge walks the USD/PhysX schema) and narrow
     # the device to it -- after this the gripper drives exactly one joint.
@@ -86,10 +94,12 @@ def run_gripper(base, prim_path, urdf_path):
 
     # With the device narrowed to the driver, dof_limits is a single pair.
     # Convention: lower = open, upper = closed.
-    opened_rad, closed_rad = _request(base, "GET", f"/articulations/{articulation_id}/dof_limits")[
-        "limits"
-    ][0]
-    print(f"  driver joint='{driver['name']}' open={opened_rad:.3f} closed={closed_rad:.3f} rad")
+    opened_rad, closed_rad = _request(
+        base, "GET", f"/articulations/{articulation_id}/dof_limits"
+    )["limits"][0]
+    print(
+        f"  driver joint='{driver['name']}' open={opened_rad:.3f} closed={closed_rad:.3f} rad"
+    )
 
     # Map a closed-ness fraction to a joint angle (this is the only gripper-specific
     # math, done client-side): close = 1.0, open = 0.0.

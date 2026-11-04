@@ -143,7 +143,9 @@ class SurfaceGripperService:
         if not usd_path:
             raise HTTPException(
                 status_code=400,
-                detail=(f"'{prim_path}' is not in the stage and no usd_path was given to load it"),
+                detail=(
+                    f"'{prim_path}' is not in the stage and no usd_path was given to load it"
+                ),
             )
         try:
             raise_if_inside_physics_body(stage, prim_path)
@@ -255,7 +257,11 @@ class SurfaceGripperService:
 
     def get_attachment_points(self, surface_gripper_id):
         """Per-attachment-point properties of one gripper, in the order it grips with them."""
-        return {"attachment_points": self.get_device(surface_gripper_id).get_attachment_points()}
+        return {
+            "attachment_points": self.get_device(
+                surface_gripper_id
+            ).get_attachment_points()
+        }
 
     def set_attachment_point_properties(
         self,

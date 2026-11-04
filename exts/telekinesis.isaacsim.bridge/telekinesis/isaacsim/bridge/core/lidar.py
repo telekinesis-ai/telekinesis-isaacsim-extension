@@ -109,7 +109,9 @@ _CONFIG_ATTRS = {
 
 # Config fields that are booleans on the USD prim; everything else in
 # _CONFIG_ATTRS is a float. Drives the Get*/Set* cast in the config accessors.
-_BOOL_CONFIG_FIELDS = frozenset({"draw_points", "draw_lines", "high_lod", "enable_semantics"})
+_BOOL_CONFIG_FIELDS = frozenset(
+    {"draw_points", "draw_lines", "high_lod", "enable_semantics"}
+)
 
 # Base RangeSensor schema attribute toggling whether PhysX computes this
 # sensor each step -- the pause/resume/is_paused backing store.
@@ -303,7 +305,9 @@ class Lidar:
             try:
                 if self._read(probe) is not None:
                     self._initialized = True
-                    carb.log_info(f"[bridge] bound lidar {self.prim_path}: {self.data_types}")
+                    carb.log_info(
+                        f"[bridge] bound lidar {self.prim_path}: {self.data_types}"
+                    )
                     return
             except Exception as exc:  # data not ready yet -> keep pumping frames
                 last_exc = exc
@@ -330,7 +334,9 @@ class Lidar:
         lidar was bound with; requesting a type this lidar wasn't bound with
         raises ``ValueError`` rather than silently returning ``null``.
         """
-        requested = list(data_types) if data_types is not None else list(self.data_types)
+        requested = (
+            list(data_types) if data_types is not None else list(self.data_types)
+        )
         unavailable = [d for d in requested if d not in self.data_types]
         if unavailable:
             raise ValueError(
@@ -549,15 +555,21 @@ class Lidar:
 
     def get_horizontal_resolution(self):
         """Horizontal angular resolution (degrees per column)."""
-        return float(self._prim.GetAttribute(_CONFIG_ATTRS["horizontal_resolution"]).Get())
+        return float(
+            self._prim.GetAttribute(_CONFIG_ATTRS["horizontal_resolution"]).Get()
+        )
 
     def set_horizontal_resolution(self, value):
         """Set the horizontal angular resolution (degrees per column)."""
-        self._prim.GetAttribute(_CONFIG_ATTRS["horizontal_resolution"]).Set(float(value))
+        self._prim.GetAttribute(_CONFIG_ATTRS["horizontal_resolution"]).Set(
+            float(value)
+        )
 
     def get_vertical_resolution(self):
         """Vertical angular resolution (degrees per row)."""
-        return float(self._prim.GetAttribute(_CONFIG_ATTRS["vertical_resolution"]).Get())
+        return float(
+            self._prim.GetAttribute(_CONFIG_ATTRS["vertical_resolution"]).Get()
+        )
 
     def set_vertical_resolution(self, value):
         """Set the vertical angular resolution (degrees per row)."""
@@ -666,7 +678,9 @@ class Lidar:
         it does expose.
         """
         azimuth = self._lidar.get_azimuth_data(self.prim_path)
-        return None if azimuth.size == 0 else [float(azimuth.min()), float(azimuth.max())]
+        return (
+            None if azimuth.size == 0 else [float(azimuth.min()), float(azimuth.max())]
+        )
 
     def get_zenith_range(self):
         """``[min, max]`` vertical scan angles (radians), or ``None`` if the

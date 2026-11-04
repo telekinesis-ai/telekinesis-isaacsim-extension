@@ -7,7 +7,10 @@ import pathlib
 import omni.usd
 from pxr import Tf
 
-from ..comm.services.articulations import ASSEMBLY_ROBOT_RELATIONSHIP, ArticulationService
+from ..comm.services.articulations import (
+    ASSEMBLY_ROBOT_RELATIONSHIP,
+    ArticulationService,
+)
 from ..comm.services.asset_library import AssetLibraryService
 from ..core import asset_loader
 from .add_asset_window import AddAssetWindow
@@ -58,7 +61,9 @@ class AddRobotWindow(AddAssetWindow):
         default_joint_configuration = asset.get("default_joint_configuration")
         is_urdf = pathlib.Path(asset["local_path"]).suffix.lower() == ".urdf"
         robot_name = Tf.MakeValidIdentifier(asset["model"])
-        assembly_path = self._free_destination_path(attaching_prim_path, f"{robot_name}_assembly")
+        assembly_path = self._free_destination_path(
+            attaching_prim_path, f"{robot_name}_assembly"
+        )
         articulation = await self._articulation_service.create_articulation(
             f"{assembly_path}/{robot_name}",
             urdf_path=asset["local_path"] if is_urdf else None,
@@ -74,8 +79,12 @@ class AddRobotWindow(AddAssetWindow):
         stage.GetPrimAtPath(assembly_path).CreateRelationship(
             ASSEMBLY_ROBOT_RELATIONSHIP
         ).SetTargets([articulation["prim_path"]])
-        status = f"Added {articulation['articulation_id']} at {articulation['prim_path']}."
-        rigid_body_path = asset_loader.find_rigid_body_ancestor(stage, articulation["prim_path"])
+        status = (
+            f"Added {articulation['articulation_id']} at {articulation['prim_path']}."
+        )
+        rigid_body_path = asset_loader.find_rigid_body_ancestor(
+            stage, articulation["prim_path"]
+        )
         if rigid_body_path is not None:
             status += (
                 f" Warning: {rigid_body_path} is a rigid body, so the robot is fixed to it with "

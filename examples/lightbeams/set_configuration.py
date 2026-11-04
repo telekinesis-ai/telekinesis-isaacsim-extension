@@ -36,14 +36,18 @@ DEFAULT_TIMEOUT = 30.0
 
 def _request(base, method, path, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
-    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
+    response = requests.request(
+        method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
+    )
     response.raise_for_status()
     return response.json() if response.content else None
 
 
 def main():
     """Change one lightbeam sensor's beam layout and print the result."""
-    parser = argparse.ArgumentParser(description="Set a lightbeam sensor's configuration.")
+    parser = argparse.ArgumentParser(
+        description="Set a lightbeam sensor's configuration."
+    )
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
@@ -52,7 +56,9 @@ def main():
         dest="lightbeam_id",
         help="lightbeam_id from put_lightbeam.py",
     )
-    parser.add_argument("--num-rays", type=int, default=None, help="beams in the curtain")
+    parser.add_argument(
+        "--num-rays", type=int, default=None, help="beams in the curtain"
+    )
     parser.add_argument(
         "--curtain-length",
         type=float,
@@ -75,8 +81,12 @@ def main():
         metavar=("X", "Y", "Z"),
         help="direction the curtain is spread along, in the sensor's frame",
     )
-    parser.add_argument("--min-range", type=float, default=None, help="blind zone in meters")
-    parser.add_argument("--max-range", type=float, default=None, help="detection range in meters")
+    parser.add_argument(
+        "--min-range", type=float, default=None, help="blind zone in meters"
+    )
+    parser.add_argument(
+        "--max-range", type=float, default=None, help="detection range in meters"
+    )
     args = parser.parse_args()
 
     # Only the fields actually passed are sent: the bridge reads an absent
@@ -92,7 +102,9 @@ def main():
     body = {key: value for key, value in body.items() if value is not None}
 
     base = f"http://{args.host}:{args.port}"
-    response = _request(base, "PATCH", f"/lightbeams/{args.lightbeam_id}/configuration", body)
+    response = _request(
+        base, "PATCH", f"/lightbeams/{args.lightbeam_id}/configuration", body
+    )
     print(f"response: {response}")
 
 
