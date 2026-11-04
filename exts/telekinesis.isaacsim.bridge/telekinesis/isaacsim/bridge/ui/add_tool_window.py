@@ -18,8 +18,9 @@ class AddToolWindow(AddAssetWindow):
 
     A parallel gripper is registered as an articulation (``PUT /articulations``), a
     suction gripper as a surface gripper (``PUT /surface_grippers``). When the
-    attaching prim is part of a robot, the gripper is loaded beside the robot, outside
-    any rigid body the robot stands in, and assembled onto the robot's stored mount
+    attaching prim is part of a robot, the gripper is loaded beside the robot -- in
+    the robot's ``<model>_assembly`` Xform when Add Robot created one -- outside any
+    rigid body the robot stands in, and assembled onto the robot's stored mount
     link at the entered offset, as ``assemble_robot`` does: a parallel gripper is
     merged into the robot's articulation, a suction gripper is bolted on and keeps its
     own id. A robot that stores no mount link refuses the add before anything is
@@ -51,6 +52,10 @@ class AddToolWindow(AddAssetWindow):
     def build_extra_fields(self):
         """Add the offset the gripper is attached at, used only when attaching to a robot."""
         self._mount_offset_fields = MountOffsetFields()
+
+    def reset_extra_fields(self):
+        """Zero the attach offset."""
+        self._mount_offset_fields.reset()
 
     async def add_fetched_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Load the gripper and, when ``attaching_prim_path`` is part of a robot, assemble it on."""

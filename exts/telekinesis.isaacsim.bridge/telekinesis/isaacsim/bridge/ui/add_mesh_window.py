@@ -14,12 +14,14 @@ class AddMeshWindow(AddAssetWindow):
     """A window that loads a mesh from the Telekinesis asset library, mounting it on a robot.
 
     The mesh is added as ``POST /stage/scene/reference`` would. When the attaching prim
-    is part of a robot, the mesh is placed beside the robot, outside any rigid body
-    the robot stands in, and fixed to the robot's stored mount link at the entered
-    offset, as ``mount_prim`` does, so it moves with the arm. A robot that stores no
-    mount link refuses the add before anything is loaded. Otherwise the mesh is added
-    under the attaching prim as it is: an OBJ, GLB or glTF mesh arrives without
-    physics, a USD asset with whatever physics it authors.
+    is part of a robot, the mesh is placed beside the robot -- in the robot's
+    ``<model>_assembly`` Xform when Add Robot created one -- outside any rigid body the
+    robot stands in, and fixed to the robot's stored mount link at the entered
+    offset, as ``mount_prim`` does: it becomes a rigid body whose weight the arm
+    carries, and its meshes collide as convex hulls. A robot that stores no mount
+    link refuses the add before anything is loaded. Otherwise the mesh is added under
+    the attaching prim as it is: an OBJ, GLB or glTF mesh arrives without physics, a
+    USD asset with whatever physics it authors.
 
     Example:
         window = AddMeshWindow(bridge_server.asset_library_service,
@@ -46,6 +48,10 @@ class AddMeshWindow(AddAssetWindow):
     def build_extra_fields(self):
         """Add the offset the mesh is mounted at, used only when mounting on a robot."""
         self._mount_offset_fields = MountOffsetFields()
+
+    def reset_extra_fields(self):
+        """Zero the mount offset."""
+        self._mount_offset_fields.reset()
 
     async def add_fetched_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Add the mesh and, when ``attaching_prim_path`` is part of a robot, mount it there."""

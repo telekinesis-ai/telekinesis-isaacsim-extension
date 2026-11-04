@@ -39,6 +39,9 @@ from ...core.robot_assembler import (
 # String attribute on an articulation's prim naming the link tools and prims are mounted
 # onto. Stored in USD so it survives saving the stage and is shared by every client.
 MOUNT_LINK_ATTRIBUTE = "telekinesis:mountLink"
+# Relationship on a robot's assembly Xform targeting the robot prim, so the assembly and
+# everything attached in it count as part of that robot. Authored by Add Robot.
+ASSEMBLY_ROBOT_RELATIONSHIP = "telekinesis:assemblyRobot"
 
 
 class ArticulationService:
@@ -752,9 +755,9 @@ class ArticulationService:
         Nothing is merged: a suction gripper has no joints to fold into the arm's
         articulation, so it keeps its own id and its own close/open routes and the
         arm's DOF are unchanged. What assembly does instead is place the gripper at
-        the flange, join the two with a fixed joint excluded from the articulation,
-        and re-park the gripper's attachment points onto the arm's mount link so
-        they can grip (see
+        the flange, join the two with a fixed joint that makes the gripper's body a
+        link of the arm's articulation without adding a DOF, and re-park the
+        gripper's attachment points onto the arm's mount link so they can grip (see
         :func:`..core.robot_assembler.attach_surface_gripper`).
 
         ``gripper_mount_link`` may be None, meaning the registered gripper prim
@@ -874,9 +877,11 @@ class ArticulationService:
 
         The prim and its ancestors are checked nearest first. A registered
         articulation at one of them is the answer, except a gripper assembled onto an
-        arm, which counts as part of that arm, so the arm's id is returned. An
-        unregistered prim carrying :data:`MOUNT_LINK_ATTRIBUTE`, such as an
-        articulation in a reopened stage, is registered first.
+        arm, which counts as part of that arm, so the arm's id is returned. A robot's
+        assembly Xform (one carrying :data:`ASSEMBLY_ROBOT_RELATIONSHIP`) stands for
+        the robot it targets, so the assembly and anything else in it count as part of
+        that robot. An unregistered prim carrying :data:`MOUNT_LINK_ATTRIBUTE`, such as
+        an articulation in a reopened stage, is registered first.
         """
         from pxr import Sdf
 
@@ -885,13 +890,20 @@ class ArticulationService:
         }
         stage = self._stage()
         # GetAncestorsRange ends even for a relative path, whose parents never run out.
-        for path in Sdf.Path(prim_path).GetAncestorsRange():
-            articulation_id = self._id_by_prim.get(path.pathString)
+        for ancestor_path in Sdf.Path(prim_path).GetAncestorsRange():
+            candidate_path = ancestor_path
+            candidate = stage.GetPrimAtPath(candidate_path)
+            assembly_robot = (
+                candidate.GetRelationship(ASSEMBLY_ROBOT_RELATIONSHIP) if candidate else None
+            )
+            if assembly_robot and assembly_robot.GetTargets():
+                candidate_path = assembly_robot.GetTargets()[0]
+                candidate = stage.GetPrimAtPath(candidate_path)
+            articulation_id = self._id_by_prim.get(candidate_path.pathString)
             if articulation_id is not None:
                 return arm_by_gripper.get(articulation_id, articulation_id)
-            prim = stage.GetPrimAtPath(path)
-            if prim and prim.HasAttribute(MOUNT_LINK_ATTRIBUTE):
-                articulation = await self.create_articulation(path.pathString, None)
+            if candidate and candidate.HasAttribute(MOUNT_LINK_ATTRIBUTE):
+                articulation = await self.create_articulation(candidate_path.pathString, None)
                 return articulation["articulation_id"]
         return None
 

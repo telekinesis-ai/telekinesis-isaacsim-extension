@@ -282,9 +282,11 @@ class MountPrimRequest(BaseModel):
     stage -- to the arm's ``arm_mount_link`` with a fixed joint, so it moves with
     the arm. The prim's origin is placed at ``offset`` in the mount link's frame
     (null/omitted => at the mount link's origin). A prim that is not a rigid body
-    becomes one, with gravity off. ``mask_collisions`` stops the arm and the prim
-    colliding with each other. Mounting the same prim again replaces its earlier
-    joint. ``arm_mount_link`` omitted means the arm's stored mount link (see
+    becomes one, and the arm carries its weight. Every mesh beneath the prim that has
+    no collider gets one, approximated by its convex hull, so the prim collides with
+    the scene. ``mask_collisions`` stops the arm and the prim colliding with each
+    other. Mounting the same prim again replaces its earlier joint. ``arm_mount_link``
+    omitted means the arm's stored mount link (see
     ``CreateArticulationRequest.mount_link``).
     """
 

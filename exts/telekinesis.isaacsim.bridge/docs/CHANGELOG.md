@@ -3,9 +3,13 @@
 ### Added
 - Right-click Create → Telekinesis Isaac Sim Bridge → Add Robot in the Stage panel and viewport
   opens a window to pick a robot (Manufacturer, Model) from the Telekinesis asset library and
-  load it under the right-clicked prim. The robot is registered as an articulation, as with
-  `PUT /articulations`. When the right-clicked prim is, or lies inside, a rigid body, the
-  success message warns that the robot is fixed to that body.
+  load it under the right-clicked prim, at `<model>_assembly/<model>`. The robot is registered
+  as an articulation, as with `PUT /articulations`. The `<model>_assembly` Xform is parked
+  clear of other robots and holds what Add Tool and Add Mesh attach to the robot, so moving or
+  deleting it takes them along. It targets the robot through the `telekinesis:assemblyRobot`
+  relationship, so Add Tool and Add Mesh on the assembly, or on anything in it, attach to the
+  robot. When the right-clicked prim is, or lies inside, a rigid body,
+  the success message warns that the robot is fixed to that body.
 - The Add Robot, Add Tool and Add Mesh windows close when Add is pressed and report progress
   and the outcome as notifications; an error stays until dismissed. Add is refused, with the
   window left open, when no model is selected or the Attaching Prim is not a prim in the stage.
@@ -18,13 +22,13 @@
 - Add Robot uses a catalogue entry's `default_joint_configuration` (degrees) as the start pose and
   its `simulation_mount_link` as the robot's mount link.
 - Right-click Create → Telekinesis Isaac Sim Bridge → Add Tool loads a parallel or suction gripper.
-  On a robot, it is loaded beside the robot, outside any rigid body the robot stands in, and
-  assembled onto the robot's mount link at the entered offset, as `assemble_robot` does;
+  On a robot, it is loaded beside the robot (in its `<model>_assembly` Xform), outside any rigid
+  body the robot stands in, and assembled onto the robot's mount link at the entered offset, as `assemble_robot` does;
   elsewhere it is only loaded. A robot that stores no mount link refuses the add before
   anything is loaded.
 - Right-click Create → Telekinesis Isaac Sim Bridge → Add Mesh adds a mesh from `usd/attachments`.
-  On a robot, it is placed beside the robot, outside any rigid body the robot stands in, and
-  mounted on the robot's mount link at the entered offset, as `mount_prim` does; elsewhere it is
+  On a robot, it is placed beside the robot (in its `<model>_assembly` Xform), outside any rigid
+  body the robot stands in, and mounted on the robot's mount link at the entered offset, as `mount_prim` does; elsewhere it is
   added under the right-clicked prim as it is. A robot that stores no mount link refuses the
   add before anything is loaded.
 - Right-clicking empty space for Add Robot, Add Tool or Add Mesh adds the asset under the
@@ -44,7 +48,13 @@
   articulation, where PhysX would not move it with its parent.
 - A robot, gripper or prop loaded under a prim other than the stage root or the default prim,
   such as a box, that would land inside one of that prim's colliders is lifted along world +Z to
-  stand on it, after the existing +X parking clear of other robots.
+  stand on it, after the existing +X parking clear of other robots. When the load also creates
+  the prim's parent, such as a robot's `<model>_assembly` Xform, that parent is what is parked
+  and lifted.
+- `POST /articulations/{id}/mount_prim` no longer turns gravity off on a prim it makes a rigid
+  body, so the arm carries the prim's weight. Every mesh beneath the prim without a collider
+  gets one, approximated by its convex hull, so the prim collides with the scene and PhysX
+  derives its mass from the hulls.
 - `PUT /prims/physics/rigid_body` makes each mesh collide as its convex hull instead of a
   convex decomposition. Decomposing open, multi-shell CAD meshes left thin hulls that gripper
   fingers were pushed through. A hull is solid, but fills holes and concave pockets.

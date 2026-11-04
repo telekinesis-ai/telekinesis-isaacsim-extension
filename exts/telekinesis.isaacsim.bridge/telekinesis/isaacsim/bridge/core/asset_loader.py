@@ -119,11 +119,12 @@ def find_rigid_body_ancestor(stage, prim_path):
 def path_beside_clear_of_rigid_bodies(stage, prim_path, name):
     """Return the path of a prim named ``name`` beside ``prim_path``, outside every rigid body.
 
-    An asset joined to a robot with a fixed joint is loaded beside the robot. When the
-    robot stands inside a rigid body, beside it is inside that body too: a gripper there
-    would be fixed to the body as well as to the robot, and the two joints would fight,
-    and a mounted mesh would be a rigid body nested in another. So the path moves up
-    beside the outermost rigid body around ``prim_path``.
+    An asset joined to a robot with a fixed joint is loaded beside the robot, which puts
+    it in the robot's ``<model>_assembly`` Xform when the robot was added into one. When
+    the robot stands inside a rigid body, beside it is inside that body too: a gripper
+    there would be fixed to the body as well as to the robot, and the two joints would
+    fight, and a mounted mesh would be a rigid body nested in another. So the path moves
+    up beside the outermost rigid body around ``prim_path``.
     """
     path = Sdf.Path(prim_path).GetParentPath().AppendChild(name)
     rigid_body_path = find_rigid_body_ancestor(stage, path.pathString)
@@ -194,9 +195,22 @@ async def _reference_asset_at(stage, asset_path, dest_prim_path):
     rebuilt) and leaves it stopped, defines the destination and any missing parent, adds
     the reference, then pumps the app so the stage recomposes before the caller measures,
     plays or binds anything.
+
+    What is parked is the outermost prim this call creates: the asset's prim, or the
+    new parent it is loaded into, such as a robot's ``<model>_assembly`` Xform, so the
+    parent arrives clear of the robots beside it and the asset sits at its origin.
     """
     app = omni.kit.app.get_app()
     omni.timeline.get_timeline_interface().stop()
+
+    arrived_path = next(
+        (
+            path
+            for path in reversed(list(Sdf.Path(dest_prim_path).GetAncestorsRange()))
+            if not stage.GetPrimAtPath(path)
+        ),
+        Sdf.Path(dest_prim_path),
+    )
 
     parent = Sdf.Path(dest_prim_path).GetParentPath()
     if parent.pathString not in ("", "/") and not stage.GetPrimAtPath(parent).IsValid():
@@ -215,7 +229,7 @@ async def _reference_asset_at(stage, asset_path, dest_prim_path):
     await app.next_update_async()
     await app.next_update_async()
 
-    _park_clear_of_robots_and_colliders(stage, dest_prim_path)
+    _park_clear_of_robots_and_colliders(stage, arrived_path.pathString)
 
     return dest_prim_path
 

@@ -83,6 +83,14 @@ class AddAssetWindow(abc.ABC):
         reads on ``self``.
         """
 
+    def reset_extra_fields(self):
+        """Set the fields built by :meth:`build_extra_fields` back to their defaults. Optional.
+
+        Called each time the window is opened while no add is running, so every add
+        starts from the defaults instead of the values of the previous one. The default
+        resets nothing.
+        """
+
     @abc.abstractmethod
     async def add_fetched_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Load the selected, downloaded asset into the stage at ``attaching_prim_path``.
@@ -103,8 +111,12 @@ class AddAssetWindow(abc.ABC):
 
         The catalogue is loaded on the first open, and retried on later opens until
         it yields any asset. Opening the window while it loads starts no second load.
+        The extra fields are reset to their defaults unless an add is running.
         """
         self._attaching_prim_field.set_value(attaching_prim_path)
+        # Add is disabled exactly while an add runs, and that add still reads the fields.
+        if self._add_button.enabled:
+            self.reset_extra_fields()
         self._window.visible = True
         if not self._assets and (self._catalogue_load is None or self._catalogue_load.done()):
             self._catalogue_load = asyncio.ensure_future(self._load_catalogue())
@@ -211,8 +223,9 @@ class AddAssetWindow(abc.ABC):
 
         Without ``robot_prim_path`` the path lies under ``attaching_prim_path``. With
         it, the asset is to be joined to that robot with a fixed joint, and bodies
-        nested under a link would not follow it, so the path lies beside the robot,
-        outside any rigid body the robot stands in (see
+        nested under a link would not follow it, so the path lies beside the robot --
+        in its ``<model>_assembly`` Xform when it has one -- outside any rigid body the
+        robot stands in (see
         :func:`..core.asset_loader.path_beside_clear_of_rigid_bodies`). A name already
         taken gets a numeric suffix, so every add creates a new prim.
         """

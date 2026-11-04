@@ -28,6 +28,11 @@ class MountOffsetFields:
             for axis in "XYZ"
         ]
 
+    def reset(self):
+        """Set every field back to zero, attaching flush at the mount link's origin."""
+        for field in self._translation_fields + self._rotation_fields:
+            field.set_value(0.0)
+
     def transformation(self) -> models.Transformation:
         """Return the entered offset as the mount transform the bridge routes take."""
         return models.Transformation(
