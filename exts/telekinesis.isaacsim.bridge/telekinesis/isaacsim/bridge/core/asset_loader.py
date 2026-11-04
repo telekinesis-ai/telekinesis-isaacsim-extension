@@ -257,15 +257,15 @@ def _park_clear_of_robots_and_colliders(stage, dest_prim_path):
 
     An asset loaded under a prop, such as a box, lands at the prop's origin, inside it.
     Any collider of that prop it would still overlap is resolved by lifting it along
-    world +Z until its bounds stand on the highest of them. Colliders that belong to a
+    world +Z until its bounds stand on the highest of them, repeated while the lift
+    brings it into another, so it ends up inside none. Colliders that belong to a
     robot are left to the +X parking. An asset loaded under the stage root or the
     default prim is not lifted: the colliders around the world origin are not a prop
     it was put on.
 
     Overlap is measured between axis-aligned world bounds, so a collider that only
     meets the bounds of a robot's arm lifts the whole robot. Only robots beside the new
-    asset are parked against, and the lift is a single pass that does not re-check what
-    the asset meets at its new height.
+    asset are parked against.
     """
     gap_metres = 0.1
 
@@ -333,13 +333,21 @@ def _park_clear_of_robots_and_colliders(stage, dest_prim_path):
     shift = Gf.Vec3d(0.0, 0.0, 0.0)
     if not Gf.Range3d.GetIntersection(bounds, occupied_by_robots).IsEmpty():
         shift[0] = occupied_by_robots.GetMax()[0] - bounds.GetMin()[0] + gap_metres
-    parked_bounds = Gf.Range3d(bounds.GetMin() + shift, bounds.GetMax() + shift)
-    overlapped_collider_tops = [
-        collider.GetMax()[2]
-        for collider in collider_bounds
-        if not Gf.Range3d.GetIntersection(parked_bounds, collider).IsEmpty()
-    ]
-    if overlapped_collider_tops:
+    # Lifting onto one collider can push the asset into another it did not reach at its
+    # first height, such as the tabletop above the cabinet a lying arm overlapped, so
+    # the lift repeats until the asset is inside none. Every pass rises, so it ends.
+    while True:
+        parked_bounds = Gf.Range3d(bounds.GetMin() + shift, bounds.GetMax() + shift)
+        overlapped_collider_tops = [
+            collider.GetMax()[2]
+            for collider in collider_bounds
+            # A collider the asset only rests on is not one it is inside; the margin
+            # absorbs the rounding of the previous lift.
+            if collider.GetMax()[2] > parked_bounds.GetMin()[2] + 1e-6
+            and not Gf.Range3d.GetIntersection(parked_bounds, collider).IsEmpty()
+        ]
+        if not overlapped_collider_tops:
+            break
         shift[2] = max(overlapped_collider_tops) - bounds.GetMin()[2]
     if shift == Gf.Vec3d(0.0, 0.0, 0.0):
         return

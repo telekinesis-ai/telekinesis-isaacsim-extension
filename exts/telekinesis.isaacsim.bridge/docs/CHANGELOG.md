@@ -56,7 +56,9 @@
   articulation, where PhysX would not move it with its parent.
 - A robot, gripper or prop loaded under a prim other than the stage root or the default prim,
   such as a box, that would land inside one of that prim's colliders is lifted along world +Z to
-  stand on it, after the existing +X parking clear of other robots. When the load also creates
+  stand on it, after the existing +X parking clear of other robots. The lift repeats while it
+  brings the load into another collider, so an arm shorter than a table's cabinet ends up on the
+  tabletop rather than inside it. When the load also creates
   the prim's parent, such as a robot's `<model>_assembly` Xform, that parent is what is parked
   and lifted.
 - `POST /articulations/{id}/mount_prim` no longer turns gravity off on a prim it makes a rigid
