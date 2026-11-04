@@ -7,7 +7,7 @@ from ..comm.services.stage import StageService
 from .add_asset_window import AddAssetWindow
 from .mount_offset_fields import MountOffsetFields
 
-ATTACHMENT_CATEGORY = "usd/attachments"
+ATTACHMENT_CATEGORY = "attachments"
 
 
 class AddMeshWindow(AddAssetWindow):
@@ -53,7 +53,7 @@ class AddMeshWindow(AddAssetWindow):
         """Zero the mount offset."""
         self._mount_offset_fields.reset()
 
-    async def add_fetched_asset(self, asset: dict, attaching_prim_path: str) -> str:
+    async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Add the mesh and, when ``attaching_prim_path`` is part of a robot, mount it there."""
         robot_id = await self._articulation_service.find_robot_for_prim(
             attaching_prim_path
@@ -65,10 +65,11 @@ class AddMeshWindow(AddAssetWindow):
             self._articulation_service.resolve_arm_mount_link(robot_id)
             robot_prim_path = self._articulation_service.get_device(robot_id).prim_path
         mesh_path = await self._stage_service.add_to_scene(
-            asset["local_path"],
+            None,
             self._free_destination_path(
                 attaching_prim_path, asset["model"], robot_prim_path
             ),
+            asset,
         )
 
         if robot_id is None:

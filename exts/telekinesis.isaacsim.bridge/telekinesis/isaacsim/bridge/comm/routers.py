@@ -157,6 +157,7 @@ async def create_articulation(
         req.usd_path,
         req.default_joint_positions,
         req.mount_link,
+        req.asset_info.model_dump() if req.asset_info else None,
     )
 
 
@@ -868,7 +869,11 @@ async def add_to_scene(
 
     The stage stays open; nothing already in it is replaced.
     """
-    return await stage_service.add_to_scene(req.uri, req.prim_path)
+    return await stage_service.add_to_scene(
+        req.uri,
+        req.prim_path,
+        req.asset_info.model_dump() if req.asset_info else None,
+    )
 
 
 @stage.get("/motion-groups", summary="List Stage Motion Groups")
@@ -1134,7 +1139,10 @@ async def fetch_asset(
 async def list_assets(
     category: str, asset_library_service=Depends(get_asset_library_service)
 ):
-    """The assets under one bucket prefix, e.g. urdf/robots/manipulators. 404 if empty."""
+    """The assets of one category, e.g. robots/manipulators, from the usd/ and urdf/ trees.
+
+    404 if empty.
+    """
     return await asset_library_service.list_assets(category)
 
 
@@ -2290,7 +2298,9 @@ async def create_surface_gripper(
 ):
     """Register (and bind) one suction gripper; returns its id, prims and state."""
     return await surface_gripper_service.create_surface_gripper(
-        req.prim_path, req.usd_path
+        req.prim_path,
+        req.usd_path,
+        req.asset_info.model_dump() if req.asset_info else None,
     )
 
 

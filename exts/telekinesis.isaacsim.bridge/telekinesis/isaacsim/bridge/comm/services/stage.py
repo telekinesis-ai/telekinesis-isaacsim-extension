@@ -4,8 +4,8 @@
 ``StageService`` is the single source of the "current USD stage, or 409 if none"
 rule (``stage()``); every other method builds on it to read/replace the open
 stage, list articulation roots, get/set stage units, and drive the simulation
-timeline. Stateless -- the open stage lives in ``omni.usd``, not here -- so one
-shared instance serves all requests.
+timeline. It holds no stage state -- the open stage lives in ``omni.usd``, not
+here -- so one shared instance serves all requests.
 
 It stays free of :mod:`..comm.models`: units are passed as a plain float and the
 router wraps/unwraps the ``StageUnits`` model, keeping the dependency arrow
@@ -15,9 +15,18 @@ imports outside Isaac Sim.
 
 from fastapi import HTTPException
 
+from .asset_library import AssetLibraryService
+
 
 class StageService:
-    """Read and drive the open USD stage (scene, units, timeline)."""
+    """Read and drive the open USD stage (scene, units, timeline).
+
+    Catalogue assets added to the scene are downloaded through
+    ``asset_library_service``.
+    """
+
+    def __init__(self, asset_library_service: AssetLibraryService):
+        self._asset_library_service = asset_library_service
 
     def stage(self):
         """Current USD stage, or 409 if no stage is open.
@@ -47,7 +56,7 @@ class StageService:
                 status_code=400, detail=f"could not open '{uri}': {error}"
             )
 
-    async def add_to_scene(self, uri, prim_path):
+    async def add_to_scene(self, uri, prim_path, asset_info=None):
         """Reference the USD, OBJ, GLB or glTF asset at ``uri`` into the open stage.
 
         The asset is referenced onto ``prim_path``.
@@ -57,13 +66,30 @@ class StageService:
         so a cell someone has built survives bringing a conveyor or a sensor into it.
         An OBJ, GLB or glTF mesh is converted to USD first and arrives without physics.
 
-        ``uri`` names an asset on the machine running Isaac Sim, not a URL. Returns the
-        prim path the asset arrived at, and leaves the timeline stopped.
+        ``uri`` names an asset on the machine running Isaac Sim, not a URL.
+        ``asset_info`` (``{"category", "manufacturer", "model"}``) instead names a
+        catalogue asset, which is downloaded into the cache once and loaded from
+        there. Exactly one of the two is given. Returns the prim path the asset
+        arrived at, and leaves the timeline stopped.
+
+        Raises:
+            HTTPException: 400 unless exactly one of ``uri`` and ``asset_info`` is
+                given; 404/502 from :meth:`AssetLibraryService.fetch_asset`; 422 if
+                loading the asset fails.
         """
         from pathlib import Path
 
         from ...core.asset_loader import import_mesh_at, reference_usd_at
 
+        if (uri is None) == (asset_info is None):
+            raise HTTPException(
+                status_code=400, detail="give either uri or asset_info, not both or neither"
+            )
+        if asset_info is not None:
+            fetched = await self._asset_library_service.fetch_asset(
+                asset_info["category"], asset_info["manufacturer"], asset_info["model"]
+            )
+            uri = fetched["local_path"]
         is_mesh = Path(uri).suffix.lower() in {".obj", ".glb", ".gltf"}
         load = import_mesh_at if is_mesh else reference_usd_at
         try:

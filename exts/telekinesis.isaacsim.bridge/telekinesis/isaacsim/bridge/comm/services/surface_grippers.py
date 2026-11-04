@@ -33,6 +33,7 @@ from fastapi import HTTPException
 
 from ...core.asset_loader import raise_if_inside_physics_body, reference_usd_at
 from ...core.surface_gripper import SurfaceGripper
+from .asset_library import AssetLibraryService
 
 
 class SurfaceGripperService:
@@ -43,7 +44,9 @@ class SurfaceGripperService:
     attachment-point getters and setters. One instance per running bridge.
     """
 
-    def __init__(self):
+    def __init__(self, asset_library_service: AssetLibraryService):
+        # Downloads the catalogue asset a create names by asset_info.
+        self._asset_library_service = asset_library_service
         self._devices = {}  # surface_gripper_id -> SurfaceGripper
         self._id_by_prim = {}  # requested prim_path -> surface_gripper_id (stable on re-create)
         self._count = 0  # for ids like surface_gripper1, surface_gripper2
@@ -65,7 +68,7 @@ class SurfaceGripperService:
         self._count = 0
         self._create_locks = {}
 
-    async def create_surface_gripper(self, prim_path, usd_path=None):
+    async def create_surface_gripper(self, prim_path, usd_path=None, asset_info=None):
         """Register (and bind) the surface gripper at ``prim_path`` and return its info.
 
         ``prim_path`` is the gripper prim itself or any ancestor of it -- usually
@@ -81,7 +84,10 @@ class SurfaceGripperService:
         A suction gripper has no URDF representation, so there is no ``urdf_path``
         counterpart to the articulation route. It can still be loaded rather than
         prepared by hand: ``usd_path`` is a prepared USD asset that is referenced
-        onto ``prim_path`` when nothing is there yet.
+        onto ``prim_path`` when nothing is there yet. ``asset_info``
+        (``{"category", "manufacturer", "model"}``) instead names a catalogue asset,
+        which is downloaded into the cache once and referenced the same way. At most
+        one of the two is given (400 otherwise).
         """
         # Normalize a trailing slash so "/World/gripper" and "/World/gripper/"
         # register as the same gripper (USD paths are case-sensitive, so case is
@@ -94,7 +100,7 @@ class SurfaceGripperService:
         # setdefault is synchronous, so concurrent callers land on one Lock.
         lock = self._create_locks.setdefault(prim_path, asyncio.Lock())
         async with lock:
-            await self._load_if_missing(prim_path, usd_path)
+            await self._load_if_missing(prim_path, usd_path, asset_info)
 
             surface_gripper_id = self._id_by_prim.get(prim_path)
             if surface_gripper_id is None:
@@ -117,12 +123,13 @@ class SurfaceGripperService:
                 **device.info(),
             }
 
-    async def _load_if_missing(self, prim_path, usd_path):
-        """Reference ``usd_path`` onto ``prim_path`` unless a prim is already there.
+    async def _load_if_missing(self, prim_path, usd_path, asset_info):
+        """Reference ``usd_path``, or the catalogue asset ``asset_info``, onto ``prim_path``.
 
-        A prim that is already in the stage is used as it is and ``usd_path`` has no
-        effect, so a client may pass it defensively on every connect. Absent both,
-        there is nothing to bind and the request is rejected.
+        A prim that is already in the stage is used as it is and ``usd_path`` and
+        ``asset_info`` have no effect, so a client may pass either defensively on
+        every connect; nothing is downloaded then. Giving both is rejected with 400,
+        as is giving neither when no prim is there, since there is nothing to bind.
 
         Loading is refused with 422 inside a rigid body or an articulation (see
         :func:`..core.asset_loader.raise_if_inside_physics_body`).
@@ -133,6 +140,10 @@ class SurfaceGripperService:
         """
         import omni.usd
 
+        if usd_path and asset_info:
+            raise HTTPException(
+                status_code=400, detail="give either usd_path or asset_info, not both"
+            )
         stage = omni.usd.get_context().get_stage()
         if stage is None:
             raise HTTPException(status_code=409, detail="no USD stage is open")
@@ -140,13 +151,19 @@ class SurfaceGripperService:
         existing = stage.GetPrimAtPath(prim_path)
         if existing and existing.IsValid():
             return
-        if not usd_path:
+        if not (usd_path or asset_info):
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"'{prim_path}' is not in the stage and no usd_path was given to load it"
+                    f"'{prim_path}' is not in the stage and no usd_path or asset_info was "
+                    "given to load it"
                 ),
             )
+        if asset_info:
+            fetched = await self._asset_library_service.fetch_asset(
+                asset_info["category"], asset_info["manufacturer"], asset_info["model"]
+            )
+            usd_path = fetched["local_path"]
         try:
             raise_if_inside_physics_body(stage, prim_path)
             await reference_usd_at(stage, usd_path, prim_path)

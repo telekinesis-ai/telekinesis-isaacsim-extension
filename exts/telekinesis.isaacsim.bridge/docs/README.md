@@ -125,6 +125,12 @@ The asset has to be a prepared USD gripper carrying an `IsaacSurfaceGripper` pri
 attachment point. There is no `urdf_path` counterpart to the articulation route — a suction gripper
 has no URDF representation.
 
+Instead of a file, `PUT /articulations`, `PUT /surface_grippers` and `POST /stage/scene/reference`
+also take `asset_info` (`{"category", "manufacturer", "model"}`, as `GET /asset_library` lists
+it): the bridge downloads that catalogue asset into its cache once and loads it, and an articulation
+loaded this way gets the catalogue's default joint configuration and mount link unless the request
+gives its own. Nothing is downloaded when a prim is already at the path.
+
 ### Attaching a gripper to an arm
 
 `POST /articulations/{arm_id}/assemble_robot` takes one `gripper_id`, which may be either an

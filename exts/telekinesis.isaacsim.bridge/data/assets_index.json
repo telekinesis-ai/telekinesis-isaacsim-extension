@@ -1480,7 +1480,7 @@
     {
       "manufacturer": "universal_robots",
       "model": "ur10",
-      "bundle": "urdf/robots/manipulators/universal_robots/ur10.zip",
+      "bundle": "usd/robots/manipulators/universal_robots/ur10.zip",
       "default_joint_configuration": [
         0.0,
         -90.0,
@@ -1712,13 +1712,6 @@
       "manufacturer": "schunk",
       "model": "schunkpzv64",
       "bundle": "urdf/tools/parallel_grippers/schunk/schunkpzv64.zip"
-    }
-  ],
-  "urdf/tools/suction_grippers": [
-    {
-      "manufacturer": "piab",
-      "model": "piabpicobotelectric",
-      "bundle": "urdf/tools/suction_grippers/piab/piabpicobotelectric.zip"
     }
   ],
   "usd/attachments": [

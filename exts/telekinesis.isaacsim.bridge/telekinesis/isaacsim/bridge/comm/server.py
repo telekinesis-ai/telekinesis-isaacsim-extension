@@ -153,13 +153,17 @@ class BridgeServer:
 
         # One shared instance of each service for the app's lifetime. The routers
         # reach them via Depends (see .dependencies), keyed by these app.state names.
-        surface_gripper_service = SurfaceGripperService()
-        articulation_service = ArticulationService(surface_gripper_service)
+        # The services that load assets download a catalogue asset through this one.
+        asset_library_service = AssetLibraryService()
+        surface_gripper_service = SurfaceGripperService(asset_library_service)
+        articulation_service = ArticulationService(
+            surface_gripper_service, asset_library_service
+        )
         camera_service = CameraService()
         lidar_service = LidarService()
         lightbeam_service = LightBeamService()
         conveyor_service = ConveyorService()
-        stage_service = StageService()
+        stage_service = StageService(asset_library_service)
         # assemble_robot accepts either kind of gripper, so the two registries know
         # about each other: the articulation service resolves a surface gripper id,
         # and a deleted surface gripper drops the assembly record naming it. A
@@ -183,7 +187,6 @@ class BridgeServer:
         prim_service.on_timeline_stopped = articulation_service.rebind_stale_devices
         app.state.prim_service = prim_service
         app.state.general_service = GeneralService()
-        asset_library_service = AssetLibraryService()
         app.state.asset_library_service = asset_library_service
         self.articulation_service = articulation_service
         self.asset_library_service = asset_library_service

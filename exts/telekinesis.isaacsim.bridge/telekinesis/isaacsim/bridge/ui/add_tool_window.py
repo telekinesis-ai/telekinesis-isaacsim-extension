@@ -1,16 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """The Add Tool window opened from the right-click Create menu."""
 
-import pathlib
-
 from ..comm.services.articulations import ArticulationService
 from ..comm.services.asset_library import AssetLibraryService
 from ..comm.services.surface_grippers import SurfaceGripperService
 from .add_asset_window import AddAssetWindow
 from .mount_offset_fields import MountOffsetFields
 
-PARALLEL_GRIPPER_CATEGORY = "urdf/tools/parallel_grippers"
-SUCTION_GRIPPER_CATEGORY = "usd/tools/suction_grippers"
+PARALLEL_GRIPPER_CATEGORY = "tools/parallel_grippers"
+SUCTION_GRIPPER_CATEGORY = "tools/suction_grippers"
 
 
 class AddToolWindow(AddAssetWindow):
@@ -57,7 +55,7 @@ class AddToolWindow(AddAssetWindow):
         """Zero the attach offset."""
         self._mount_offset_fields.reset()
 
-    async def add_fetched_asset(self, asset: dict, attaching_prim_path: str) -> str:
+    async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Load the gripper and, when ``attaching_prim_path`` is part of a robot, assemble it on."""
         robot_id = await self._articulation_service.find_robot_for_prim(
             attaching_prim_path
@@ -74,15 +72,12 @@ class AddToolWindow(AddAssetWindow):
 
         if asset["category"] == SUCTION_GRIPPER_CATEGORY:
             tool = await self._surface_gripper_service.create_surface_gripper(
-                tool_path, asset["local_path"]
+                tool_path, asset_info=asset
             )
             tool_id = tool["surface_gripper_id"]
         else:
-            is_urdf = pathlib.Path(asset["local_path"]).suffix.lower() == ".urdf"
             tool = await self._articulation_service.create_articulation(
-                tool_path,
-                urdf_path=asset["local_path"] if is_urdf else None,
-                usd_path=None if is_urdf else asset["local_path"],
+                tool_path, None, asset_info=asset
             )
             tool_id = tool["articulation_id"]
 

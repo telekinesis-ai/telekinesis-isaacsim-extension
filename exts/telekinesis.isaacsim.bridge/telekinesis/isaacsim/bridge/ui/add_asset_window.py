@@ -25,8 +25,9 @@ class AddAssetWindow(abc.ABC):
     covers, and the prim the asset is added at (pre-filled with the right-clicked
     prim). Pressing Add checks that a model is selected and that the Attaching Prim
     exists; if not, the window stays open and its status line says why. Otherwise the
-    window closes, the asset is downloaded into the local cache once and handed to
-    :meth:`add_fetched_asset`, which loads it through the bridge services so the
+    window closes and the selected catalogue entry is handed to
+    :meth:`add_selected_asset`, which loads it through the bridge services by its
+    ``asset_info`` -- the services download it into the local cache once -- so the
     result is the same as an HTTP client doing it. Progress and the outcome are shown
     as notifications, an error as a warning that stays until dismissed. Add is
     disabled while an add runs. Every add creates a new prim: a name already taken in
@@ -69,7 +70,7 @@ class AddAssetWindow(abc.ABC):
 
     @abc.abstractmethod
     def asset_categories(self) -> list[str]:
-        """Return the catalogue categories this window offers, e.g. ``["urdf/robots/manipulators"]``.
+        """Return the catalogue categories this window offers, e.g. ``["robots/manipulators"]``.
 
         Called when the catalogue is first loaded. The entries of all returned
         categories share the Manufacturer and Model dropdowns.
@@ -79,7 +80,7 @@ class AddAssetWindow(abc.ABC):
         """Build input fields shown below Attaching Prim. Optional; the default builds none.
 
         Called once from the constructor, inside the window's vertical layout, so
-        widgets created here land in it. Store anything :meth:`add_fetched_asset`
+        widgets created here land in it. Store anything :meth:`add_selected_asset`
         reads on ``self``.
         """
 
@@ -92,16 +93,16 @@ class AddAssetWindow(abc.ABC):
         """
 
     @abc.abstractmethod
-    async def add_fetched_asset(self, asset: dict, attaching_prim_path: str) -> str:
-        """Load the selected, downloaded asset into the stage at ``attaching_prim_path``.
+    async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
+        """Load the selected catalogue asset into the stage at ``attaching_prim_path``.
 
-        Called when Add is pressed, after the asset is in the local cache and with
-        ``attaching_prim_path`` naming a prim in the stage. ``asset`` is its catalogue
-        entry (``manufacturer``, ``model``, ``bundle``, ``category`` and any extra index
-        fields) plus ``local_path``, the bundle's main file. Must go through the bridge
-        services and place new prims at :meth:`_free_destination_path`. May raise the
-        services' ``HTTPException`` or the core layer's ``RuntimeError``, whose message
-        is shown to the user.
+        Called when Add is pressed, with ``attaching_prim_path`` naming a prim in the
+        stage. ``asset`` is the selected catalogue entry (``manufacturer``, ``model``,
+        ``bundle``, ``category`` and any extra index fields). Must load it through the
+        bridge services by passing ``asset`` as their ``asset_info``, so they download
+        it and apply the catalogue's defaults, and place new prims at
+        :meth:`_free_destination_path`. May raise the services' ``HTTPException`` or
+        the core layer's ``RuntimeError``, whose message is shown to the user.
 
         Returns the message shown on success.
         """
@@ -192,17 +193,12 @@ class AddAssetWindow(abc.ABC):
         asyncio.ensure_future(self._add_asset(asset, attaching_prim_path))
 
     async def _add_asset(self, asset: dict, attaching_prim_path: str):
-        """Download ``asset``, pass it to :meth:`add_fetched_asset`, and notify the outcome."""
+        """Pass ``asset`` to :meth:`add_selected_asset` and notify the outcome."""
         asset_label = f"{self._manufacturer_label(asset)} {asset['model']}"
         self._add_button.enabled = False
         notification_manager.post_notification(f"Adding {asset_label}...")
         try:
-            fetched = await self._asset_library_service.fetch_asset(
-                asset["category"], asset["manufacturer"], asset["model"]
-            )
-            success_message = await self.add_fetched_asset(
-                {**fetched, "category": asset["category"]}, attaching_prim_path
-            )
+            success_message = await self.add_selected_asset(asset, attaching_prim_path)
         except HTTPException as exc:
             self._post_add_failure(asset_label, exc.detail)
         except RuntimeError as exc:

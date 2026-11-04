@@ -1,9 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The Add Robot window opened from the right-click Create menu."""
 
-import math
-import pathlib
-
 import omni.usd
 from pxr import Tf
 
@@ -15,7 +12,7 @@ from ..comm.services.asset_library import AssetLibraryService
 from ..core import asset_loader
 from .add_asset_window import AddAssetWindow
 
-ROBOT_CATEGORY = "urdf/robots/manipulators"
+ROBOT_CATEGORY = "robots/manipulators"
 
 
 class AddRobotWindow(AddAssetWindow):
@@ -56,24 +53,14 @@ class AddRobotWindow(AddAssetWindow):
         """Offer the robot arms of the catalogue."""
         return [ROBOT_CATEGORY]
 
-    async def add_fetched_asset(self, asset: dict, attaching_prim_path: str) -> str:
+    async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Register the robot as an articulation under ``attaching_prim_path``."""
-        default_joint_configuration = asset.get("default_joint_configuration")
-        is_urdf = pathlib.Path(asset["local_path"]).suffix.lower() == ".urdf"
         robot_name = Tf.MakeValidIdentifier(asset["model"])
         assembly_path = self._free_destination_path(
             attaching_prim_path, f"{robot_name}_assembly"
         )
         articulation = await self._articulation_service.create_articulation(
-            f"{assembly_path}/{robot_name}",
-            urdf_path=asset["local_path"] if is_urdf else None,
-            usd_path=None if is_urdf else asset["local_path"],
-            default_joint_positions=(
-                [math.radians(degrees) for degrees in default_joint_configuration]
-                if default_joint_configuration is not None
-                else None
-            ),
-            mount_link=asset.get("simulation_mount_link"),
+            f"{assembly_path}/{robot_name}", None, asset_info=asset
         )
         stage = omni.usd.get_context().get_stage()
         stage.GetPrimAtPath(assembly_path).CreateRelationship(

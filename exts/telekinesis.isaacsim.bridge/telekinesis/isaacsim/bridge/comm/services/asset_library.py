@@ -24,7 +24,11 @@ from ...global_variables import ASSET_LIBRARY_URL
 LOCAL_ASSET_INDEX_FILE = "data/assets_index.json"
 LEGACY_BUNDLE_URL = "https://assets.telekinesis.ai"
 
-# The main file of a bundle: a URDF under a "urdf/" category, else a USD or mesh file.
+# The bucket keeps one tree per description format, each holding the same categories.
+# USD comes first: a model found in both trees is taken from its USD bundle.
+FORMAT_PREFIXES = ("usd", "urdf")
+
+# The main file of a bundle: a URDF in the "urdf" tree, else a USD or mesh file.
 URDF_SUFFIXES = {".urdf"}
 USD_SUFFIXES = {".usd", ".usda", ".usdc", ".usdz"}
 USD_OR_MESH_SUFFIXES = USD_SUFFIXES | {".obj", ".glb", ".gltf"}
@@ -36,20 +40,22 @@ LISTING_TIMEOUT_SECONDS = 10
 class AssetLibraryService:
     """The Telekinesis asset catalogue and its local download cache.
 
-    The catalogue is the layout of the asset bucket: a category is a bucket prefix
-    such as ``"urdf/robots/manipulators"``, each folder below it is a manufacturer,
-    and each ``.zip`` in a manufacturer folder is one model's bundle. An entry is
-    ``{"manufacturer", "model", "bundle"}``, where ``model`` is the ZIP name without
-    extension and ``bundle`` the bucket-relative key of the ZIP. Each category is
-    listed once per session; bundles are downloaded once and kept in the cache
-    across sessions.
+    The catalogue is the layout of the asset bucket, which keeps one tree per
+    description format, ``usd/`` and ``urdf/``. A category such as
+    ``"robots/manipulators"`` is a folder path below a format tree and is listed from
+    both trees; each folder below it is a manufacturer, and each ``.zip`` in a
+    manufacturer folder is one model's bundle. A model found in both trees is taken
+    from its USD bundle. An entry is ``{"manufacturer", "model", "bundle"}``, where
+    ``model`` is the ZIP name without extension and ``bundle`` the bucket-relative key
+    of the ZIP, format tree included. Each category is listed once per session;
+    bundles are downloaded once and kept in the cache across sessions.
 
     The bucket must allow public listing. Kit's storage client also caches
     listings, so assets uploaded during a session may only appear after a restart.
 
     Example:
         service = AssetLibraryService()
-        robot = await service.fetch_asset("urdf/robots/manipulators", "epson", "cx4a601s")
+        robot = await service.fetch_asset("robots/manipulators", "epson", "cx4a601s")
         robot["local_path"]  # .../telekinesis_assets/urdf/robots/manipulators/epson/cx4a601s/....urdf
     """
 
@@ -72,10 +78,18 @@ class AssetLibraryService:
                 cannot be listed.
         """
         if category not in self._entries_by_category:
-            if ASSET_LIBRARY_URL is None:
-                entries = self._read_local_asset_index(category)
-            else:
-                entries = await self._list_bucket_category(category)
+            entries_by_identity = {}
+            for format_prefix in FORMAT_PREFIXES:
+                tree_category = f"{format_prefix}/{category}"
+                if ASSET_LIBRARY_URL is None:
+                    tree_entries = self._read_local_asset_index(tree_category)
+                else:
+                    tree_entries = await self._list_bucket_category(tree_category)
+                for entry in tree_entries:
+                    entries_by_identity.setdefault(
+                        (entry["manufacturer"], entry["model"]), entry
+                    )
+            entries = list(entries_by_identity.values())
             if not entries:
                 raise HTTPException(
                     status_code=404,
@@ -93,8 +107,8 @@ class AssetLibraryService:
 
         The bundle is downloaded and extracted on first use only. The returned entry
         gains ``local_path``: the absolute path of the bundle's main file in the cache
-        -- its URDF (or USD) for a ``urdf/`` category, otherwise its USD, OBJ, GLB or
-        glTF file, the shallowest one when there are several. ``manufacturer`` is ``None`` for an
+        -- its URDF (or USD) for a bundle in the ``urdf/`` tree, otherwise its USD,
+        OBJ, GLB or glTF file, the shallowest one when there are several. ``manufacturer`` is ``None`` for an
         entry listed without one.
 
         Raises:
@@ -142,7 +156,7 @@ class AssetLibraryService:
 
         main_file_suffixes = (
             URDF_SUFFIXES | USD_SUFFIXES
-            if category.startswith("urdf/")
+            if entry["bundle"].startswith("urdf/")
             else USD_OR_MESH_SUFFIXES
         )
         main_files = [

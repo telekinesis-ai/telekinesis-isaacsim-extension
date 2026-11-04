@@ -22,6 +22,8 @@ Wire units mirror the rest of the bridge: radians for joints, meters for lengths
 """
 
 import asyncio
+import math
+import pathlib
 
 from fastapi import HTTPException
 
@@ -39,6 +41,7 @@ from ...core.robot_assembler import (
     mount_prim,
     place_tcp,
 )
+from .asset_library import AssetLibraryService
 
 # String attribute on an articulation's prim naming the link tools and prims are mounted
 # onto. Stored in USD so it survives saving the stage and is shared by every client.
@@ -58,10 +61,12 @@ class ArticulationService:
 
     ``assemble_robot`` accepts either kind of gripper, so this service composes the
     surface gripper registry (the way :class:`..services.prims.PrimService` composes
-    the stage service) to resolve a ``gripper_id`` that belongs to it.
+    the stage service) to resolve a ``gripper_id`` that belongs to it. Catalogue assets
+    a create names by ``asset_info`` are downloaded through the asset library service.
     """
 
-    def __init__(self, surface_gripper_service):
+    def __init__(self, surface_gripper_service, asset_library_service: AssetLibraryService):
+        self._asset_library_service = asset_library_service
         self._devices = {}  # articulation_id -> SingleArticulation
         self._id_by_prim = {}  # requested prim_path -> articulation_id (stable on re-create)
         self._count = 0  # for ids like articulation1, articulation2
@@ -91,27 +96,38 @@ class ArticulationService:
         usd_path=None,
         default_joint_positions=None,
         mount_link=None,
+        asset_info=None,
     ):
         """Register (and bind) the articulation at ``prim_path`` and return its info.
 
         One articulation per *requested* prim; PUTting the same prim again returns
         the same id (and rebinds). We key on the requested path, so a client that
-        passes ``urdf_path``/``usd_path`` defensively gets the same id whether the
-        robot had to be loaded or was already in the stage. Ids are 1-based:
+        passes ``urdf_path``/``usd_path``/``asset_info`` defensively gets the same id
+        whether the robot had to be loaded or was already in the stage. Ids are 1-based:
         ``articulation1``,
         ``articulation2``, ... The bind runs every time: a new client session may
         follow a timeline stop/replay, which invalidates the cached articulation
         handle.
 
+        ``asset_info`` (``{"category", "manufacturer", "model"}``) names a catalogue
+        asset to load when no prim is at ``prim_path``: it is downloaded into the
+        cache once, then imported (a URDF) or referenced (a USD). At most one of
+        ``urdf_path``, ``usd_path`` and ``asset_info`` is given (see
+        :meth:`_resolve_prim`).
+
         ``default_joint_positions`` (radians) is applied only when this request
         loaded the prim: the joints are teleported there and it becomes the reset
         pose. A loaded asset starts every joint at zero, which may lie outside a
-        joint's range; a prim already in the stage keeps the pose it stands in.
+        joint's range; a prim already in the stage keeps the pose it stands in. A
+        catalogue asset loaded without it uses the catalogue's
+        ``default_joint_configuration`` (degrees), when it has one.
 
         ``mount_link`` names the link that ``assemble_robot`` and ``mount_prim`` attach
         to when they are given none. It is stored on the prim as
-        :data:`MOUNT_LINK_ATTRIBUTE`, replacing any stored before; without it, the prim
-        is left as it is (see :meth:`resolve_arm_mount_link`).
+        :data:`MOUNT_LINK_ATTRIBUTE`, replacing any stored before; without it, a
+        catalogue asset this request loads stores the catalogue's
+        ``simulation_mount_link``, when it has one, and any other prim is left as it is
+        (see :meth:`resolve_arm_mount_link`).
 
         Loading is refused with 422 when ``prim_path`` lies inside an articulation. A
         robot loaded inside a rigid body is fixed to the nearest such body with a joint
@@ -128,9 +144,19 @@ class ArticulationService:
         # concurrent callers for the same prim_path always land on the same Lock.
         lock = self._create_locks.setdefault(prim_path, asyncio.Lock())
         async with lock:
-            resolved, prim_source = await self._resolve_prim(
-                prim_path, urdf_path, usd_path
+            resolved, prim_source, catalogue_entry = await self._resolve_prim(
+                prim_path, urdf_path, usd_path, asset_info
             )
+            if catalogue_entry is not None:
+                catalogue_joint_configuration = catalogue_entry.get(
+                    "default_joint_configuration"
+                )
+                if default_joint_positions is None and catalogue_joint_configuration is not None:
+                    default_joint_positions = [
+                        math.radians(degrees) for degrees in catalogue_joint_configuration
+                    ]
+                if mount_link is None:
+                    mount_link = catalogue_entry.get("simulation_mount_link")
 
             articulation_id = self._id_by_prim.get(prim_path)
             if articulation_id is None:
@@ -1007,37 +1033,56 @@ class ArticulationService:
             raise HTTPException(status_code=409, detail="no USD stage is open")
         return stage
 
-    async def _resolve_prim(self, requested_prim_path, urdf_path, usd_path):
+    async def _resolve_prim(self, requested_prim_path, urdf_path, usd_path, asset_info):
         """Use the prim if it's already in the stage, else load it there from a file.
 
-        Returns ``(resolved_path, prim_source)``. ``prim_source`` reports which of
-        the three actually happened -- ``"isaac_usd"`` if the prim was already in
-        the stage (any ``urdf_path``/``usd_path`` given had no effect),
-        ``"imported_urdf"`` if it was imported from that URDF file just now, or
-        ``"referenced_usd"`` if that USD asset was referenced onto it just now.
-        Without this, a client that passes a path defensively (load if missing,
+        The file is ``urdf_path``, ``usd_path``, or the main file of the catalogue
+        asset ``asset_info``, which is downloaded only when the prim is missing.
+
+        Returns ``(resolved_path, prim_source, catalogue_entry)``. ``prim_source``
+        reports which of the three actually happened -- ``"isaac_usd"`` if the prim
+        was already in the stage (any ``urdf_path``/``usd_path``/``asset_info`` given
+        had no effect), ``"imported_urdf"`` if it was imported from a URDF file just
+        now, or ``"referenced_usd"`` if a USD asset was referenced onto it just now.
+        Without this, a client that passes a source defensively (load if missing,
         reuse if not) has no way to tell which one actually happened.
+        ``catalogue_entry`` is the entry :meth:`AssetLibraryService.fetch_asset`
+        returned when ``asset_info`` was loaded, else ``None``.
+
+        Raises:
+            HTTPException: 400 if more than one source is given, or none while the
+                prim is missing; 404/502 from the catalogue download; 422 if loading
+                fails.
         """
         import omni.usd
 
-        if urdf_path and usd_path:
+        if sum(1 for source in (urdf_path, usd_path, asset_info) if source) > 1:
             raise HTTPException(
                 status_code=400,
-                detail="give either urdf_path or usd_path, not both",
+                detail="give only one of urdf_path, usd_path or asset_info",
             )
 
         stage = omni.usd.get_context().get_stage()
         existing = stage.GetPrimAtPath(requested_prim_path)
         if existing and existing.IsValid():
-            return requested_prim_path, "isaac_usd"
-        if not (urdf_path or usd_path):
+            return requested_prim_path, "isaac_usd", None
+        if not (urdf_path or usd_path or asset_info):
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"'{requested_prim_path}' is not in the stage and no urdf_path or usd_path "
-                    "was given to load it"
+                    f"'{requested_prim_path}' is not in the stage and no urdf_path, usd_path "
+                    "or asset_info was given to load it"
                 ),
             )
+        catalogue_entry = None
+        if asset_info:
+            catalogue_entry = await self._asset_library_service.fetch_asset(
+                asset_info["category"], asset_info["manufacturer"], asset_info["model"]
+            )
+            if pathlib.Path(catalogue_entry["local_path"]).suffix.lower() == ".urdf":
+                urdf_path = catalogue_entry["local_path"]
+            else:
+                usd_path = catalogue_entry["local_path"]
         try:
             rigid_body_path = find_rigid_body_ancestor(stage, requested_prim_path)
             if urdf_path:
@@ -1048,7 +1093,7 @@ class ArticulationService:
                 prim_source = "referenced_usd"
             if rigid_body_path is not None:
                 await fix_robot_to_rigid_body(stage, resolved, rigid_body_path)
-            return resolved, prim_source
+            return resolved, prim_source, catalogue_entry
         except RuntimeError as exc:
             # 422: well-formed request, but loading the file itself failed.
             raise HTTPException(status_code=422, detail=str(exc)) from exc

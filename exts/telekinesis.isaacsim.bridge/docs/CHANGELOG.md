@@ -1,6 +1,13 @@
 # Changelog
 ## [0.8.1] - 2026-11-02
 ### Added
+- `PUT /articulations`, `PUT /surface_grippers` and `POST /stage/scene/reference` take an
+  optional `asset_info` (`{"category", "manufacturer", "model"}`) in place of a file: the bridge
+  downloads that catalogue asset into its cache once and loads it. An articulation loaded this
+  way gets the catalogue's default joint configuration and mount link unless the request gives
+  its own. Nothing is downloaded when a prim is already at the path; giving `asset_info` with a
+  file is a 400. `uri` of `POST /stage/scene/reference` is now optional. The Add Robot, Add Tool
+  and Add Mesh windows load through `asset_info` too.
 - Right-click Create → Telekinesis Isaac Sim Bridge → Add Robot in the Stage panel and viewport
   opens a window to pick a robot (Manufacturer, Model) from the Telekinesis asset library and
   load it under the right-clicked prim, at `<model>_assembly/<model>`. The robot is registered
@@ -14,8 +21,9 @@
   and the outcome as notifications; an error stays until dismissed. Add is refused, with the
   window left open, when no model is selected or the Attaching Prim is not a prim in the stage.
   Every Add creates a new prim: a name already taken gets a numeric suffix.
-- `GET /asset_library/{category}` lists the assets under a bucket prefix (e.g.
-  `urdf/robots/manipulators`): each manufacturer folder and the model ZIPs in it.
+- `GET /asset_library/{category}` lists the assets of a category (e.g. `robots/manipulators`)
+  from both the bucket's `usd/` and `urdf/` trees: each manufacturer folder and the model ZIPs
+  in it. A model found in both trees is taken from its USD bundle.
   `POST /asset_library/fetch` downloads an asset bundle into the bridge's local cache once and
   returns its entry with the local path of the bundle's main file (its URDF, or its USD, OBJ,
   GLB or glTF file).
@@ -26,7 +34,7 @@
   body the robot stands in, and assembled onto the robot's mount link at the entered offset, as `assemble_robot` does;
   elsewhere it is only loaded. A robot that stores no mount link refuses the add before
   anything is loaded.
-- Right-click Create → Telekinesis Isaac Sim Bridge → Add Mesh adds a mesh from `usd/attachments`.
+- Right-click Create → Telekinesis Isaac Sim Bridge → Add Mesh adds a mesh from `attachments`.
   On a robot, it is placed beside the robot (in its `<model>_assembly` Xform), outside any rigid
   body the robot stands in, and mounted on the robot's mount link at the entered offset, as `mount_prim` does; elsewhere it is
   added under the right-clicked prim as it is. A robot that stores no mount link refuses the
