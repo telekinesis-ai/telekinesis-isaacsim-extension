@@ -55,6 +55,7 @@ from fastapi import responses
 import carb
 
 from .services.articulations import ArticulationService
+from .services.asset_library import AssetLibraryService
 from .services.cameras import CameraService
 from .services.conveyors import ConveyorService
 from .services.lidars import LidarService
@@ -71,7 +72,14 @@ class BridgeServer:
 
     The request logic lives in the services (built and shared in ``_build_app``);
     this class only runs the server and clears the articulation registry on stop.
+    The services the extension's GUI uses are public, so it drives the same
+    instances the routes do.
     """
+
+    articulation_service: ArticulationService
+    asset_library_service: AssetLibraryService
+    stage_service: StageService
+    surface_gripper_service: SurfaceGripperService
 
     def __init__(self, host="127.0.0.1", port=8766):
         """Build the FastAPI app (and its services); call `start()` to begin serving."""
@@ -171,6 +179,12 @@ class BridgeServer:
         prim_service.on_timeline_stopped = articulation_service.rebind_stale_devices
         app.state.prim_service = prim_service
         app.state.general_service = GeneralService()
+        asset_library_service = AssetLibraryService()
+        app.state.asset_library_service = asset_library_service
+        self.articulation_service = articulation_service
+        self.asset_library_service = asset_library_service
+        self.stage_service = stage_service
+        self.surface_gripper_service = surface_gripper_service
         self._device_services = (
             articulation_service,
             surface_gripper_service,

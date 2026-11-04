@@ -35,6 +35,7 @@ from fastapi import (
 from . import binary
 from .dependencies import (
     get_articulation_service,
+    get_asset_library_service,
     get_camera_service,
     get_conveyor_service,
     get_general_service,
@@ -68,6 +69,7 @@ from .models import (
     CreateSurfaceGripperRequest,
     DefaultJointStateRequest,
     DofGainsRequest,
+    FetchAssetRequest,
     GripperActionRequest,
     JointEffortsRequest,
     JointPositionsRequest,
@@ -150,7 +152,7 @@ async def create_articulation(
 ):
     """Register (and bind) one articulation; returns its id, prim, dof and state."""
     return await articulation_service.create_articulation(
-        req.prim_path, req.urdf_path, req.usd_path, req.default_joint_positions
+        req.prim_path, req.urdf_path, req.usd_path, req.default_joint_positions, req.mount_link
     )
 
 
@@ -1035,6 +1037,26 @@ async def select_prims():
 async def list_selected_prims():
     """Mirrored from the spec; not yet implemented."""
     not_implemented()
+
+
+# -- asset library ----------------------------------------------------------
+
+asset_library = APIRouter(prefix="/asset_library", tags=["asset_library"])
+
+
+# Declared before the catch-all category GET so "fetch" is never read as a category.
+@asset_library.post("/fetch", summary="Fetch Asset")
+async def fetch_asset(
+    req: FetchAssetRequest, asset_library_service=Depends(get_asset_library_service)
+):
+    """Download the asset into the bridge's cache (once); returns its entry plus local_path."""
+    return await asset_library_service.fetch_asset(req.category, req.manufacturer, req.model)
+
+
+@asset_library.get("/{category:path}", summary="List Assets")
+async def list_assets(category: str, asset_library_service=Depends(get_asset_library_service)):
+    """The assets under one bucket prefix, e.g. urdf/robots/manipulators. 404 if empty."""
+    return await asset_library_service.list_assets(category)
 
 
 # -- nucleus ----------------------------------------------------------------
@@ -2337,6 +2359,7 @@ ALL_ROUTERS = (
     general,
     stage,
     prims,
+    asset_library,
     nucleus,
     manipulators,
     trajectories,

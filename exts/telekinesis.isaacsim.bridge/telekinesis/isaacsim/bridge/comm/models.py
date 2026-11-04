@@ -27,12 +27,34 @@ class CreateArticulationRequest(BaseModel):
     freshly loaded articulation is placed at and resets to on Stop+Play. It applies
     only when this request loads the prim; a prim already in the stage keeps its
     pose.
+
+    ``mount_link`` is the link tools and prims are attached to when assemble_robot or
+    mount_prim name none. It is stored on the articulation's prim; without it, an
+    articulation that stores none yet gets its last link.
+
+    Loading fails with 422 when ``prim_path`` lies inside an articulation. A robot
+    loaded inside a rigid body is fixed to the nearest such body with a joint, so it
+    moves with that body, and stops being fixed to the world.
     """
 
     prim_path: str = Field(min_length=1)
     urdf_path: str | None = None
     usd_path: str | None = None
     default_joint_positions: list[float] | None = None
+    mount_link: str | None = None
+
+
+class FetchAssetRequest(BaseModel):
+    """Body of POST /asset_library/fetch -- make one catalogue asset available locally.
+
+    ``category`` is a bucket prefix such as ``urdf/robots/manipulators``;
+    ``manufacturer`` and ``model`` name the entry exactly as ``GET /asset_library``
+    lists it (the manufacturer folder and the bundle ZIP name).
+    """
+
+    category: str = Field(min_length=1)
+    manufacturer: str | None = None
+    model: str = Field(min_length=1)
 
 
 class JointPositionsRequest(BaseModel):
@@ -226,7 +248,8 @@ class AssembleRobotRequest(BaseModel):
     its own, keeping its own close/open routes.
 
     ``arm_mount_link`` is the arm's flange (e.g. UR ``wrist_3_link``) -- a
-    RigidBodyAPI link or a Site, not an empty frame like ``tool0``.
+    RigidBodyAPI link or a Site, not an empty frame like ``tool0``. Omitted, the
+    arm's stored mount link is used (see ``CreateArticulationRequest.mount_link``).
 
     ``gripper_mount_link`` is where on the gripper to join it. Leave it
     null/omitted for the usual case: for an articulated gripper that
@@ -244,7 +267,7 @@ class AssembleRobotRequest(BaseModel):
     """
 
     gripper_id: str
-    arm_mount_link: str
+    arm_mount_link: str | None = None
     gripper_mount_link: str | None = None
     offset: Transformation | None = None
     mask_collisions: bool = True
@@ -259,11 +282,12 @@ class MountPrimRequest(BaseModel):
     (null/omitted => at the mount link's origin). A prim that is not a rigid body
     becomes one, with gravity off. ``mask_collisions`` stops the arm and the prim
     colliding with each other. Mounting the same prim again replaces its earlier
-    joint.
+    joint. ``arm_mount_link`` omitted means the arm's stored mount link (see
+    ``CreateArticulationRequest.mount_link``).
     """
 
     prim_path: str
-    arm_mount_link: str
+    arm_mount_link: str | None = None
     offset: Transformation | None = None
     mask_collisions: bool = True
 

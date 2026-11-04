@@ -1,10 +1,44 @@
 # Changelog
 ## [0.8.1] - 2026-11-02
 ### Added
-- A "Telekinesis Isaac Sim Bridge" entry in the right-click Create menu of the Stage panel and
-  viewport. It is a placeholder that only prints the right-clicked prims to the terminal.
+- Right-click Create → Telekinesis Isaac Sim Bridge → Add Robot in the Stage panel and viewport
+  opens a window to pick a robot (Manufacturer, Model) from the Telekinesis asset library and
+  load it under the right-clicked prim. The robot is registered as an articulation, as with
+  `PUT /articulations`. When the right-clicked prim is, or lies inside, a rigid body, the
+  status line warns that the robot is fixed to that body.
+- `GET /asset_library/{category}` lists the assets under a bucket prefix (e.g.
+  `urdf/robots/manipulators`): each manufacturer folder and the model ZIPs in it.
+  `POST /asset_library/fetch` downloads an asset bundle into the bridge's local cache once and
+  returns its entry with the local path of the bundle's main file (its URDF, or its USD, OBJ,
+  GLB or glTF file).
+- Add Robot uses a catalogue entry's `default_joint_configuration` (degrees) as the start pose and
+  its `simulation_mount_link` as the robot's mount link.
+- Right-click Create → Telekinesis Isaac Sim Bridge → Add Tool loads a parallel or suction gripper.
+  On a robot, it is loaded beside the robot, outside any rigid body the robot stands in, and
+  assembled onto the robot's mount link at the entered offset, as `assemble_robot` does;
+  elsewhere it is only loaded.
+- Right-click Create → Telekinesis Isaac Sim Bridge → Add Mesh adds a mesh from `usd/attachments`.
+  On a robot, it is placed beside the robot, outside any rigid body the robot stands in, and
+  mounted on the robot's mount link at the entered offset, as `mount_prim` does; elsewhere it is
+  added as a static prim.
+- Right-clicking empty space for Add Robot, Add Tool or Add Mesh adds the asset under the
+  stage's default prim, or under the stage root when the stage has none.
+- `PUT /articulations` takes an optional `mount_link`, stored on the articulation prim as the
+  `telekinesis:mountLink` attribute. Without it, an articulation that stores none gets its last
+  link.
 
 ### Changed
+- `arm_mount_link` is optional on `POST /articulations/{id}/assemble_robot` and
+  `POST /articulations/{id}/mount_prim`; omitted, the robot's stored mount link is used.
+- `PUT /articulations` refuses with 422 to load a robot inside an articulation. A robot loaded
+  inside a rigid body keeps that place in the hierarchy, gets `!resetXformStack!` so PhysX
+  treats it as standalone, and is fixed to the nearest rigid body with a fixed joint, so it
+  moves with that body. It is no longer fixed to the world.
+- `PUT /surface_grippers` refuses with 422 to load a gripper inside a rigid body or an
+  articulation, where PhysX would not move it with its parent.
+- A loaded robot, gripper or prop that would land inside a collider, such as the box it was
+  loaded under, is lifted along world +Z to stand on it, after the existing +X parking clear of
+  other robots.
 - `PUT /prims/physics/rigid_body` makes each mesh collide as its convex hull instead of a
   convex decomposition. Decomposing open, multi-shell CAD meshes left thin hulls that gripper
   fingers were pushed through. A hull is solid, but fills holes and concave pockets.

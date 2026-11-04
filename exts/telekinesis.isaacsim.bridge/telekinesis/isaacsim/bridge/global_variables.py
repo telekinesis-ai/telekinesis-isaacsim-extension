@@ -12,9 +12,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Extension-wide constants: display title and the bridge server's host/port."""
+"""Extension-wide constants: display title, the bridge server's host/port, and the
+asset library's base URL."""
 
 EXTENSION_TITLE = "TelekinesisIsaacSimBridge"
 
 BRIDGE_HOST = "127.0.0.1"
 BRIDGE_PORT = 8766
+
+# S3 endpoint of the public asset bucket (Kit's storage client lists S3 only through the
+# endpoint URL, not a custom domain). None uses the local asset index instead.
+# TODO: set to the bucket endpoint, e.g.
+# "https://telekinesis-public-assets.s3.us-east-1.amazonaws.com", when the bucket is public.
+ASSET_LIBRARY_URL: str | None = None

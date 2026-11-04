@@ -31,7 +31,7 @@ import asyncio
 
 from fastapi import HTTPException
 
-from ...core.asset_loader import reference_usd_at
+from ...core.asset_loader import raise_if_inside_physics_body, reference_usd_at
 from ...core.surface_gripper import SurfaceGripper
 
 
@@ -124,6 +124,9 @@ class SurfaceGripperService:
         effect, so a client may pass it defensively on every connect. Absent both,
         there is nothing to bind and the request is rejected.
 
+        Loading is refused with 422 inside a rigid body or an articulation (see
+        :func:`..core.asset_loader.raise_if_inside_physics_body`).
+
         Loading stops the timeline, which kills the physics handle of every device
         bound before it, so the devices the articulation service holds are repaired
         in this same request rather than left dead until their next client rebind.
@@ -143,6 +146,7 @@ class SurfaceGripperService:
                 detail=(f"'{prim_path}' is not in the stage and no usd_path was given to load it"),
             )
         try:
+            raise_if_inside_physics_body(stage, prim_path)
             await reference_usd_at(stage, usd_path, prim_path)
         except RuntimeError as exc:
             # 422: well-formed request, but loading the asset itself failed.

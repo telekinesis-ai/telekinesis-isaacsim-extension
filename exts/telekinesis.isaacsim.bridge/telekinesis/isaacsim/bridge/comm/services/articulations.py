@@ -26,14 +26,19 @@ import asyncio
 from fastapi import HTTPException
 
 from ...core.articulation import SingleArticulation, find_driver_joint, joint_prims
-from ...core.asset_loader import import_urdf_at, reference_usd_at
+from ...core.asset_loader import find_rigid_body_ancestor, import_urdf_at, reference_usd_at
 from ...core.robot_assembler import (
     assemble_tool,
     attach_surface_gripper,
     bind_shared_articulation,
+    fix_robot_to_rigid_body,
     mount_prim,
     place_tcp,
 )
+
+# String attribute on an articulation's prim naming the link tools and prims are mounted
+# onto. Stored in USD so it survives saving the stage and is shared by every client.
+MOUNT_LINK_ATTRIBUTE = "telekinesis:mountLink"
 
 
 class ArticulationService:
@@ -73,7 +78,7 @@ class ArticulationService:
         self._assembly_locks = {}
 
     async def create_articulation(
-        self, prim_path, urdf_path, usd_path=None, default_joint_positions=None
+        self, prim_path, urdf_path, usd_path=None, default_joint_positions=None, mount_link=None
     ):
         """Register (and bind) the articulation at ``prim_path`` and return its info.
 
@@ -90,6 +95,15 @@ class ArticulationService:
         loaded the prim: the joints are teleported there and it becomes the reset
         pose. A loaded asset starts every joint at zero, which may lie outside a
         joint's range; a prim already in the stage keeps the pose it stands in.
+
+        ``mount_link`` names the link that ``assemble_robot`` and ``mount_prim`` attach
+        to when they are given none. It is stored on the prim as
+        :data:`MOUNT_LINK_ATTRIBUTE`; without it, an articulation that has no stored
+        mount link yet gets its last link (the flange of a serial arm).
+
+        Loading is refused with 422 when ``prim_path`` lies inside an articulation. A
+        robot loaded inside a rigid body is fixed to the nearest such body with a joint
+        and moves with it (see :func:`..core.robot_assembler.fix_robot_to_rigid_body`).
         """
         # Normalize a trailing slash so "/World/ur10e" and "/World/ur10e/" register as
         # the same articulation (USD paths are case-sensitive, so case is left alone).
@@ -124,6 +138,7 @@ class ArticulationService:
                     device.set_joints_default_state(joint_positions=default_joint_positions)
                 except ValueError as exc:
                     raise HTTPException(status_code=400, detail=str(exc)) from exc
+            self._store_mount_link(device, mount_link)
             await self.rebind_stale_devices()
             return {
                 "articulation_id": articulation_id,
@@ -554,7 +569,8 @@ class ArticulationService:
         assembles again.
 
         ``mask_collisions`` only applies to a suction gripper (see
-        :class:`..comm.models.AssembleRobotRequest`).
+        :class:`..comm.models.AssembleRobotRequest`). ``arm_mount_link`` ``None`` means
+        the arm's stored mount link (see :meth:`create_articulation`).
         """
         import carb
 
@@ -564,8 +580,8 @@ class ArticulationService:
         # the USD level, only this guard makes repeat calls safe).
         lock = self._assembly_locks.setdefault(arm_id, asyncio.Lock())
         async with lock:
-            self.get_device(arm_id)  # 404 early if the arm itself is unknown
-            surface_gripper = self._surface_gripper_service.find_device(gripper_id)
+            arm_mount_link = self._arm_mount_link(self.get_device(arm_id), arm_mount_link)
+            surface_gripper =self._surface_gripper_service.find_device(gripper_id)
             if surface_gripper is None and gripper_id not in self._devices:
                 raise HTTPException(
                     status_code=404,
@@ -611,7 +627,8 @@ class ArticulationService:
 
         Mounting stops the timeline, which invalidates every bound articulation
         handle, so the timeline is played again and those are re-bound -- the arm,
-        and a gripper merged into it, included.
+        and a gripper merged into it, included. ``arm_mount_link`` ``None`` means the
+        arm's stored mount link (see :meth:`create_articulation`).
         """
         import omni.kit.app
         import omni.timeline
@@ -619,6 +636,7 @@ class ArticulationService:
         lock = self._assembly_locks.setdefault(arm_id, asyncio.Lock())
         async with lock:
             arm = self.get_device(arm_id)  # 404 early if the arm itself is unknown
+            arm_mount_link = self._arm_mount_link(arm, arm_mount_link)
             try:
                 fixed_joint = await mount_prim(
                     self._stage(),
@@ -846,7 +864,67 @@ class ArticulationService:
             )
         return device
 
+    async def find_robot_for_prim(self, prim_path):
+        """Return the id of the articulation ``prim_path`` is part of, or ``None``.
+
+        The prim and its ancestors are checked nearest first. A registered
+        articulation at one of them is the answer, except a gripper assembled onto an
+        arm, which counts as part of that arm, so the arm's id is returned. An
+        unregistered prim carrying :data:`MOUNT_LINK_ATTRIBUTE`, such as an
+        articulation in a reopened stage, is registered first.
+        """
+        from pxr import Sdf
+
+        arm_by_gripper = {record["gripper_id"]: arm_id for arm_id, record in self._assemblies.items()}
+        stage = self._stage()
+        path = Sdf.Path(prim_path)
+        while not path.isEmpty and path != Sdf.Path.absoluteRootPath:
+            articulation_id = self._id_by_prim.get(path.pathString)
+            if articulation_id is not None:
+                return arm_by_gripper.get(articulation_id, articulation_id)
+            prim = stage.GetPrimAtPath(path)
+            if prim and prim.HasAttribute(MOUNT_LINK_ATTRIBUTE):
+                articulation = await self.create_articulation(path.pathString, None)
+                return articulation["articulation_id"]
+            path = path.GetParentPath()
+        return None
+
     # -- internals ----------------------------------------------------------
+
+    def _store_mount_link(self, device, mount_link):
+        """Write ``mount_link`` to the device prim's :data:`MOUNT_LINK_ATTRIBUTE`.
+
+        Without a ``mount_link``, a prim that already stores one keeps it, and one
+        that does not gets the device's last link.
+        """
+        from pxr import Sdf
+
+        prim = self._stage().GetPrimAtPath(device.prim_path)
+        if mount_link is None:
+            if prim.HasAttribute(MOUNT_LINK_ATTRIBUTE):
+                return
+            mount_link = device.last_link_name()
+        prim.CreateAttribute(MOUNT_LINK_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(mount_link)
+
+    def _arm_mount_link(self, arm, arm_mount_link):
+        """Return ``arm_mount_link``, or the arm's stored mount link when it is ``None``.
+
+        Raises:
+            HTTPException: 422 if none is given and the arm prim stores none.
+        """
+        if arm_mount_link is not None:
+            return arm_mount_link
+        attribute = self._stage().GetPrimAtPath(arm.prim_path).GetAttribute(MOUNT_LINK_ATTRIBUTE)
+        stored_mount_link = attribute.Get() if attribute else None
+        if not stored_mount_link:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"no arm_mount_link given and '{arm.prim_path}' stores none in "
+                    f"'{MOUNT_LINK_ATTRIBUTE}'"
+                ),
+            )
+        return stored_mount_link
 
     @staticmethod
     def _stage():
@@ -890,11 +968,16 @@ class ArticulationService:
                 ),
             )
         try:
+            rigid_body_path = find_rigid_body_ancestor(stage, requested_prim_path)
             if urdf_path:
                 resolved = await import_urdf_at(stage, urdf_path, requested_prim_path)
-                return resolved, "imported_urdf"
-            resolved = await reference_usd_at(stage, usd_path, requested_prim_path)
-            return resolved, "referenced_usd"
+                prim_source = "imported_urdf"
+            else:
+                resolved = await reference_usd_at(stage, usd_path, requested_prim_path)
+                prim_source = "referenced_usd"
+            if rigid_body_path is not None:
+                await fix_robot_to_rigid_body(stage, resolved, rigid_body_path)
+            return resolved, prim_source
         except RuntimeError as exc:
             # 422: well-formed request, but loading the file itself failed.
             raise HTTPException(status_code=422, detail=str(exc)) from exc

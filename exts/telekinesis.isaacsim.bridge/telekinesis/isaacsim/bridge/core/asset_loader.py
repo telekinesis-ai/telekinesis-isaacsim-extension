@@ -35,8 +35,8 @@ async def import_urdf_at(stage, urdf_path, dest_prim_path):
     mesh always reaches the stage.
 
     The robot arrives at the world origin unless another robot is already standing
-    there, in which case it is parked beside that one instead (see
-    :func:`_park_clear_of_existing_robots`).
+    there, in which case it is parked beside that one instead, and is lifted onto any
+    other collider it would land inside (see :func:`_park_clear_of_robots_and_colliders`).
 
     Importing straight into the open stage is the other way to do this, and it is the
     wrong way whenever the stage has never been saved: the importer then has nowhere
@@ -86,6 +86,69 @@ async def reference_usd_at(stage, usd_path, dest_prim_path):
         raise RuntimeError(f"cannot find the usd asset '{usd_path}'")
 
     return await _reference_asset_at(stage, usd_path, dest_prim_path)
+
+
+def find_rigid_body_ancestor(stage, prim_path):
+    """Return the path of the nearest rigid body ``prim_path`` lies inside, or ``None``.
+
+    A robot or gripper brings its own rigid bodies, and PhysX does not move a rigid
+    body with a rigid-body ancestor. A static prop that only carries colliders is not
+    a rigid body and does not count.
+
+    Raises:
+        RuntimeError: If an ancestor of ``prim_path`` has ``ArticulationRootAPI``; the
+            message names that ancestor. An asset rides on a robot through
+            ``assemble_robot`` / ``mount_prim`` instead.
+    """
+    rigid_body_path = None
+    ancestor_path = Sdf.Path(prim_path).GetParentPath()
+    while not ancestor_path.isEmpty and ancestor_path != Sdf.Path.absoluteRootPath:
+        ancestor = stage.GetPrimAtPath(ancestor_path)
+        if ancestor and ancestor.HasAPI(UsdPhysics.ArticulationRootAPI):
+            raise RuntimeError(
+                f"'{prim_path}' lies inside the articulation '{ancestor_path}'; load it beside "
+                "that prim and attach it with assemble_robot or mount_prim instead"
+            )
+        if rigid_body_path is None and ancestor and ancestor.HasAPI(UsdPhysics.RigidBodyAPI):
+            rigid_body_path = ancestor_path.pathString
+        ancestor_path = ancestor_path.GetParentPath()
+    return rigid_body_path
+
+
+def path_beside_clear_of_rigid_bodies(stage, prim_path, name):
+    """Return the path of a prim named ``name`` beside ``prim_path``, outside every rigid body.
+
+    An asset joined to a robot with a fixed joint is loaded beside the robot. When the
+    robot stands inside a rigid body, beside it is inside that body too: a gripper there
+    would be fixed to the body as well as to the robot, and the two joints would fight,
+    and a mounted mesh would be a rigid body nested in another. So the path moves up
+    beside the outermost rigid body around ``prim_path``.
+    """
+    path = Sdf.Path(prim_path).GetParentPath().AppendChild(name)
+    rigid_body_path = find_rigid_body_ancestor(stage, path.pathString)
+    while rigid_body_path is not None:
+        path = Sdf.Path(rigid_body_path).GetParentPath().AppendChild(name)
+        rigid_body_path = find_rigid_body_ancestor(stage, path.pathString)
+    return path.pathString
+
+
+def raise_if_inside_physics_body(stage, prim_path):
+    """Refuse a gripper destination that lies inside a rigid body or articulation.
+
+    Below either, the gripper's own rigid bodies would not follow the parent. To ride
+    on a moving body or a robot, the gripper is loaded beside it and joined with a
+    fixed joint instead (``assemble_robot``).
+
+    Raises:
+        RuntimeError: If an ancestor of ``prim_path`` has ``RigidBodyAPI`` or
+            ``ArticulationRootAPI``; the message names that ancestor.
+    """
+    rigid_body_path = find_rigid_body_ancestor(stage, prim_path)
+    if rigid_body_path is not None:
+        raise RuntimeError(
+            f"'{prim_path}' lies inside the rigid body '{rigid_body_path}'; load it beside "
+            "that prim and attach it with a fixed joint instead"
+        )
 
 
 async def import_mesh_at(stage, mesh_path, dest_prim_path):
@@ -151,34 +214,41 @@ async def _reference_asset_at(stage, asset_path, dest_prim_path):
     await app.next_update_async()
     await app.next_update_async()
 
-    _park_clear_of_existing_robots(stage, dest_prim_path)
+    _park_clear_of_robots_and_colliders(stage, dest_prim_path)
 
     return dest_prim_path
 
 
-def _park_clear_of_existing_robots(stage, dest_prim_path):
-    """Offset a freshly referenced robot so it does not arrive inside another one.
+def _park_clear_of_robots_and_colliders(stage, dest_prim_path):
+    """Offset a freshly referenced asset so it does not arrive inside a robot or a
+    collider.
 
-    An import carries no pose of its own, so it lands at the world origin -- which is
-    where the last import landed too. Two robots sharing that space are each held
-    there by their own fixed base, so physics cannot separate them and resolves the
-    overlap with forces large enough to throw either of them across the stage.
-    Offsetting the new robot along +X until it clears the robots already beside it
-    keeps an import from disturbing them, and a robot later assembled onto an arm is
-    moved to its mount anyway, so the parking spot lasts only until it is given a
-    real one.
+    An import carries no pose of its own, so it lands at its parent's origin -- the
+    world origin, where the last import landed too, or the origin of the prim it was
+    loaded under. Two robots sharing that space are each held there by their own fixed
+    base, so physics cannot separate them and resolves the overlap with forces large
+    enough to throw either of them across the stage. Offsetting the new asset along
+    world +X until it clears the robots already beside it keeps an import from
+    disturbing them, and a robot later assembled onto an arm is moved to its mount
+    anyway, so the parking spot lasts only until it is given a real one.
 
-    Only a robot counts as an occupant. A ground plane or a stage prop shares the
-    origin with every robot by design, and counting those would push the first import
-    off the origin for no reason.
+    Any other collider it would still overlap, such as the box it was loaded onto, is
+    resolved by lifting it along world +Z until its bounds stand on the highest of
+    them. Colliders that belong to a robot are left to the +X parking.
+
+    Overlap is measured between axis-aligned world bounds, so a collider that only
+    meets the bounds of a robot's arm lifts the whole robot. Only robots beside the new
+    asset are parked against, and the lift is a single pass that does not re-check what
+    the asset meets at its new height.
     """
     gap_metres = 0.1
 
     prim = stage.GetPrimAtPath(dest_prim_path)
     cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
+    xform_cache = UsdGeom.XformCache()
     bounds = cache.ComputeWorldBound(prim).ComputeAlignedRange()
 
-    occupied = Gf.Range3d()
+    occupied_by_robots = Gf.Range3d()
     for sibling in stage.GetPrimAtPath(prim.GetPath().GetParentPath()).GetChildren():
         # Measured whole rather than from the articulation root down: which prim of a
         # robot carries the root API is up to whoever authored it, and on an asset
@@ -187,16 +257,66 @@ def _park_clear_of_existing_robots(stage, dest_prim_path):
             p.HasAPI(UsdPhysics.ArticulationRootAPI) for p in Usd.PrimRange(sibling)
         ):
             continue
-        occupied = Gf.Range3d.GetUnion(
-            occupied, cache.ComputeWorldBound(sibling).ComputeAlignedRange()
+        occupied_by_robots = Gf.Range3d.GetUnion(
+            occupied_by_robots, cache.ComputeWorldBound(sibling).ComputeAlignedRange()
         )
 
-    if bounds.IsEmpty() or occupied.IsEmpty():
-        return
-    if Gf.Range3d.GetIntersection(bounds, occupied).IsEmpty():
+    # A robot is the prim carrying the root API, or the robot prim above it when the
+    # API sits on the root joint or the base link.
+    robot_paths = []
+    colliders = []
+    for candidate in stage.Traverse():
+        if candidate.HasAPI(UsdPhysics.ArticulationRootAPI):
+            robot = (
+                candidate.GetParent()
+                if candidate.IsA(UsdPhysics.Joint) or candidate.HasAPI(UsdPhysics.RigidBodyAPI)
+                else candidate
+            )
+            robot_paths.append(robot.GetPath())
+        if candidate.HasAPI(UsdPhysics.CollisionAPI):
+            colliders.append(candidate)
+    collider_bounds = []
+    for collider in colliders:
+        if collider.GetPath().HasPrefix(prim.GetPath()) or any(
+            collider.GetPath().HasPrefix(robot_path) for robot_path in robot_paths
+        ):
+            continue
+        # The collider's own extent rather than its BBoxCache bound: that bound
+        # includes the collider's descendants, and the asset may just have been
+        # loaded below it.
+        extent = UsdGeom.Boundable.ComputeExtentFromPlugins(
+            UsdGeom.Boundable(collider), Usd.TimeCode.Default()
+        )
+        if not extent:
+            continue
+        collider_bounds.append(
+            Gf.BBox3d(
+                Gf.Range3d(Gf.Vec3d(extent[0]), Gf.Vec3d(extent[1])),
+                xform_cache.GetLocalToWorldTransform(collider),
+            ).ComputeAlignedRange()
+        )
+
+    if bounds.IsEmpty():
         return
 
-    shift = occupied.GetMax()[0] - bounds.GetMin()[0] + gap_metres
+    shift = Gf.Vec3d(0.0, 0.0, 0.0)
+    if not Gf.Range3d.GetIntersection(bounds, occupied_by_robots).IsEmpty():
+        shift[0] = occupied_by_robots.GetMax()[0] - bounds.GetMin()[0] + gap_metres
+    parked_bounds = Gf.Range3d(bounds.GetMin() + shift, bounds.GetMax() + shift)
+    overlapped_collider_tops = [
+        collider.GetMax()[2]
+        for collider in collider_bounds
+        if not Gf.Range3d.GetIntersection(parked_bounds, collider).IsEmpty()
+    ]
+    if overlapped_collider_tops:
+        shift[2] = max(overlapped_collider_tops) - bounds.GetMin()[2]
+    if shift == Gf.Vec3d(0.0, 0.0, 0.0):
+        return
+    # The shift is in world axes; the translate op is read in the parent's frame,
+    # which is scaled and rotated when the asset was loaded under a prop.
+    parent_shift = (
+        xform_cache.GetLocalToWorldTransform(prim.GetParent()).GetInverse().TransformDir(shift)
+    )
 
     # Added to whatever translation the asset authors rather than authored fresh: a
     # modelled asset arrives with its own xform ops, and adding a second translate op
@@ -215,12 +335,18 @@ def _park_clear_of_existing_robots(stage, dest_prim_path):
     )
     authored = translate.Get()
     if authored is None:
-        translate.Set(Gf.Vec3d(shift, 0.0, 0.0))
+        translate.Set(parent_shift)
     else:
-        translate.Set(type(authored)(authored[0] + shift, authored[1], authored[2]))
+        translate.Set(
+            type(authored)(
+                authored[0] + parent_shift[0],
+                authored[1] + parent_shift[1],
+                authored[2] + parent_shift[2],
+            )
+        )
     carb.log_info(
-        f"[bridge] parked {dest_prim_path} {shift:.3f} m along +X, clear of the robot(s) "
-        "already on the stage"
+        f"[bridge] parked {dest_prim_path} {shift[0]:.3f} m along +X and {shift[2]:.3f} m "
+        "along +Z, clear of the robots and colliders already on the stage"
     )
 
 
