@@ -29,8 +29,10 @@ class CreateArticulationRequest(BaseModel):
     pose.
 
     ``mount_link`` is the link tools and prims are attached to when assemble_robot or
-    mount_prim name none. It is stored on the articulation's prim; without it, an
-    articulation that stores none yet gets its last link.
+    mount_prim name none. It is stored on the articulation's prim, replacing any stored
+    before; without it, the prim is left as it is, and assemble_robot and mount_prim
+    then fail with 422 unless they are given an ``arm_mount_link`` or one was stored
+    earlier.
 
     Loading fails with 422 when ``prim_path`` lies inside an articulation. A robot
     loaded inside a rigid body is fixed to the nearest such body with a joint, so it

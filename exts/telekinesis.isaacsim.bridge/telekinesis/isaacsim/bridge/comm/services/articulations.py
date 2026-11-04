@@ -98,8 +98,8 @@ class ArticulationService:
 
         ``mount_link`` names the link that ``assemble_robot`` and ``mount_prim`` attach
         to when they are given none. It is stored on the prim as
-        :data:`MOUNT_LINK_ATTRIBUTE`; without it, an articulation that has no stored
-        mount link yet gets its last link (the flange of a serial arm).
+        :data:`MOUNT_LINK_ATTRIBUTE`, replacing any stored before; without it, the prim
+        is left as it is (see :meth:`resolve_arm_mount_link`).
 
         Loading is refused with 422 when ``prim_path`` lies inside an articulation. A
         robot loaded inside a rigid body is fixed to the nearest such body with a joint
@@ -138,7 +138,12 @@ class ArticulationService:
                     device.set_joints_default_state(joint_positions=default_joint_positions)
                 except ValueError as exc:
                     raise HTTPException(status_code=400, detail=str(exc)) from exc
-            self._store_mount_link(device, mount_link)
+            if mount_link is not None:
+                from pxr import Sdf
+
+                self._stage().GetPrimAtPath(device.prim_path).CreateAttribute(
+                    MOUNT_LINK_ATTRIBUTE, Sdf.ValueTypeNames.String
+                ).Set(mount_link)
             await self.rebind_stale_devices()
             return {
                 "articulation_id": articulation_id,
@@ -580,8 +585,8 @@ class ArticulationService:
         # the USD level, only this guard makes repeat calls safe).
         lock = self._assembly_locks.setdefault(arm_id, asyncio.Lock())
         async with lock:
-            arm_mount_link = self._arm_mount_link(self.get_device(arm_id), arm_mount_link)
-            surface_gripper =self._surface_gripper_service.find_device(gripper_id)
+            arm_mount_link = self.resolve_arm_mount_link(arm_id, arm_mount_link)
+            surface_gripper = self._surface_gripper_service.find_device(gripper_id)
             if surface_gripper is None and gripper_id not in self._devices:
                 raise HTTPException(
                     status_code=404,
@@ -636,7 +641,7 @@ class ArticulationService:
         lock = self._assembly_locks.setdefault(arm_id, asyncio.Lock())
         async with lock:
             arm = self.get_device(arm_id)  # 404 early if the arm itself is unknown
-            arm_mount_link = self._arm_mount_link(arm, arm_mount_link)
+            arm_mount_link = self.resolve_arm_mount_link(arm_id, arm_mount_link)
             try:
                 fixed_joint = await mount_prim(
                     self._stage(),
@@ -875,10 +880,12 @@ class ArticulationService:
         """
         from pxr import Sdf
 
-        arm_by_gripper = {record["gripper_id"]: arm_id for arm_id, record in self._assemblies.items()}
+        arm_by_gripper = {
+            record["gripper_id"]: arm_id for arm_id, record in self._assemblies.items()
+        }
         stage = self._stage()
-        path = Sdf.Path(prim_path)
-        while not path.isEmpty and path != Sdf.Path.absoluteRootPath:
+        # GetAncestorsRange ends even for a relative path, whose parents never run out.
+        for path in Sdf.Path(prim_path).GetAncestorsRange():
             articulation_id = self._id_by_prim.get(path.pathString)
             if articulation_id is not None:
                 return arm_by_gripper.get(articulation_id, articulation_id)
@@ -886,32 +893,19 @@ class ArticulationService:
             if prim and prim.HasAttribute(MOUNT_LINK_ATTRIBUTE):
                 articulation = await self.create_articulation(path.pathString, None)
                 return articulation["articulation_id"]
-            path = path.GetParentPath()
         return None
 
-    # -- internals ----------------------------------------------------------
-
-    def _store_mount_link(self, device, mount_link):
-        """Write ``mount_link`` to the device prim's :data:`MOUNT_LINK_ATTRIBUTE`.
-
-        Without a ``mount_link``, a prim that already stores one keeps it, and one
-        that does not gets the device's last link.
-        """
-        from pxr import Sdf
-
-        prim = self._stage().GetPrimAtPath(device.prim_path)
-        if mount_link is None:
-            if prim.HasAttribute(MOUNT_LINK_ATTRIBUTE):
-                return
-            mount_link = device.last_link_name()
-        prim.CreateAttribute(MOUNT_LINK_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(mount_link)
-
-    def _arm_mount_link(self, arm, arm_mount_link):
+    def resolve_arm_mount_link(self, arm_id, arm_mount_link=None):
         """Return ``arm_mount_link``, or the arm's stored mount link when it is ``None``.
 
+        The stored mount link is the one ``create_articulation`` was given (see
+        :data:`MOUNT_LINK_ATTRIBUTE`); no link is guessed when none was.
+
         Raises:
-            HTTPException: 422 if none is given and the arm prim stores none.
+            HTTPException: 404 if ``arm_id`` is unknown; 422 if no ``arm_mount_link`` is
+                given and the arm prim stores none.
         """
+        arm = self.get_device(arm_id)
         if arm_mount_link is not None:
             return arm_mount_link
         attribute = self._stage().GetPrimAtPath(arm.prim_path).GetAttribute(MOUNT_LINK_ATTRIBUTE)
@@ -921,10 +915,13 @@ class ArticulationService:
                 status_code=422,
                 detail=(
                     f"no arm_mount_link given and '{arm.prim_path}' stores none in "
-                    f"'{MOUNT_LINK_ATTRIBUTE}'"
+                    f"'{MOUNT_LINK_ATTRIBUTE}'; pass arm_mount_link, or register the arm "
+                    "with a mount_link"
                 ),
             )
         return stored_mount_link
+
+    # -- internals ----------------------------------------------------------
 
     @staticmethod
     def _stage():

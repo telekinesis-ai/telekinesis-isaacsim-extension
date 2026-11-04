@@ -1,6 +1,6 @@
 [package]
 name = "telekinesis.isaacsim.bridge"
-version = "0.8.1"
+version = "0.9.0"
 category = "Simulation"
 title = "Telekinesis Isaac Sim Bridge"
 description = "HTTP and WebSocket bridge for connecting NVIDIA Isaac Sim to local applications with real-time articulation control and streaming."
@@ -22,6 +22,7 @@ writeTarget.kit = true
 "isaacsim.robot.surface_gripper" = {}
 "omni.kit.asset_converter" = {}
 "omni.kit.context_menu" = {}
+"omni.kit.notification_manager" = {}
 "omni.kit.uiapp" = {}
 "omni.usd.schema.physx" = {}
 

@@ -82,16 +82,6 @@ def get_articulation_base_link_name(articulation):
     return articulation._articulation_view.body_names[0]
 
 
-def get_articulation_last_link_name(articulation):
-    """Last link name of an already-initialized ``SingleArticulation``.
-
-    The default mount link of a robot whose asset names none: links are ordered
-    root-first, so on a serial arm the last one is the flange link a tool is bolted
-    to. Read off the physics view, like :func:`get_articulation_base_link_name`.
-    """
-    return articulation._articulation_view.body_names[-1]
-
-
 def offset_matrix(offset):
     """Matrix form of a ``models.Transformation`` mount offset, identity for ``None``.
 
@@ -403,23 +393,29 @@ async def fix_robot_to_rigid_body(stage, robot_prim, rigid_body_path):
     only while simulating.
 
     Edits USD, so the timeline must be stopped. Returns the path of the fixed joint.
+
+    Raises:
+        RuntimeError: If the robot has no rigid body to fix; nothing is edited then.
     """
     ext_manager = omni.kit.app.get_app().get_extension_manager()
     ext_manager.set_extension_enabled_immediate("isaacsim.robot_setup.assembler", True)
     from isaacsim.robot_setup.assembler import RobotAssembler
 
     robot = stage.GetPrimAtPath(robot_prim)
+    base_link = next(
+        (prim for prim in Usd.PrimRange(robot) if prim.HasAPI(UsdPhysics.RigidBodyAPI)), None
+    )
+    if base_link is None:
+        raise RuntimeError(f"'{robot_prim}' has no rigid body to fix to '{rigid_body_path}'")
+
     world_pose = Gf.Transform(omni.usd.get_world_transform_matrix(robot))
-    world_pose.SetScale(Gf.Vec3d(1.0, 1.0, 1.0))
+    world_pose.SetScale(Gf.Transform(omni.usd.get_local_transform_matrix(robot)).GetScale())
     xformable = UsdGeom.Xformable(robot)
     xformable.MakeMatrixXform().Set(world_pose.GetMatrix())
     xformable.SetResetXformStack(True)
 
     _disable_world_welds(stage, robot_prim)
 
-    base_link = next(
-        prim for prim in Usd.PrimRange(robot) if prim.HasAPI(UsdPhysics.RigidBodyAPI)
-    )
     body = stage.GetPrimAtPath(rigid_body_path)
     # Read in the body's own frame, scale included, which is how PhysX reads localPos0.
     base_in_body = Gf.Transform(

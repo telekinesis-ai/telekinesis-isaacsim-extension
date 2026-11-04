@@ -1,13 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """The Add Mesh window opened from the right-click Create menu."""
 
-import omni.usd
-from pxr import Tf
-
 from ..comm.services.articulations import ArticulationService
 from ..comm.services.asset_library import AssetLibraryService
 from ..comm.services.stage import StageService
-from ..core import asset_loader
 from .add_asset_window import AddAssetWindow
 from .mount_offset_fields import MountOffsetFields
 
@@ -19,10 +15,11 @@ class AddMeshWindow(AddAssetWindow):
 
     The mesh is added as ``POST /stage/scene/reference`` would. When the attaching prim
     is part of a robot, the mesh is placed beside the robot, outside any rigid body
-    the robot stands in, and fixed to the robot's
-    mount link at the entered offset, as ``mount_prim`` does, so it moves with the
-    arm. Otherwise it is added under the attaching prim as a static, visual-only
-    prim.
+    the robot stands in, and fixed to the robot's stored mount link at the entered
+    offset, as ``mount_prim`` does, so it moves with the arm. A robot that stores no
+    mount link refuses the add before anything is loaded. Otherwise the mesh is added
+    under the attaching prim as it is: an OBJ, GLB or glTF mesh arrives without
+    physics, a USD asset with whatever physics it authors.
 
     Example:
         window = AddMeshWindow(bridge_server.asset_library_service,
@@ -53,20 +50,15 @@ class AddMeshWindow(AddAssetWindow):
     async def add_fetched_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Add the mesh and, when ``attaching_prim_path`` is part of a robot, mount it there."""
         robot_id = await self._articulation_service.find_robot_for_prim(attaching_prim_path)
-        mesh_name = Tf.MakeValidIdentifier(asset["model"])
-        # Joined by a fixed joint, a mounted mesh sits beside the robot: a body nested
-        # under a link would not follow it.
+        robot_prim_path = None
+        if robot_id is not None:
+            # Checked before anything is loaded, so a robot that stores no mount link
+            # fails the add without leaving a mesh behind.
+            self._articulation_service.resolve_arm_mount_link(robot_id)
+            robot_prim_path = self._articulation_service.get_device(robot_id).prim_path
         mesh_path = await self._stage_service.add_to_scene(
             asset["local_path"],
-            (
-                f"{attaching_prim_path.rstrip('/')}/{mesh_name}"
-                if robot_id is None
-                else asset_loader.path_beside_clear_of_rigid_bodies(
-                    omni.usd.get_context().get_stage(),
-                    self._articulation_service.get_device(robot_id).prim_path,
-                    mesh_name,
-                )
-            ),
+            self._free_destination_path(attaching_prim_path, asset["model"], robot_prim_path),
         )
 
         if robot_id is None:

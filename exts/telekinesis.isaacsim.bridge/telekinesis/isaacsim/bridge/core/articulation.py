@@ -35,7 +35,7 @@ from isaacsim.core.utils.types import ArticulationAction
 import carb
 from pxr import PhysxSchema, Usd, UsdPhysics
 
-from .robot_assembler import get_articulation_base_link_name, get_articulation_last_link_name
+from .robot_assembler import get_articulation_base_link_name
 
 # A PhysX position drive settles with a small steady-state offset (gravity, drive
 # stiffness, the URDF importer's default gains), so an over-tight position
@@ -395,13 +395,6 @@ class SingleArticulation:
         :func:`..core.robot_assembler.get_articulation_base_link_name`.
         """
         return get_articulation_base_link_name(self._articulation)
-
-    def last_link_name(self):
-        """Last link name of this device's underlying handle: the flange of a serial arm,
-        used as its mount link when the asset names none. See
-        :func:`..core.robot_assembler.get_articulation_last_link_name`.
-        """
-        return get_articulation_last_link_name(self._articulation)
 
     def shared_info(self):
         """Total DOF count and full DOF-name list of the underlying handle --

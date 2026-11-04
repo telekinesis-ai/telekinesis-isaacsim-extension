@@ -1044,7 +1044,6 @@ async def list_selected_prims():
 asset_library = APIRouter(prefix="/asset_library", tags=["asset_library"])
 
 
-# Declared before the catch-all category GET so "fetch" is never read as a category.
 @asset_library.post("/fetch", summary="Fetch Asset")
 async def fetch_asset(
     req: FetchAssetRequest, asset_library_service=Depends(get_asset_library_service)

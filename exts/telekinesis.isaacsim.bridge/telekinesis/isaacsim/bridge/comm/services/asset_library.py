@@ -11,6 +11,7 @@ import asyncio
 import io
 import json
 import pathlib
+import shutil
 import zipfile
 
 from fastapi import HTTPException
@@ -59,6 +60,9 @@ class AssetLibraryService:
             carb.tokens.get_tokens_interface().resolve("${data}/telekinesis_assets")
         )
         self._entries_by_category: dict[str, list[dict]] = {}
+        # bundle key -> asyncio.Lock, so concurrent fetches of one bundle download it once
+        # and never extract into the same folder at the same time.
+        self._fetch_locks: dict[str, asyncio.Lock] = {}
 
     async def list_assets(self, category: str) -> list[dict]:
         """Return the catalogue entries of ``category``, sorted by manufacturer and model.
@@ -115,16 +119,18 @@ class AssetLibraryService:
         # the old copy until its cache folder is deleted by hand. Re-download when the bucket's
         # version differs (e.g. the listing's ETag / modified time, stored beside the extraction).
         bundle_directory = self._cache_directory / pathlib.PurePosixPath(entry["bundle"]).with_suffix("")
-        if not bundle_directory.is_dir():
-            url = f"{ASSET_LIBRARY_URL or LEGACY_BUNDLE_URL}/{entry['bundle']}"
-            result, _, content = await omni.client.read_file_async(url)
-            if result != omni.client.Result.OK:
-                raise HTTPException(
-                    status_code=502, detail=f"failed to download asset bundle {url}: {result.name}"
+        async with self._fetch_locks.setdefault(entry["bundle"], asyncio.Lock()):
+            if not bundle_directory.is_dir():
+                url = f"{ASSET_LIBRARY_URL or LEGACY_BUNDLE_URL}/{entry['bundle']}"
+                result, _, content = await omni.client.read_file_async(url)
+                if result != omni.client.Result.OK:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"failed to download asset bundle {url}: {result.name}",
+                    )
+                await asyncio.to_thread(
+                    self._extract_bundle, memoryview(content).tobytes(), bundle_directory
                 )
-            await asyncio.to_thread(
-                self._extract_bundle, memoryview(content).tobytes(), bundle_directory
-            )
 
         main_file_suffixes = (
             URDF_SUFFIXES | USD_SUFFIXES if category.startswith("urdf/") else USD_OR_MESH_SUFFIXES
@@ -215,13 +221,15 @@ class AssetLibraryService:
 
         Extraction goes to a temporary sibling directory that is renamed into place,
         so an interrupted extraction never leaves a half-extracted bundle that looks
-        complete on the next fetch.
+        complete on the next fetch. A temporary directory left by such an extraction is
+        cleared first, so none of its files end up in the bundle.
 
         Raises:
             HTTPException: 502 if the archive is not a valid ZIP.
         """
         partial_directory = bundle_directory.with_name(bundle_directory.name + ".partial")
-        partial_directory.mkdir(parents=True, exist_ok=True)
+        shutil.rmtree(partial_directory, ignore_errors=True)
+        partial_directory.mkdir(parents=True)
         try:
             with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
                 archive.extractall(partial_directory)

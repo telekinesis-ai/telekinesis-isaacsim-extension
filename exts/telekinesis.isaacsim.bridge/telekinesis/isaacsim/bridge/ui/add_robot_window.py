@@ -5,7 +5,6 @@ import math
 import pathlib
 
 import omni.usd
-from pxr import Tf
 
 from ..comm.services.articulations import ArticulationService
 from ..comm.services.asset_library import AssetLibraryService
@@ -18,14 +17,15 @@ ROBOT_CATEGORY = "urdf/robots/manipulators"
 class AddRobotWindow(AddAssetWindow):
     """A window that loads a robot arm from the Telekinesis asset library.
 
-    The robot is registered as an articulation at ``<attaching prim>/<model>``, exactly
-    as ``PUT /articulations`` would, so HTTP clients can address it by the returned
-    articulation id. The catalogue's ``default_joint_configuration`` (degrees) becomes
-    its start and reset pose, and its ``simulation_mount_link`` the link Add Tool and
-    Add Mesh attach to (the arm's last link when the catalogue names none). When the
-    attaching prim is, or lies inside, a rigid body, the robot is fixed to that body
-    with a joint and moves with it, and the status line warns about it. A robot cannot
-    be added inside another articulation.
+    The robot is registered as an articulation at ``<attaching prim>/<model>`` (with a
+    numeric suffix when that name is taken), exactly as ``PUT /articulations`` would,
+    so HTTP clients can address it by the returned articulation id. The catalogue's
+    ``default_joint_configuration`` (degrees) becomes its start and reset pose, and its
+    ``simulation_mount_link`` the link Add Tool and Add Mesh attach to; a robot whose
+    catalogue entry names none stores no mount link, and Add Tool and Add Mesh refuse
+    to attach to it. When the attaching prim is, or lies inside, a rigid body, the
+    robot is fixed to that body with a joint and moves with it, and the success
+    message warns about it. A robot cannot be added inside another articulation.
 
     Example:
         window = AddRobotWindow(bridge_server.asset_library_service,
@@ -50,7 +50,7 @@ class AddRobotWindow(AddAssetWindow):
         default_joint_configuration = asset.get("default_joint_configuration")
         is_urdf = pathlib.Path(asset["local_path"]).suffix.lower() == ".urdf"
         articulation = await self._articulation_service.create_articulation(
-            f"{attaching_prim_path.rstrip('/')}/{Tf.MakeValidIdentifier(asset['model'])}",
+            self._free_destination_path(attaching_prim_path, asset["model"]),
             urdf_path=asset["local_path"] if is_urdf else None,
             usd_path=None if is_urdf else asset["local_path"],
             default_joint_positions=(
@@ -61,9 +61,6 @@ class AddRobotWindow(AddAssetWindow):
             mount_link=asset.get("simulation_mount_link"),
         )
         status = f"Added {articulation['articulation_id']} at {articulation['prim_path']}."
-        # Only a robot this add loaded was fixed to the body; one already there is used as is.
-        if articulation["prim_source"] == "isaac_usd":
-            return status
         rigid_body_path = asset_loader.find_rigid_body_ancestor(
             omni.usd.get_context().get_stage(), articulation["prim_path"]
         )
