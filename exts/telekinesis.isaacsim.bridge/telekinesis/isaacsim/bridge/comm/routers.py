@@ -155,7 +155,6 @@ async def create_articulation(
         req.prim_path,
         req.urdf_path,
         req.usd_path,
-        req.default_joint_positions,
         req.mount_link,
         req.asset_info.model_dump() if req.asset_info else None,
     )

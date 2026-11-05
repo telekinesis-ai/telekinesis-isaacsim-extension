@@ -27,8 +27,7 @@
   `POST /asset_library/fetch` downloads an asset bundle into the bridge's local cache once and
   returns its entry with the local path of the bundle's main file (its URDF, or its USD, OBJ,
   GLB or glTF file).
-- Add Robot uses a catalogue entry's `default_joint_configuration` (degrees) as the start pose and
-  its `simulation_mount_link` as the robot's mount link.
+- Add Robot uses a catalogue entry's `simulation_mount_link` as the robot's mount link.
 - Right-click Create → Telekinesis Isaac Sim Bridge → Add Tool loads a parallel or suction gripper.
   On a robot, it is loaded beside the robot (in its `<model>_assembly` Xform), outside any rigid
   body the robot stands in, and assembled onto the robot's mount link at the entered offset, as `assemble_robot` does;

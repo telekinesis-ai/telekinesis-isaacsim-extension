@@ -25,10 +25,8 @@ class AddRobotWindow(AddAssetWindow):
     what is parked clear of other robots, and it holds everything Add Tool and Add
     Mesh later attach to the robot, so moving or deleting it takes them along. It
     targets the robot through ``telekinesis:assemblyRobot``, so Add Tool and Add Mesh
-    on the assembly or on anything in it attach to the robot. The
-    catalogue's ``default_joint_configuration`` (degrees) becomes the robot's start
-    and reset pose, and its ``simulation_mount_link`` the link Add Tool and Add Mesh
-    attach to; a robot whose catalogue entry names none stores no mount link, and Add
+    on the assembly or on anything in it attach to the robot. The catalogue's
+    ``simulation_mount_link`` becomes the link Add Tool and Add Mesh attach to; a robot whose catalogue entry names none stores no mount link, and Add
     Tool and Add Mesh refuse to attach to it. When the attaching prim is, or lies
     inside, a rigid body, the robot is fixed to that body with a joint and moves with
     it, and the success message warns about it; what is then attached to the robot

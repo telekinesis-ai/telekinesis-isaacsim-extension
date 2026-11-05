@@ -41,12 +41,6 @@ class CreateArticulationRequest(BaseModel):
     Fails with 404 when ``asset_info`` names no catalogue asset and 502 when its
     download fails.
 
-    ``default_joint_positions`` (radians, one per driven joint) is the pose a
-    freshly loaded articulation is placed at and resets to on Stop+Play. It applies
-    only when this request loads the prim; a prim already in the stage keeps its
-    pose. A catalogue asset loaded without it starts at the catalogue's default
-    joint configuration, when the catalogue has one.
-
     ``mount_link`` is the link tools and prims are attached to when assemble_robot or
     mount_prim name none. It is stored on the articulation's prim, replacing any stored
     before; without it, a catalogue asset this request loads stores the catalogue's
@@ -63,7 +57,6 @@ class CreateArticulationRequest(BaseModel):
     urdf_path: str | None = None
     usd_path: str | None = None
     asset_info: FetchAssetRequest | None = None
-    default_joint_positions: list[float] | None = None
     mount_link: str | None = None
 
 

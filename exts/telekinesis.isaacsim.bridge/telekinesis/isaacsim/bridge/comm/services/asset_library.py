@@ -234,8 +234,7 @@ class AssetLibraryService:
         The file maps a category to its entries in the same shape the bucket listing
         produces: ``{"<category>": [{"manufacturer", "model", "bundle"}, ...]}``, where
         ``manufacturer`` may be ``null``. A robot entry may also carry
-        ``simulation_mount_link`` and ``default_joint_configuration`` (degrees), which
-        are passed through unchanged.
+        ``simulation_mount_link``, which is passed through unchanged.
         """
         import omni.kit.app
 

@@ -22,7 +22,6 @@ Wire units mirror the rest of the bridge: radians for joints, meters for lengths
 """
 
 import asyncio
-import math
 import pathlib
 
 from fastapi import HTTPException
@@ -94,7 +93,6 @@ class ArticulationService:
         prim_path,
         urdf_path,
         usd_path=None,
-        default_joint_positions=None,
         mount_link=None,
         asset_info=None,
     ):
@@ -114,13 +112,6 @@ class ArticulationService:
         cache once, then imported (a URDF) or referenced (a USD). At most one of
         ``urdf_path``, ``usd_path`` and ``asset_info`` is given (see
         :meth:`_resolve_prim`).
-
-        ``default_joint_positions`` (radians) is applied only when this request
-        loaded the prim: the joints are teleported there and it becomes the reset
-        pose. A loaded asset starts every joint at zero, which may lie outside a
-        joint's range; a prim already in the stage keeps the pose it stands in. A
-        catalogue asset loaded without it uses the catalogue's
-        ``default_joint_configuration`` (degrees), when it has one.
 
         ``mount_link`` names the link that ``assemble_robot`` and ``mount_prim`` attach
         to when they are given none. It is stored on the prim as
@@ -147,16 +138,8 @@ class ArticulationService:
             resolved, prim_source, catalogue_entry = await self._resolve_prim(
                 prim_path, urdf_path, usd_path, asset_info
             )
-            if catalogue_entry is not None:
-                catalogue_joint_configuration = catalogue_entry.get(
-                    "default_joint_configuration"
-                )
-                if default_joint_positions is None and catalogue_joint_configuration is not None:
-                    default_joint_positions = [
-                        math.radians(degrees) for degrees in catalogue_joint_configuration
-                    ]
-                if mount_link is None:
-                    mount_link = catalogue_entry.get("simulation_mount_link")
+            if catalogue_entry is not None and mount_link is None:
+                mount_link = catalogue_entry.get("simulation_mount_link")
 
             articulation_id = self._id_by_prim.get(prim_path)
             if articulation_id is None:
@@ -174,14 +157,6 @@ class ArticulationService:
                 # 422: the request was well-formed but the prim couldn't actually
                 # be bound (semantic/runtime failure, not a bad input value).
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
-            if prim_source != "isaac_usd" and default_joint_positions is not None:
-                try:
-                    await device.set_j(default_joint_positions)
-                    device.set_joints_default_state(
-                        joint_positions=default_joint_positions
-                    )
-                except ValueError as exc:
-                    raise HTTPException(status_code=400, detail=str(exc)) from exc
             if mount_link is not None:
                 from pxr import Sdf
 
