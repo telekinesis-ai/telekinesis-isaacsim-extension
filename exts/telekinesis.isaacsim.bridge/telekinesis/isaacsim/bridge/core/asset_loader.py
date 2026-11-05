@@ -255,13 +255,15 @@ def _park_clear_of_robots_and_colliders(stage, dest_prim_path):
     disturbing them, and a robot later assembled onto an arm is moved to its mount
     anyway, so the parking spot lasts only until it is given a real one.
 
-    An asset loaded under a prop, such as a box, lands at the prop's origin, inside it.
-    Any collider of that prop it would still overlap is resolved by lifting it along
-    world +Z until its bounds stand on the highest of them, repeated while the lift
-    brings it into another, so it ends up inside none. Colliders that belong to a
-    robot are left to the +X parking. An asset loaded under the stage root or the
-    default prim is not lifted: the colliders around the world origin are not a prop
-    it was put on.
+    An asset loaded under a prop, such as a box, lands at the origin of the prim it was
+    loaded under, inside the prop. The prop is the prim directly under the default
+    prim (or under the stage root, outside the default prim) that holds the asset, and
+    every collider in it counts, wherever the prop keeps them. Any of them the asset
+    would still overlap is resolved by lifting it along world +Z until its bounds stand
+    on the highest of them, repeated while the lift brings it into another, so it ends
+    up inside none. Colliders that belong to a robot are left to the +X parking. An
+    asset loaded directly under the stage root or the default prim is not lifted: the
+    colliders around the world origin are not a prop it was put on.
 
     Overlap is measured between axis-aligned world bounds, so a collider that only
     meets the bounds of a robot's arm lifts the whole robot. Only robots beside the new
@@ -290,15 +292,24 @@ def _park_clear_of_robots_and_colliders(stage, dest_prim_path):
             occupied_by_robots, cache.ComputeWorldBound(sibling).ComputeAlignedRange()
         )
 
+    # The prop is searched whole rather than below the parent: an asset authors its
+    # colliders wherever it likes, such as a table whose tabletop collider sits in a
+    # Colliders scope beside the visible tabletop mesh the asset was loaded under.
+    container = stage.GetDefaultPrim()
+    if not container or not prim.GetPath().HasPrefix(container.GetPath()):
+        container = stage.GetPseudoRoot()
+    prop_path = next(
+        path
+        for path in prim.GetPath().GetAncestorsRange()
+        if path.GetParentPath() == container.GetPath()
+    )
+
     # A robot is the prim carrying the root API, or the robot prim above it when the
     # API sits on the root joint or the base link.
     robot_paths = []
     colliders = []
-    if (
-        parent.GetPath() != Sdf.Path.absoluteRootPath
-        and parent != stage.GetDefaultPrim()
-    ):
-        for candidate in Usd.PrimRange(parent):
+    if prop_path != prim.GetPath():
+        for candidate in Usd.PrimRange(stage.GetPrimAtPath(prop_path)):
             if candidate.HasAPI(UsdPhysics.ArticulationRootAPI):
                 robot = (
                     candidate.GetParent()

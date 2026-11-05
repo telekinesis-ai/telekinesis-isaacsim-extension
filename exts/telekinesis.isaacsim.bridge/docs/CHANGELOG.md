@@ -72,6 +72,10 @@
   small parts slid out of parallel-jaw grippers.
 
 ### Fixed
+- A robot, tool or mesh added onto part of a prop that keeps its colliders elsewhere, such as the
+  visible tabletop mesh of a table whose colliders sit in a separate scope, landed inside the prop.
+  It is now lifted onto every collider of the prop (the prim directly under the default prim
+  that holds it), not only the colliders below the prim it was added to.
 - `POST /articulations/{id}/mount_prim` mounted a prim with no mass and no colliders, such as a
   camera, as a body PhysX weighs at its 1 kg default with an inertia unrelated to the prim, which
   shook the arm. Such a prim now gets the mass and inertia of a solid box filling its bounds at
