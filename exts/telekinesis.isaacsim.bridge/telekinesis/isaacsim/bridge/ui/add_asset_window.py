@@ -187,7 +187,9 @@ class AddAssetWindow(abc.ABC):
         each button a width of :data:`BUTTON_WIDTH`.
         """
 
-    async def transformation_frame(self, attaching_prim_path: str) -> Gf.Matrix4d | None:
+    async def transformation_frame(
+        self, attaching_prim_path: str
+    ) -> Gf.Matrix4d | None:
         """Return the world frame Position and Rotation are read in, or ``None`` when
         they do not place the asset.
 
@@ -326,9 +328,7 @@ class AddAssetWindow(abc.ABC):
     def _build_key_cap(key: str):
         """Build a keyboard key labelled ``key``, as the gizmo hint names it."""
         with ui.ZStack(width=22, height=20):
-            ui.Rectangle(
-                style={"background_color": ACCENT_COLOR, "border_radius": 3}
-            )
+            ui.Rectangle(style={"background_color": ACCENT_COLOR, "border_radius": 3})
             ui.Label(
                 key,
                 alignment=ui.Alignment.CENTER,

@@ -89,9 +89,7 @@ class AddToolWindow(AddAssetWindow):
             self._attaching_prim_model.get_value_as_string()
         )
         if robot_id is None:
-            self._status_label.text = (
-                "Auto-calculate Placement needs an Attaching Prim that is part of a robot."
-            )
+            self._status_label.text = "Auto-calculate Placement needs an Attaching Prim that is part of a robot."
             return
         try:
             arm_mount_path = self._arm_mount_path(robot_id)

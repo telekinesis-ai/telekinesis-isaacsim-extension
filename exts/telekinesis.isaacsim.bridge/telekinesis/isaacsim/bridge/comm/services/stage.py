@@ -83,7 +83,8 @@ class StageService:
 
         if (uri is None) == (asset_info is None):
             raise HTTPException(
-                status_code=400, detail="give either uri or asset_info, not both or neither"
+                status_code=400,
+                detail="give either uri or asset_info, not both or neither",
             )
         if asset_info is not None:
             fetched = await self._asset_library_service.fetch_asset(

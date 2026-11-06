@@ -68,6 +68,10 @@ class AddMeshWindow(AddAssetWindow):
         if robot_id is None:
             return f"Added {mesh_path}."
         mount = await self._articulation_service.mount_prim(
-            robot_id, mesh_path, None, self._transformation_fields.transformation(), True
+            robot_id,
+            mesh_path,
+            None,
+            self._transformation_fields.transformation(),
+            True,
         )
         return f"Added {mesh_path} and mounted it on {robot_id} at {mount['arm_mount_link']}."

@@ -63,7 +63,9 @@ class ArticulationService:
     a create names by ``asset_info`` are downloaded through the asset library service.
     """
 
-    def __init__(self, surface_gripper_service, asset_library_service: AssetLibraryService):
+    def __init__(
+        self, surface_gripper_service, asset_library_service: AssetLibraryService
+    ):
         self._asset_library_service = asset_library_service
         self._devices = {}  # articulation_id -> SingleArticulation
         self._id_by_prim = {}  # requested prim_path -> articulation_id (stable on re-create)

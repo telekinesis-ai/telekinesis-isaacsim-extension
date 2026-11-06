@@ -164,7 +164,10 @@ class PlacementGizmo:
                 with self._scene_view.scene:
                     transform.TransformManipulator(
                         model=self._model,
-                        gestures=[PlacementTranslateGesture(), PlacementRotateGesture()],
+                        gestures=[
+                            PlacementTranslateGesture(),
+                            PlacementRotateGesture(),
+                        ],
                     )
             self._viewport_window.viewport_api.add_scene_view(self._scene_view)
         self._model.set_pose(pose)
