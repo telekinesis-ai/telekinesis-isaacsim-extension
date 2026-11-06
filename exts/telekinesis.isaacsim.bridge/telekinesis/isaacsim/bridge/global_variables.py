@@ -22,6 +22,4 @@ BRIDGE_PORT = 8766
 
 # S3 endpoint of the public asset bucket (Kit's storage client lists S3 only through the
 # endpoint URL, not a custom domain). None uses the local asset index instead.
-# TODO: set to the bucket endpoint, e.g.
-# "https://telekinesis-public-assets.s3.us-east-1.amazonaws.com", when the bucket is public.
 ASSET_LIBRARY_URL: str | None = None

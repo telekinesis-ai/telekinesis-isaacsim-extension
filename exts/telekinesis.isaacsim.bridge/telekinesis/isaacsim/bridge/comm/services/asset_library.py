@@ -18,9 +18,8 @@ from fastapi import HTTPException
 
 from ...global_variables import ASSET_LIBRARY_URL
 
-# TODO: delete when the S3 bucket is public. Until then ASSET_LIBRARY_URL is None, the
-# catalogue is read from this file in the extension folder, and bundles are downloaded
-# from the host that serves them today.
+# While ASSET_LIBRARY_URL is None, the catalogue is read from this file in the extension
+# folder, and bundles are downloaded from the host that serves them today.
 LOCAL_ASSET_INDEX_FILE = "data/assets_index.json"
 LEGACY_BUNDLE_URL = "https://assets.telekinesis.ai"
 
@@ -133,9 +132,6 @@ class AssetLibraryService:
                 detail=f"no '{manufacturer} {model}' in asset category '{category}'",
             )
 
-        # TODO: a cached bundle is never refreshed, so a bundle replaced on S3 keeps serving
-        # the old copy until its cache folder is deleted by hand. Re-download when the bucket's
-        # version differs (e.g. the listing's ETag / modified time, stored beside the extraction).
         bundle_directory = self._cache_directory / pathlib.PurePosixPath(
             entry["bundle"]
         ).with_suffix("")
@@ -226,7 +222,6 @@ class AssetLibraryService:
             )
         return list(entries)
 
-    # TODO: delete when the S3 bucket is public (see LOCAL_ASSET_INDEX_FILE).
     @staticmethod
     def _read_local_asset_index(category: str) -> list[dict]:
         """Return ``category``'s entries from the extension's local ``assets_index.json``.

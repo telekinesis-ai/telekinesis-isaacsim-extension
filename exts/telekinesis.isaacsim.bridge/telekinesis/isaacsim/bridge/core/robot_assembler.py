@@ -349,9 +349,10 @@ async def mount_prim(
     """Fix any prim to the arm's mount link so it moves with the arm.
 
     The counterpart to :func:`attach_surface_gripper` for a prim that is not a
-    gripper, such as a camera: a prim parented under an articulation link in USD
-    does not follow the simulated link, so it is bolted on with a fixed joint
-    instead, and can sit anywhere in the stage. The prim is moved so its origin
+    gripper, such as a camera that is to weigh on the arm. A prim nested under a link
+    follows it only while it is not a rigid body itself, and then adds no mass when
+    the link sets its own, so it is bolted on with a fixed joint instead and can sit
+    anywhere in the stage. The prim is moved so its origin
     lands at ``offset`` in the mount link's frame, any joint an earlier mount left
     on it is removed, and a fixed joint joins the two (see
     :func:`_create_mount_joint`), leaving the arm's DOF unchanged.
@@ -397,16 +398,7 @@ async def mount_prim(
         UsdPhysics.RigidBodyAPI.Apply(prim)
     if prim.HasAttribute("physics:kinematicEnabled"):
         prim.GetAttribute("physics:kinematicEnabled").Set(False)
-    for descendant in Usd.PrimRange(prim):
-        if descendant.IsA(UsdGeom.Mesh) and not descendant.HasAPI(
-            UsdPhysics.CollisionAPI
-        ):
-            UsdPhysics.CollisionAPI.Apply(descendant)
-            # PhysX cannot simulate a triangle mesh on a moving body; a hull, as
-            # set_rigid_body uses, stays solid for an open CAD surface too.
-            UsdPhysics.MeshCollisionAPI.Apply(descendant).CreateApproximationAttr(
-                UsdPhysics.Tokens.convexHull
-            )
+    add_convex_hull_colliders(prim)
     # Checked apart from the rigid body: a stage kept from an earlier mount already
     # holds the prim as a rigid body, possibly without a mass.
     if not any(
@@ -428,6 +420,26 @@ async def mount_prim(
     await app.next_update_async()
 
     return fixed_joint.GetPath().pathString
+
+
+def add_convex_hull_colliders(prim):
+    """Make every mesh at or beneath ``prim`` that has no collider collide as its convex hull.
+
+    A mesh that already has a collider keeps it. A hull stays solid even for an open
+    CAD surface, but fills the mesh's holes and concave pockets. The colliders belong
+    to the nearest rigid body at or above each mesh, so they move with it and add to
+    its mass unless the body sets its mass itself; with no rigid body they are static. Meshes inside instanced prims are left as they
+    are, since they cannot be edited.
+    """
+    for descendant in Usd.PrimRange(prim):
+        if descendant.IsA(UsdGeom.Mesh) and not descendant.HasAPI(
+            UsdPhysics.CollisionAPI
+        ):
+            UsdPhysics.CollisionAPI.Apply(descendant)
+            # PhysX cannot simulate a triangle mesh on a moving body.
+            UsdPhysics.MeshCollisionAPI.Apply(descendant).CreateApproximationAttr(
+                UsdPhysics.Tokens.convexHull
+            )
 
 
 def place_tcp(stage, arm_prim, arm_mount_link, tcp_name, offset):

@@ -28,15 +28,16 @@
   layer: it is never saved, cannot be selected, stays out of undo and takes no part in physics.
   Its first preview of a URDF model imports the URDF once. A model that cannot be previewed
   shows "No preview: ..." and can still be added. Add (with Auto-calculate Placement left of
-  it in Add Robot and Add Tool) sits in a centered row set apart below the fields. The Position
+  it in Add Robot, Add Tool and Add Camera) sits in a centered row set apart below the fields. The Position
   and Rotation are entered in one row of X, Y and Z fields each, aligned with the fields above.
   The Attaching Prim is the right-clicked prim and is read-only. All four windows open at the
   same size. Manufacturer and Model read None whenever a window opens, and picking a
   manufacturer sets Model back to None, so nothing is loaded until a model is picked.
-- While the Add Robot, Add Tool, Add Mesh or Add Camera window previews a robot, or a tool, mesh or camera on a
-  robot, a move/rotate gizmo stands on the preview in the viewport. Dragging it enters the
-  dragged pose in Position and Rotation, and typing in them moves the gizmo. It moves along and
-  turns about the world axes, offers rotation while the viewport's Rotate tool (E) is selected
+- While the Add Robot, Add Tool, Add Mesh or Add Camera window previews a robot, a camera, or a
+  tool or mesh on a robot, a move/rotate gizmo stands on the preview in the viewport. Dragging it
+  enters the dragged pose in Position and Rotation, and typing in them moves the gizmo. It is
+  drawn in the frame of what it places, not the world's, and moves along and turns about that
+  frame's axes; it offers rotation while the viewport's Rotate tool (E) is selected
   and translation otherwise, and edits nothing in the stage: no saved changes, no undo entries.
   Nothing in the stage can be selected while one of these windows is open, so Kit's own gizmo
   never shows beside it. A highlighted note under Position and Rotation always says to
@@ -69,10 +70,20 @@
   added under the right-clicked prim as it is. A robot that stores no mount link refuses the
   add before anything is loaded.
 - Right-click Create → Telekinesis Isaac Sim Bridge → Add Camera adds a camera from `cameras`
-  (e.g. the RealSense D405) the way Add Mesh adds a mesh: on a robot it is mounted on the
-  robot's mount link at the entered offset, elsewhere it is added under the right-clicked
-  prim. The camera is not registered for capture; register its camera prim with
-  `PUT /cameras` (`GET /cameras/discover` on the added prim lists it).
+  (e.g. the RealSense D405) as a child of the prim it rides on, with no rigid body or joint
+  of its own: the rigid body the right-clicked prim is or lies in (a robot link, or a mount
+  fixed to one), else the robot's mount link when the right-clicked prim is a robot or its
+  `<model>_assembly`, else the right-clicked prim. It follows that body while simulating
+  and can be moved with the timeline stopped or playing. Position and Rotation are its pose
+  in that prim's frame. Its meshes collide as convex hulls, as part of that body, and add
+  to its mass unless the body sets its own, as a robot link does; a camera that is to weigh
+  on the arm is mounted with `mount_prim` instead. The camera is not registered for
+  capture; register its camera prim with `PUT /cameras` (`GET /cameras/discover` on the
+  added prim lists it). The window's gizmo stands on the asset's first camera prim, and a
+  second note says the camera looks the opposite way to the gizmo's blue Z arrow; the
+  preview draws none of its camera prims. Auto-calculate Placement turns the camera to look
+  the way the robot's flange points (its Z axis opposite the flange's, its X axis along the
+  flange's), keeping Position.
 - Right-clicking empty space for Add Robot, Add Tool, Add Mesh or Add Camera adds the asset under the
   stage's default prim, or under the stage root when the stage has none.
 - `PUT /articulations` takes an optional `mount_link`, stored on the articulation prim as the

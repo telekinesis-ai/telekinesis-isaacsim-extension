@@ -3,6 +3,7 @@
 
 import abc
 import asyncio
+import contextlib
 from pathlib import Path
 
 import omni.usd
@@ -30,7 +31,7 @@ NO_SELECTION_LABEL = "None"
 BUTTON_WIDTH = 180
 # Size, in pixels, every Add window opens at, so the Add windows all look alike.
 WINDOW_WIDTH = 640
-WINDOW_HEIGHT = 280
+WINDOW_HEIGHT = 360
 # Extra gap, in pixels, between the input fields and the button row.
 BUTTON_ROW_GAP = 15
 # omni.ui colours are 0xAABBGGRR. The accent is the preview's #41d1ff; the hint's
@@ -52,9 +53,10 @@ class AddAssetWindow(abc.ABC):
     takes no part in physics. Position and Rotation place the asset in a frame the
     window names, its transformation frame; while that frame exists, a move/rotate
     gizmo stands on the ghost in the viewport, and dragging it enters where it is
-    dragged to in Position and Rotation. The gizmo turns about the world axes, offers
-    rotation while the viewport's Rotate tool (E) is selected and translation
-    otherwise, and edits nothing in the stage. Nothing in the stage can be selected
+    dragged to in Position and Rotation. The gizmo is drawn in the frame of what it
+    places and moves along and turns about that frame's axes; it offers rotation
+    while the viewport's Rotate tool (E) is selected and translation otherwise, and
+    edits nothing in the stage. Nothing in the stage can be selected
     while the window is open: a selection is cleared as soon as it is made, so Kit's
     own gizmo never shows beside it. A model
     that cannot be previewed leaves the reason in the status line and can still be
@@ -68,8 +70,9 @@ class AddAssetWindow(abc.ABC):
     a warning that stays until dismissed. Add is disabled while an add runs. Every add
     creates a new prim: a name already taken in the stage gets a numeric suffix.
 
-    A subclass names its categories, may add buttons, names its transformation frame,
-    places the ghost where its add puts the asset, and implements the add itself.
+    A subclass names its categories, may add buttons and hints, names its
+    transformation frame, places the ghost where its add puts the asset, may stand the
+    gizmo on a part of the asset, and implements the add itself.
 
     Example:
         window = AddRobotWindow(bridge_server.asset_library_service,
@@ -102,6 +105,9 @@ class AddAssetWindow(abc.ABC):
         # The world transformation frame the gizmo was last shown in, which turns a
         # dragged pose back into Position and Rotation.
         self._gizmo_frame = Gf.Matrix4d(1.0)
+        # The gizmo's pose in the frame of what Position and Rotation place, when it
+        # was last shown.
+        self._gizmo_in_asset = Gf.Matrix4d(1.0)
         # Clears every selection while the window is open; None while it is closed.
         self._selection_subscription = None
 
@@ -138,28 +144,14 @@ class AddAssetWindow(abc.ABC):
                 self._transformation_fields = TransformationFields(
                     on_changed_fn=self.update_ghost
                 )
-                # A callout in the preview's colour, always shown so the buttons below
-                # it never move.
-                with ui.ZStack(height=0):
-                    ui.Rectangle(
-                        style={
-                            "background_color": HINT_BACKGROUND_COLOR,
-                            "border_color": ACCENT_COLOR,
-                            "border_width": 1,
-                            "border_radius": 4,
-                        }
-                    )
-                    with ui.VStack(height=0):
-                        ui.Spacer(height=6)
-                        with ui.HStack(height=0, spacing=6):
-                            ui.Spacer()
-                            ui.Label("Hover over the viewport and press", width=0)
-                            self._build_key_cap("W")
-                            ui.Label("for the move or", width=0)
-                            self._build_key_cap("E")
-                            ui.Label("for the rotate tool", width=0)
-                            ui.Spacer()
-                        ui.Spacer(height=6)
+                # Always shown, so the buttons below it never move.
+                with self._hint_callout():
+                    ui.Label("Hover over the viewport and press", width=0)
+                    self._build_key_cap("W")
+                    ui.Label("for the move or", width=0)
+                    self._build_key_cap("E")
+                    ui.Label("for the rotate tool", width=0)
+                self.build_extra_hints()
                 ui.Spacer(height=BUTTON_ROW_GAP)
                 # The button row is centered by a stretching spacer on either side.
                 with ui.HStack(spacing=5, height=0):
@@ -185,6 +177,14 @@ class AddAssetWindow(abc.ABC):
 
         Called once from the constructor, inside that centered horizontal row; give
         each button a width of :data:`BUTTON_WIDTH`.
+        """
+
+    def build_extra_hints(self):
+        """Build hints shown below the move/rotate hint. Optional; the default builds none.
+
+        Called once from the constructor, inside the window's vertical stack; build
+        each hint as the widgets of a ``with self._hint_callout():`` block, so it looks
+        like the move/rotate hint.
         """
 
     async def transformation_frame(
@@ -231,6 +231,18 @@ class AddAssetWindow(abc.ABC):
             robot_assembler.offset_matrix(self._transformation_fields.transformation())
             * transformation_frame
         )
+
+    def gizmo_pose_in_asset(self) -> Gf.Matrix4d:
+        """Return where the gizmo stands, in the frame of what Position and Rotation place.
+
+        Called on every ghost refresh, once :meth:`place_ghost` has placed the ghost.
+        Dragging the gizmo moves the asset so that this part of it follows the gizmo.
+
+        Optional; the default is the identity: the gizmo stands on the placed frame
+        itself, the asset's mount body or, for a ghost placed with
+        :meth:`AssetGhost.place_under`, its root.
+        """
+        return Gf.Matrix4d(1.0)
 
     @abc.abstractmethod
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
@@ -325,6 +337,28 @@ class AddAssetWindow(abc.ABC):
         self._gizmo.hide()
 
     @staticmethod
+    @contextlib.contextmanager
+    def _hint_callout():
+        """Build a hint box in the preview's colour; the widgets built inside the
+        ``with`` block form its centered row."""
+        with ui.ZStack(height=0):
+            ui.Rectangle(
+                style={
+                    "background_color": HINT_BACKGROUND_COLOR,
+                    "border_color": ACCENT_COLOR,
+                    "border_width": 1,
+                    "border_radius": 4,
+                }
+            )
+            with ui.VStack(height=0):
+                ui.Spacer(height=6)
+                with ui.HStack(height=0, spacing=6):
+                    ui.Spacer()
+                    yield
+                    ui.Spacer()
+                ui.Spacer(height=6)
+
+    @staticmethod
     def _build_key_cap(key: str):
         """Build a keyboard key labelled ``key``, as the gizmo hint names it."""
         with ui.ZStack(width=22, height=20):
@@ -338,8 +372,10 @@ class AddAssetWindow(abc.ABC):
     def _on_gizmo_dragged(self, pose: Gf.Matrix4d):
         """Enter the dragged world ``pose``, read in the transformation frame, in
         Position and Rotation, which moves the ghost after it."""
+        # Gf composes row-vector first: the gizmo's pose in the placed frame, then the
+        # entered offset, then the transformation frame.
         translation, rotation = robot_assembler.matrix_to_translation_rotation(
-            pose * self._gizmo_frame.GetInverse()
+            self._gizmo_in_asset.GetInverse() * pose * self._gizmo_frame.GetInverse()
         )
         self._transformation_fields.set_transformation(
             models.Transformation(translation=translation, rotation=rotation)
@@ -408,8 +444,10 @@ class AddAssetWindow(abc.ABC):
             self._gizmo.hide()
             return
         self._gizmo_frame = transformation_frame
+        self._gizmo_in_asset = self.gizmo_pose_in_asset()
         self._gizmo.show(
-            robot_assembler.offset_matrix(self._transformation_fields.transformation())
+            self._gizmo_in_asset
+            * robot_assembler.offset_matrix(self._transformation_fields.transformation())
             * transformation_frame
         )
 
@@ -417,6 +455,35 @@ class AddAssetWindow(abc.ABC):
         """Remove the ghost and say why the selected asset has no preview."""
         self._remove_ghost()
         self._status_label.text = f"No preview: {reason}"
+
+    async def _mount_path_for_auto_placement(self) -> str | None:
+        """Return the stored mount link of the robot the Attaching Prim is part of, for
+        an Auto-calculate Placement button, or ``None`` once the status line says what
+        is missing.
+
+        Needs the ghost of the selected model to be shown and up to date, since a
+        placement is measured on it, and the Attaching Prim to be part of a robot that
+        stores a mount link.
+        """
+        if self._ghost_asset is None or not self._ghost_refresh.done():
+            self._status_label.text = (
+                "Auto-calculate Placement places the preview: press it once the "
+                "preview shows."
+            )
+            return None
+        robot_id = await self._articulation_service.find_robot_for_prim(
+            self._attaching_prim_model.get_value_as_string()
+        )
+        if robot_id is None:
+            self._status_label.text = "Auto-calculate Placement needs an Attaching Prim that is part of a robot."
+            return None
+        try:
+            return self._arm_mount_path(robot_id)
+        except HTTPException as exc:
+            self._status_label.text = f"Auto-calculate Placement failed: {exc.detail}"
+        except RuntimeError as exc:
+            self._status_label.text = f"Auto-calculate Placement failed: {exc}"
+        return None
 
     def _arm_mount_path(self, robot_id: str) -> str:
         """Return the prim path of the robot's stored mount link.

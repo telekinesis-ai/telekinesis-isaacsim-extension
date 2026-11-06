@@ -4,7 +4,6 @@
 import asyncio
 
 import omni.usd
-from fastapi import HTTPException
 from omni import ui
 from pxr import Gf, Sdf
 
@@ -79,27 +78,9 @@ class AddToolWindow(AddAssetWindow):
         missing. The result does not depend on the entered offset, so pressing it
         again changes nothing.
         """
-        if self._ghost_asset is None or not self._ghost_refresh.done():
-            self._status_label.text = (
-                "Auto-calculate Placement places the preview: press it once the "
-                "gripper shows."
-            )
+        arm_mount_path = await self._mount_path_for_auto_placement()
+        if arm_mount_path is None:
             return
-        robot_id = await self._articulation_service.find_robot_for_prim(
-            self._attaching_prim_model.get_value_as_string()
-        )
-        if robot_id is None:
-            self._status_label.text = "Auto-calculate Placement needs an Attaching Prim that is part of a robot."
-            return
-        try:
-            arm_mount_path = self._arm_mount_path(robot_id)
-        except HTTPException as exc:
-            self._status_label.text = f"Auto-calculate Placement failed: {exc.detail}"
-            return
-        except RuntimeError as exc:
-            self._status_label.text = f"Auto-calculate Placement failed: {exc}"
-            return
-
         flange_path = robot_assembler.find_flange_frame(
             omni.usd.get_context().get_stage(), arm_mount_path
         )

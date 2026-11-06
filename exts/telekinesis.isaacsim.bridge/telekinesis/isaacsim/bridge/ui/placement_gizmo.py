@@ -15,8 +15,8 @@ GIZMO_FRAME_NAME = "telekinesis.isaacsim.bridge.placement_gizmo"
 class PlacementGizmoModel(transform.AbstractTransformManipulatorModel):
     """The pose a :class:`PlacementGizmo` stands at, and the operation it offers.
 
-    The gizmo is drawn world-aligned at the pose's position, so a drag moves along
-    and turns about the world axes.
+    The gizmo is drawn in the pose's own frame, so a drag moves along and turns about
+    the pose's axes.
     """
 
     def __init__(self, on_dragged_fn: Callable[[Gf.Matrix4d], None]):
@@ -52,14 +52,14 @@ class PlacementGizmoModel(transform.AbstractTransformManipulatorModel):
         return self._operation
 
     def get_as_floats(self, item):
-        """Return the gizmo's transform: the pose's position only, keeping it world-aligned."""
+        """Return the gizmo's transform: the pose without its scale, so the gizmo keeps its size."""
         if item == self._transform_item:
-            return sc.Matrix44.get_translation_matrix(*self.pose.ExtractTranslation())
+            return [value for row in self.pose.RemoveScaleShear() for value in row]
         return None
 
 
 class PlacementTranslateGesture(transform.TranslateChangedGesture):
-    """Moves the model's pose along a dragged world axis or plane."""
+    """Moves the model's pose along a dragged axis or plane of the pose."""
 
     def on_began(self):
         """Remember the pose the drag starts from."""
@@ -72,10 +72,14 @@ class PlacementTranslateGesture(transform.TranslateChangedGesture):
         if not isinstance(self.gesture_payload, transform.TranslateDragGesturePayload):
             return
         # Summed from the per-update deltas, as Kit's own gizmo does: the gizmo follows
-        # the drag, so the payload's running total is measured from a moving origin.
+        # the drag, so the payload's running total is measured from a moving origin. The
+        # deltas are along the gizmo's axes, which a translation does not turn.
         self._moved += Gf.Vec3d(*self.gesture_payload.moved_delta)
         pose = Gf.Matrix4d(self._begin_pose)
-        pose.SetTranslateOnly(self._begin_pose.ExtractTranslation() + self._moved)
+        pose.SetTranslateOnly(
+            self._begin_pose.ExtractTranslation()
+            + self._begin_pose.RemoveScaleShear().TransformDir(self._moved)
+        )
         self.sender.model.drag_to(pose)
 
     def on_ended(self):
@@ -88,7 +92,7 @@ class PlacementTranslateGesture(transform.TranslateChangedGesture):
 
 
 class PlacementRotateGesture(transform.RotateChangedGesture):
-    """Turns the model's pose about a dragged world axis through its position."""
+    """Turns the model's pose about a dragged axis through its position."""
 
     def on_began(self):
         """Remember the pose the drag starts from."""
@@ -106,12 +110,15 @@ class PlacementRotateGesture(transform.RotateChangedGesture):
             start_pose, angle = self.sender.model.pose, payload.angle_delta
         else:
             start_pose, angle = self._begin_pose, payload.angle
+        axis = Gf.Vec3d(*payload.axis[:3])
+        if not (payload.free_rotation or payload.screen_space):
+            # A ring of the gizmo reports its axis in the gizmo's frame; the free and
+            # screen-space rotations report theirs in world axes.
+            axis = start_pose.RemoveScaleShear().TransformDir(axis)
         orientation = Gf.Matrix4d(start_pose)
         orientation.SetTranslateOnly(Gf.Vec3d(0.0))
         # Gf composes row-vector first: the start orientation, then the world rotation.
-        pose = orientation * Gf.Matrix4d(1.0).SetRotate(
-            Gf.Rotation(Gf.Vec3d(*payload.axis[:3]), angle)
-        )
+        pose = orientation * Gf.Matrix4d(1.0).SetRotate(Gf.Rotation(axis, angle))
         pose.SetTranslateOnly(start_pose.ExtractTranslation())
         self.sender.model.drag_to(pose)
 
@@ -128,7 +135,7 @@ class PlacementGizmo:
     """A move/rotate gizmo drawn over the active viewport, which edits nothing in the stage.
 
     It stands where :meth:`show` puts it and reports each pose it is dragged to; the
-    caller decides what the pose means. Its axes are the world axes. It offers
+    caller decides what the pose means. Its axes are the pose's own axes. It offers
     rotation while the viewport's Rotate tool is selected (E) and translation
     otherwise (W, or any other tool). Dragging it neither selects prims nor adds to
     undo.

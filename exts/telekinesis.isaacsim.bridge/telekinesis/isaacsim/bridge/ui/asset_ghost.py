@@ -21,7 +21,8 @@ class AssetGhost:
     :data:`GHOST_ROOT_PATH`, so it is never saved, never marks the stage modified and
     stays out of undo. The Stage window does not list it and the viewport cannot select
     it. Its physics is switched off, so a playing timeline neither moves it nor lets
-    anything collide with it. At most one asset is shown at a time.
+    anything collide with it, and its cameras are switched off, so the viewport draws
+    none of them. At most one asset is shown at a time.
 
     Example:
         ghost = AssetGhost()
@@ -78,6 +79,10 @@ class AssetGhost:
                 usd_path.as_posix(), asset_loader.asset_root_prim_path(usd_path)
             )
             self._switch_off_physics(asset)
+            # The viewport draws every camera with its own frame, which would stand
+            # beside the window's gizmo; switching a camera off removes it from the viewport.
+            for camera in [prim for prim in Usd.PrimRange(asset) if prim.IsA(UsdGeom.Camera)]:
+                camera.SetActive(False)
         omni.usd.get_context().set_pickable(GHOST_ROOT_PATH, False)
 
     def place_under(self, parent_world: Gf.Matrix4d):
@@ -131,6 +136,31 @@ class AssetGhost:
             omni.usd.get_world_transform_matrix(self._mount_body(asset)).GetInverse()
         )
         return bounds.ComputeAlignedRange()
+
+    def camera_in_mount_frame(self) -> Gf.Matrix4d | None:
+        """Return the pose of the shown asset's first camera in its mount body's frame,
+        or ``None`` when the asset has no camera.
+
+        The camera looks along its own -Z axis. The mount body is the one
+        :meth:`place_on_mount` places. The result does not depend on where the ghost stands.
+        """
+        stage = omni.usd.get_context().get_stage()
+        asset = stage.GetPrimAtPath(GHOST_ASSET_PATH)
+        # The ghost's cameras are inactive, which the default traversal skips.
+        camera = next(
+            (
+                prim
+                for prim in Usd.PrimRange(asset, Usd.PrimAllPrimsPredicate)
+                if prim.IsA(UsdGeom.Camera)
+            ),
+            None,
+        )
+        if camera is None:
+            return None
+        return (
+            omni.usd.get_world_transform_matrix(camera)
+            * omni.usd.get_world_transform_matrix(self._mount_body(asset)).GetInverse()
+        )
 
     def remove(self):
         """Remove the ghost from the stage. Does nothing when none is shown."""
