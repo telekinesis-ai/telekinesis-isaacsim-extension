@@ -265,18 +265,26 @@ class Extension(omni.ext.IExt):
         self.ui_builder.on_physics_step(step)
 
     def _on_bridge_stage_event(self, event):
-        """Clear the bridge's device registry when the stage is opened or closed.
+        """Clear the bridge's device registry and close the Add windows when the stage
+        is opened or closed.
 
         The articulation handles held by the bridge belong to the stage that was
         active when they were created; replacing the stage strands them. We clear
         rather than restart the server so the port stays bound and clients can
-        simply re-PUT their articulations against the new stage.
+        simply re-PUT their articulations against the new stage. The Add windows'
+        Attaching Prim names a prim of the old stage too.
         """
         if event.type == int(StageEventType.OPENED) or event.type == int(
             StageEventType.CLOSED
         ):
             if getattr(self, "_bridge_server", None) is not None:
                 self._bridge_server.reset_devices()
+            for window in (
+                self._add_robot_window,
+                self._add_tool_window,
+                self._add_mesh_window,
+            ):
+                window.close()
 
     def _show_add_asset_window(self, window: AddAssetWindow, objects: dict):
         """Open ``window`` with the right-clicked prim as its Attaching Prim.

@@ -28,7 +28,6 @@ from fastapi import HTTPException
 
 from ...core.articulation import SingleArticulation, find_driver_joint, joint_prims
 from ...core.asset_loader import (
-    find_rigid_body_ancestor,
     import_urdf_at,
     reference_usd_at,
 )
@@ -36,7 +35,6 @@ from ...core.robot_assembler import (
     assemble_tool,
     attach_surface_gripper,
     bind_shared_articulation,
-    fix_robot_to_rigid_body,
     mount_prim,
     place_tcp,
 )
@@ -121,8 +119,11 @@ class ArticulationService:
         (see :meth:`resolve_arm_mount_link`).
 
         Loading is refused with 422 when ``prim_path`` lies inside an articulation. A
-        robot loaded inside a rigid body is fixed to the nearest such body with a joint
-        and moves with it (see :func:`..core.robot_assembler.fix_robot_to_rigid_body`).
+        robot loaded inside a rigid body is fixed to the nearest such body and moves
+        with it: its root joint welds the base link to the robot's own root prim, which
+        has no rigid body, so PhysX joins it to the nearest rigid-body ancestor instead
+        of the world. The weld sits in the robot's frame, so moving the robot in the
+        editor moves it relative to that body.
         """
         # Normalize a trailing slash so "/World/ur10e" and "/World/ur10e/" register as
         # the same articulation (USD paths are case-sensitive, so case is left alone).
@@ -1059,15 +1060,12 @@ class ArticulationService:
             else:
                 usd_path = catalogue_entry["local_path"]
         try:
-            rigid_body_path = find_rigid_body_ancestor(stage, requested_prim_path)
             if urdf_path:
                 resolved = await import_urdf_at(stage, urdf_path, requested_prim_path)
                 prim_source = "imported_urdf"
             else:
                 resolved = await reference_usd_at(stage, usd_path, requested_prim_path)
                 prim_source = "referenced_usd"
-            if rigid_body_path is not None:
-                await fix_robot_to_rigid_body(stage, resolved, rigid_body_path)
             return resolved, prim_source, catalogue_entry
         except RuntimeError as exc:
             # 422: well-formed request, but loading the file itself failed.

@@ -21,9 +21,6 @@ Any other prim, such as a camera, is bolted on the suction way by :func:`mount_p
 minus the attachment points: it becomes a rigid body if it is not one, its meshes
 collide as convex hulls, and it is fixed to the mount link.
 
-A robot loaded inside a rigid body is fixed to that body by
-:func:`fix_robot_to_rigid_body`, so it moves with the body.
-
 omni/isaac imports live at module top (only imported inside Isaac Sim), matching
 :mod:`.asset_loader`. ``RobotAssembler`` ships as its own Kit extension, so it is
 enabled + imported lazily inside the two assembly functions.
@@ -36,6 +33,7 @@ import omni.usd
 from isaacsim.core.prims import SingleArticulation
 import carb
 from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics
+from scipy.spatial import transform
 
 _BIND_RETRIES = 60
 # Name of the fixed joint the suction path authors, matched on to clear out the ones
@@ -44,6 +42,8 @@ _MOUNT_JOINT_NAME = "AssemblerFixedJoint"
 # PhysX's default density, in kg/m^3, used to weigh a mounted prim that has no mass.
 _MOUNTED_PRIM_DENSITY = 1000.0
 _TCP_XFORM_NAME = "tcp"
+# ROS-Industrial (REP-199) name of the frame on an arm's flange face, Z pointing out of it.
+_FLANGE_FRAME_NAME = "tool0"
 # Size of the TCP marker's axes, in meters.
 _TCP_AXIS_LENGTH = 0.05
 _TCP_AXIS_RADIUS = 0.002
@@ -100,6 +100,41 @@ def offset_matrix(offset):
     matrix = Gf.Matrix4d().SetRotate(rot)
     matrix.SetTranslateOnly(Gf.Vec3d(*offset.translation))
     return matrix
+
+
+def matrix_to_translation_rotation(matrix):
+    """Translation (meters) and XYZ Euler rotation (degrees) of ``matrix``, as two lists.
+
+    The inverse of :func:`offset_matrix`, which composes rotations about the fixed x,
+    then y, then z axes: scipy's extrinsic ``"xyz"``. ``Gf.Rotation.Decompose`` uses
+    another convention and would not round-trip.
+    """
+    quaternion = matrix.ExtractRotationQuat()
+    rotation = transform.Rotation.from_quat(
+        [*quaternion.GetImaginary(), quaternion.GetReal()]
+    )
+    return (
+        [float(value) for value in matrix.ExtractTranslation()],
+        [float(angle) for angle in rotation.as_euler("xyz", degrees=True)],
+    )
+
+
+def find_flange_frame(stage, arm_mount_path):
+    """Path of the frame on the arm's flange face whose Z axis points out of the flange.
+
+    That is the ROS-Industrial ``tool0`` under the mount link when the robot has one:
+    on ABB, KUKA and Fanuc arms the mount link's own X axis runs along the flange
+    axis, and ``tool0`` turns it to Z. Otherwise it is the mount link itself, taken to
+    have its origin on the flange face and its Z axis out of it.
+    """
+    return next(
+        (
+            prim.GetPath().pathString
+            for prim in Usd.PrimRange(stage.GetPrimAtPath(arm_mount_path))
+            if prim.GetName() == _FLANGE_FRAME_NAME
+        ),
+        arm_mount_path,
+    )
 
 
 def apply_attach_offset(prim_path, offset):
@@ -390,82 +425,6 @@ async def mount_prim(
     await app.next_update_async()
 
     return fixed_joint.GetPath().pathString
-
-
-async def fix_robot_to_rigid_body(stage, robot_prim, rigid_body_path):
-    """Fix a robot loaded inside a rigid body to that body, so it moves with it.
-
-    PhysX does not move a rigid body with a rigid-body ancestor, and treats a robot's
-    links nested in another body as an error. The robot keeps its place in the
-    hierarchy but gets ``!resetXformStack!`` at its current world pose, without the
-    body's scale, so PhysX treats it as standalone. Whatever grounds the robot to the
-    world is disabled (see :func:`_disable_world_welds`), and a fixed joint excluded
-    from the articulation joins the body to the robot's base link -- its first rigid
-    body -- at their current relative pose. Collisions between the two are masked,
-    since the robot stands on the body.
-
-    The robot is no longer fixed to the world: its weight rests on the body, which
-    tips or slides unless it is heavy enough or kinematic. Because of the reset, the
-    robot does not follow the body when the body is moved in the editor; it follows
-    only while simulating.
-
-    Edits USD, so the timeline must be stopped. Returns the path of the fixed joint.
-
-    Raises:
-        RuntimeError: If the robot has no rigid body to fix; nothing is edited then.
-    """
-    ext_manager = omni.kit.app.get_app().get_extension_manager()
-    ext_manager.set_extension_enabled_immediate("isaacsim.robot_setup.assembler", True)
-    from isaacsim.robot_setup.assembler import RobotAssembler
-
-    robot = stage.GetPrimAtPath(robot_prim)
-    base_link = next(
-        (prim for prim in Usd.PrimRange(robot) if prim.HasAPI(UsdPhysics.RigidBodyAPI)),
-        None,
-    )
-    if base_link is None:
-        raise RuntimeError(
-            f"'{robot_prim}' has no rigid body to fix to '{rigid_body_path}'"
-        )
-
-    world_pose = Gf.Transform(omni.usd.get_world_transform_matrix(robot))
-    world_pose.SetScale(
-        Gf.Transform(omni.usd.get_local_transform_matrix(robot)).GetScale()
-    )
-    xformable = UsdGeom.Xformable(robot)
-    xformable.MakeMatrixXform().Set(world_pose.GetMatrix())
-    xformable.SetResetXformStack(True)
-
-    _disable_world_welds(stage, robot_prim)
-
-    body = stage.GetPrimAtPath(rigid_body_path)
-    # Read in the body's own frame, scale included, which is how PhysX reads localPos0.
-    base_in_body = Gf.Transform(
-        omni.usd.get_world_transform_matrix(base_link)
-        * omni.usd.get_world_transform_matrix(body).GetInverse()
-    )
-    joint = UsdPhysics.FixedJoint.Define(stage, f"{robot_prim}/{_MOUNT_JOINT_NAME}")
-    joint.CreateBody0Rel().SetTargets([body.GetPath()])
-    joint.CreateBody1Rel().SetTargets([base_link.GetPath()])
-    joint.CreateLocalPos0Attr().Set(Gf.Vec3f(base_in_body.GetTranslation()))
-    joint.CreateLocalRot0Attr().Set(Gf.Quatf(base_in_body.GetRotation().GetQuat()))
-    joint.CreateLocalPos1Attr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
-    joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
-    joint.CreateExcludeFromArticulationAttr(True)
-
-    # Authored on the body, not the robot, for the reason given in attach_surface_gripper.
-    RobotAssembler().mask_collisions(rigid_body_path, robot_prim)
-
-    carb.log_warn(
-        f"[bridge] {robot_prim} lies inside the rigid body {rigid_body_path}; it is fixed to "
-        "that body with a joint and moves with it"
-    )
-
-    app = omni.kit.app.get_app()
-    await app.next_update_async()
-    await app.next_update_async()
-
-    return joint.GetPath().pathString
 
 
 def place_tcp(stage, arm_prim, arm_mount_link, tcp_name, offset):

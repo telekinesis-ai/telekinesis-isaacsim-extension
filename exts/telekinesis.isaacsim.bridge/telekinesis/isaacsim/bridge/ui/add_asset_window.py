@@ -3,6 +3,7 @@
 
 import abc
 import asyncio
+from pathlib import Path
 
 import omni.usd
 from fastapi import HTTPException
@@ -11,30 +12,40 @@ from omni.kit import notification_manager
 from pxr import Tf
 from isaacsim.gui.components import element_wrappers
 
+from ..comm import models
+from ..comm.services.articulations import ArticulationService
 from ..comm.services.asset_library import AssetLibraryService
-from ..core import asset_loader
+from ..core import asset_loader, robot_assembler
+from .asset_ghost import AssetGhost
 
 # Shown in the Manufacturer dropdown for catalogue entries listed without a manufacturer.
 GENERIC_MANUFACTURER_LABEL = "Generic"
+# Width, in pixels, of every button in the windows' centered button rows.
+BUTTON_WIDTH = 180
 
 
 class AddAssetWindow(abc.ABC):
     """A window that adds one asset from the Telekinesis asset library to the stage.
 
     The user picks a manufacturer and model from the catalogue categories the window
-    covers, and the prim the asset is added at (pre-filled with the right-clicked
-    prim). Pressing Add checks that a model is selected and that the Attaching Prim
-    exists; if not, the window stays open and its status line says why. Otherwise the
-    window closes and the selected catalogue entry is handed to
-    :meth:`add_selected_asset`, which loads it through the bridge services by its
-    ``asset_info`` -- the services download it into the local cache once -- so the
-    result is the same as an HTTP client doing it. Progress and the outcome are shown
-    as notifications, an error as a warning that stays until dismissed. Add is
-    disabled while an add runs. Every add creates a new prim: a name already taken in
-    the stage gets a numeric suffix.
+    covers; the prim the asset is added at, the Attaching Prim, is the right-clicked
+    prim and cannot be edited. While the window is open, a see-through ghost of the
+    selected model shows where Add will put it and follows every change of the model
+    and the window's other fields; the ghost is never saved, cannot be selected and
+    takes no part in physics. A model
+    that cannot be previewed leaves the reason in the status line and can still be
+    added. The window closes when another stage is opened. Pressing Add checks that a model is
+    selected and that the Attaching Prim exists; if not, the window stays open and
+    its status line says why. Otherwise the window closes, which removes the ghost,
+    and the selected catalogue entry is handed to :meth:`add_selected_asset`, which
+    loads it through the bridge services by its ``asset_info`` -- the services
+    download it into the local cache once -- so the result is the same as an HTTP
+    client doing it. Progress and the outcome are shown as notifications, an error as
+    a warning that stays until dismissed. Add is disabled while an add runs. Every add
+    creates a new prim: a name already taken in the stage gets a numeric suffix.
 
-    A subclass names its categories, may add input fields, and implements the add
-    itself.
+    A subclass names its categories, may add input fields, places the ghost where its
+    add puts the asset, and implements the add itself.
 
     Example:
         window = AddRobotWindow(bridge_server.asset_library_service,
@@ -42,30 +53,56 @@ class AddAssetWindow(abc.ABC):
         window.show("/World")
     """
 
-    def __init__(self, title: str, asset_library_service: AssetLibraryService):
+    def __init__(
+        self,
+        title: str,
+        asset_library_service: AssetLibraryService,
+        articulation_service: ArticulationService,
+    ):
         self._asset_library_service = asset_library_service
+        self._articulation_service = articulation_service
         # Entries of every category this window covers, each tagged with its "category".
         self._assets: list[dict] = []
         # The catalogue load running or last run; None until the window is first shown.
         self._catalogue_load: asyncio.Future | None = None
+        self._ghost = AssetGhost()
+        # Main file of a catalogue asset -> the USD its ghost shows, built once per session.
+        self._preview_asset_paths: dict[str, Path] = {}
+        # The catalogue entry the ghost shows, None while no ghost is shown.
+        self._ghost_asset: dict | None = None
+        # The ghost refresh running or last run, and whether a change arrived since it
+        # last read the window.
+        self._ghost_refresh: asyncio.Future | None = None
+        self._ghost_outdated = False
 
         self._window = ui.Window(title, width=420, height=0, visible=False)
+        self._window.set_visibility_changed_fn(self._on_visibility_changed)
         with self._window.frame:
             with ui.VStack(spacing=5, height=0):
                 self._manufacturer_dropdown = element_wrappers.DropDown(
                     "Manufacturer",
-                    on_selection_fn=lambda _: self._model_dropdown.repopulate(),
+                    on_selection_fn=self._on_manufacturer_selected,
                 )
                 self._model_dropdown = element_wrappers.DropDown(
-                    "Model", populate_fn=self._models_of_selected_manufacturer
+                    "Model",
+                    populate_fn=self._models_of_selected_manufacturer,
+                    on_selection_fn=lambda _: self.update_ghost(),
                 )
+                # Read-only: the right-clicked prim the window was opened on.
                 self._attaching_prim_field = element_wrappers.StringField(
-                    "Attaching Prim", tooltip="Prim the asset is added at"
+                    "Attaching Prim",
+                    tooltip="Prim the asset is added at",
+                    read_only=True,
                 )
                 self.build_extra_fields()
-                self._add_button = element_wrappers.Button(
-                    "", "Add", on_click_fn=self._on_add_clicked
-                )
+                # The button row is centered by a stretching spacer on either side.
+                with ui.HStack(spacing=5, height=0):
+                    ui.Spacer()
+                    self.build_extra_buttons()
+                    self._add_button = ui.Button(
+                        "Add", width=BUTTON_WIDTH, clicked_fn=self._on_add_clicked
+                    )
+                    ui.Spacer()
                 self._status_label = ui.Label("", word_wrap=True)
 
     @abc.abstractmethod
@@ -81,7 +118,16 @@ class AddAssetWindow(abc.ABC):
 
         Called once from the constructor, inside the window's vertical layout, so
         widgets created here land in it. Store anything :meth:`add_selected_asset`
-        reads on ``self``.
+        reads on ``self``. A field that changes where the asset lands must call
+        :meth:`update_ghost` when its value changes.
+        """
+
+    def build_extra_buttons(self):
+        """Build buttons shown left of Add, in the same row. Optional; the default
+        builds none.
+
+        Called once from the constructor, inside that centered horizontal row; give
+        each button a width of :data:`BUTTON_WIDTH`.
         """
 
     def reset_extra_fields(self):
@@ -91,6 +137,21 @@ class AddAssetWindow(abc.ABC):
         starts from the defaults instead of the values of the previous one. The default
         resets nothing.
         """
+
+    async def place_ghost(self, attaching_prim_path: str):
+        """Move the ghost to where :meth:`add_selected_asset` would put the selected asset.
+
+        Called on every ghost refresh, once the ghost shows the selected asset and
+        ``attaching_prim_path`` names a prim in the stage. Must place the ghost through
+        ``self._ghost`` (:meth:`AssetGhost.place_under` or
+        :meth:`AssetGhost.place_on_mount`). May raise the services' ``HTTPException`` or
+        the core layer's ``RuntimeError``; the ghost is then removed and the message
+        shown as the reason there is no preview.
+
+        Optional; the default stands the asset at the Attaching Prim's origin, as it
+        is loaded under it.
+        """
+        self._ghost.place_under(self._world_transform(attaching_prim_path))
 
     @abc.abstractmethod
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
@@ -123,10 +184,144 @@ class AddAssetWindow(abc.ABC):
             self._catalogue_load is None or self._catalogue_load.done()
         ):
             self._catalogue_load = asyncio.ensure_future(self._load_catalogue())
+        self.update_ghost()
+
+    def update_ghost(self):
+        """Bring the ghost in line with the window: its model, Attaching Prim and fields.
+
+        Returns at once; the ghost follows asynchronously. Changes that arrive while it
+        is being brought up to date are applied together afterwards, so the ghost
+        always ends at the latest values.
+        """
+        self._ghost_outdated = True
+        if self._ghost_refresh is None or self._ghost_refresh.done():
+            self._ghost_refresh = asyncio.ensure_future(self._refresh_ghost())
+
+    def close(self):
+        """Close the window, which removes the ghost. An add already running carries on."""
+        self._window.visible = False
 
     def destroy(self):
-        """Release the window's widgets."""
+        """Remove the ghost and release the window's widgets."""
+        self._ghost.remove()
         self._window.destroy()
+
+    def _on_visibility_changed(self, visible: bool):
+        """Remove the ghost as soon as the window closes, before an add starts loading."""
+        if not visible:
+            self._ghost.remove()
+            self._ghost_asset = None
+        self.update_ghost()
+
+    def _on_manufacturer_selected(self, _manufacturer: str):
+        """Offer the manufacturer's models and show the selected one as the ghost."""
+        self._model_dropdown.repopulate()
+        # Repopulating calls the model callback only when the selected name changed.
+        self.update_ghost()
+
+    async def _refresh_ghost(self):
+        """Bring the ghost up to date until no change is left unapplied.
+
+        A model that cannot be fetched, previewed or placed removes the ghost and
+        leaves the reason in the status line.
+        """
+        while self._ghost_outdated:
+            self._ghost_outdated = False
+            try:
+                await self._bring_ghost_up_to_date()
+            except HTTPException as exc:
+                self._show_no_preview(exc.detail)
+            except RuntimeError as exc:
+                # The core layer's user-facing error, which the services translate to 422.
+                self._show_no_preview(exc)
+
+    async def _bring_ghost_up_to_date(self):
+        """Show the selected asset as the ghost, then place it where Add would put it.
+
+        No ghost is shown while the window is closed, no model is selected, or the
+        Attaching Prim names no prim. A model is fetched and previewed only when it is
+        not the one shown already.
+        """
+        asset = self._selected_asset()
+        attaching_prim_path = self._attaching_prim_field.get_value()
+        stage = omni.usd.get_context().get_stage()
+        if (
+            not self._window.visible
+            or asset is None
+            or not stage.GetPrimAtPath(attaching_prim_path)
+        ):
+            self._ghost.remove()
+            self._ghost_asset = None
+            return
+
+        if asset is not self._ghost_asset:
+            self._status_label.text = "Loading preview..."
+            fetched = await self._asset_library_service.fetch_asset(
+                asset["category"], asset["manufacturer"], asset["model"]
+            )
+            main_file = fetched["local_path"]
+            if main_file not in self._preview_asset_paths:
+                self._preview_asset_paths[
+                    main_file
+                ] = await asset_loader.build_preview_asset(main_file)
+            if self._ghost_outdated:
+                # The window changed while the preview loaded; the next pass shows the
+                # latest selection instead of this one.
+                return
+            self._ghost.show(self._preview_asset_paths[main_file])
+            self._ghost_asset = asset
+            self._status_label.text = ""
+        await self.place_ghost(attaching_prim_path)
+
+    def _show_no_preview(self, reason):
+        """Remove the ghost and say why the selected asset has no preview."""
+        self._ghost.remove()
+        self._ghost_asset = None
+        self._status_label.text = f"No preview: {reason}"
+
+    async def _place_ghost_on_robot_mount(
+        self, attaching_prim_path: str, offset: models.Transformation
+    ):
+        """Place the ghost as a tool or mesh attached at ``offset`` to the robot the
+        Attaching Prim is part of, or under the Attaching Prim when it is part of none.
+
+        Mirrors the add: the robot's stored mount link is used, and ``offset`` is read
+        in its frame.
+
+        Raises:
+            HTTPException: 422 if the robot stores no mount link.
+            RuntimeError: If the robot has no prim of its mount link's name.
+        """
+        robot_id = await self._articulation_service.find_robot_for_prim(
+            attaching_prim_path
+        )
+        if robot_id is None:
+            self._ghost.place_under(self._world_transform(attaching_prim_path))
+            return
+        self._ghost.place_on_mount(
+            robot_assembler.offset_matrix(offset)
+            * self._world_transform(self._arm_mount_path(robot_id))
+        )
+
+    def _arm_mount_path(self, robot_id: str) -> str:
+        """Return the prim path of the robot's stored mount link.
+
+        Raises:
+            HTTPException: 422 if the robot stores no mount link.
+            RuntimeError: If the robot has no prim of its mount link's name.
+        """
+        return robot_assembler.find_prim_by_name(
+            omni.usd.get_context().get_stage(),
+            self._articulation_service.get_device(robot_id).prim_path,
+            self._articulation_service.resolve_arm_mount_link(robot_id),
+        )
+
+    @staticmethod
+    def _world_transform(prim_path: str):
+        """Return the world transform of the prim at ``prim_path`` as a ``Gf.Matrix4d``."""
+        return omni.usd.get_world_transform_matrix(
+            omni.usd.get_context().get_stage().GetPrimAtPath(prim_path)
+        )
 
     async def _load_catalogue(self):
         """Fill the dropdowns from every category; report categories that fail to load.
@@ -150,6 +345,7 @@ class AddAssetWindow(abc.ABC):
         )
         self._model_dropdown.repopulate()
         self._status_label.text = "; ".join(errors)
+        self.update_ghost()
 
     def _models_of_selected_manufacturer(self) -> list[str]:
         """Return the models of the manufacturer selected in the Manufacturer dropdown."""
@@ -160,16 +356,11 @@ class AddAssetWindow(abc.ABC):
             if self._manufacturer_label(asset) == manufacturer
         )
 
-    def _on_add_clicked(self):
-        """Check the selected asset and the Attaching Prim, then close the window and add it.
-
-        A missing selection or an Attaching Prim that is not a prim in the stage keeps
-        the window open with the reason in the status line, before anything is
-        downloaded or loaded.
-        """
+    def _selected_asset(self) -> dict | None:
+        """Return the catalogue entry selected in the dropdowns, or ``None`` when there is none."""
         manufacturer = self._manufacturer_dropdown.get_selection()
         model = self._model_dropdown.get_selection()
-        asset = next(
+        return next(
             (
                 candidate
                 for candidate in self._assets
@@ -178,6 +369,15 @@ class AddAssetWindow(abc.ABC):
             ),
             None,
         )
+
+    def _on_add_clicked(self):
+        """Check the selected asset and the Attaching Prim, then close the window and add it.
+
+        A missing selection or an Attaching Prim that is not a prim in the stage keeps
+        the window open with the reason in the status line, before anything is
+        downloaded or loaded.
+        """
+        asset = self._selected_asset()
         if asset is None:
             self._status_label.text = "Select a manufacturer and model first."
             return

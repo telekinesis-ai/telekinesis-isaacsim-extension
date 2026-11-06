@@ -1,11 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
 """The Add Tool window opened from the right-click Create menu."""
 
+import asyncio
+
+import omni.usd
+from fastapi import HTTPException
+from omni import ui
+from pxr import Gf, Sdf
+
+from ..comm import models
 from ..comm.services.articulations import ArticulationService
 from ..comm.services.asset_library import AssetLibraryService
 from ..comm.services.surface_grippers import SurfaceGripperService
-from .add_asset_window import AddAssetWindow
-from .mount_offset_fields import MountOffsetFields
+from ..core import robot_assembler
+from .add_asset_window import BUTTON_WIDTH, AddAssetWindow
+from .transformation_fields import TransformationFields
 
 PARALLEL_GRIPPER_CATEGORY = "tools/parallel_grippers"
 SUCTION_GRIPPER_CATEGORY = "tools/suction_grippers"
@@ -23,7 +32,17 @@ class AddToolWindow(AddAssetWindow):
     merged into the robot's articulation, a suction gripper is bolted on and keeps its
     own id. A robot that stores no mount link refuses the add before anything is
     loaded. Otherwise the gripper is only loaded under the attaching prim. An assembly
-    cannot be undone.
+    cannot be undone. The window's ghost shows the gripper on the mount link at the
+    entered offset, following every edit of it, or at the attaching prim off a robot.
+
+    Auto-calculate Placement enters the offset that stands the gripper in front of
+    the robot's flange: the gripper's Z axis along the flange's Z axis, its X axis
+    along the flange's X axis, its base origin on the flange axis, and its backmost
+    point on the flange face. The flange is the robot's ``tool0`` under the mount
+    link (the ROS-Industrial tool flange, Z pointing out of the face) or, when it
+    has none, the mount link itself. It assumes the gripper's own +Z points from
+    its base towards its fingers; a gripper authored otherwise comes out turned and
+    needs the Rotation fixed by hand.
 
     Example:
         window = AddToolWindow(bridge_server.asset_library_service,
@@ -38,10 +57,9 @@ class AddToolWindow(AddAssetWindow):
         articulation_service: ArticulationService,
         surface_gripper_service: SurfaceGripperService,
     ):
-        self._articulation_service = articulation_service
         self._surface_gripper_service = surface_gripper_service
-        self._mount_offset_fields: MountOffsetFields
-        super().__init__("Add Tool", asset_library_service)
+        self._mount_offset_fields: TransformationFields
+        super().__init__("Add Tool", asset_library_service, articulation_service)
 
     def asset_categories(self) -> list[str]:
         """Offer the parallel and suction grippers of the catalogue."""
@@ -49,11 +67,84 @@ class AddToolWindow(AddAssetWindow):
 
     def build_extra_fields(self):
         """Add the offset the gripper is attached at, used only when attaching to a robot."""
-        self._mount_offset_fields = MountOffsetFields()
+        self._mount_offset_fields = TransformationFields(
+            on_changed_fn=self.update_ghost
+        )
+
+    def build_extra_buttons(self):
+        """Add Auto-calculate Placement, left of Add."""
+        ui.Button(
+            "Auto-calculate Placement",
+            width=BUTTON_WIDTH,
+            clicked_fn=lambda: asyncio.ensure_future(self._auto_calculate_placement()),
+        )
 
     def reset_extra_fields(self):
         """Zero the attach offset."""
         self._mount_offset_fields.reset()
+
+    async def _auto_calculate_placement(self):
+        """Enter the offset that stands the gripper in front of the robot's flange.
+
+        Needs the ghost of the selected gripper to be shown and up to date, and the
+        Attaching Prim to be part of a robot; otherwise the status line says what is
+        missing. The result does not depend on the entered offset, so pressing it
+        again changes nothing.
+        """
+        if self._ghost_asset is None or not self._ghost_refresh.done():
+            self._status_label.text = (
+                "Auto-calculate Placement places the preview: press it once the "
+                "gripper shows."
+            )
+            return
+        robot_id = await self._articulation_service.find_robot_for_prim(
+            self._attaching_prim_field.get_value()
+        )
+        if robot_id is None:
+            self._status_label.text = (
+                "Auto-calculate Placement needs an Attaching Prim that is part of a robot."
+            )
+            return
+        try:
+            arm_mount_path = self._arm_mount_path(robot_id)
+        except HTTPException as exc:
+            self._status_label.text = f"Auto-calculate Placement failed: {exc.detail}"
+            return
+        except RuntimeError as exc:
+            self._status_label.text = f"Auto-calculate Placement failed: {exc}"
+            return
+
+        flange_path = robot_assembler.find_flange_frame(
+            omni.usd.get_context().get_stage(), arm_mount_path
+        )
+        flange_in_mount = (
+            self._world_transform(flange_path)
+            * self._world_transform(arm_mount_path).GetInverse()
+        )
+        # Moves the gripper's backmost point onto the flange face.
+        distance = -self._ghost.bounds_in_mount_frame().GetMin()[2]
+        # Gf composes row-vector first: the gripper in the flange's frame, then the
+        # flange in the mount link's frame, where the offset is read.
+        placement = (
+            Gf.Matrix4d().SetTranslate(Gf.Vec3d(0.0, 0.0, distance)) * flange_in_mount
+        )
+        translation, rotation = robot_assembler.matrix_to_translation_rotation(
+            placement
+        )
+        self._mount_offset_fields.set_transformation(
+            models.Transformation(translation=translation, rotation=rotation)
+        )
+        self._status_label.text = (
+            f"Auto-calculate Placement stood the gripper {distance:.3f} m along the Z "
+            f"axis of {Sdf.Path(flange_path).name}."
+        )
+
+    async def place_ghost(self, attaching_prim_path: str):
+        """Stand the gripper on the robot's mount link at the entered offset, or at the
+        Attaching Prim when it is part of no robot."""
+        await self._place_ghost_on_robot_mount(
+            attaching_prim_path, self._mount_offset_fields.transformation()
+        )
 
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Load the gripper and, when ``attaching_prim_path`` is part of a robot, assemble it on."""

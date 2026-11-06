@@ -2,15 +2,19 @@
 """The Add Robot window opened from the right-click Create menu."""
 
 import omni.usd
-from pxr import Tf
+from fastapi import HTTPException
+from omni import ui
+from pxr import Gf, Tf, UsdGeom
 
+from ..comm import models
 from ..comm.services.articulations import (
     ASSEMBLY_ROBOT_RELATIONSHIP,
     ArticulationService,
 )
 from ..comm.services.asset_library import AssetLibraryService
-from ..core import asset_loader
-from .add_asset_window import AddAssetWindow
+from ..core import asset_loader, robot_assembler
+from .add_asset_window import BUTTON_WIDTH, AddAssetWindow
+from .transformation_fields import TransformationFields
 
 ROBOT_CATEGORY = "robots/manipulators"
 
@@ -22,11 +26,18 @@ class AddRobotWindow(AddAssetWindow):
     ``<attaching prim>/<model>_assembly/<model>`` (the assembly Xform gets a numeric
     suffix when that name is taken), exactly as ``PUT /articulations`` would, so HTTP
     clients can address it by the returned articulation id. The assembly Xform is
-    what is parked clear of other robots, and it holds everything Add Tool and Add
-    Mesh later attach to the robot, so moving or deleting it takes them along. It
-    targets the robot through ``telekinesis:assemblyRobot``, so Add Tool and Add Mesh
-    on the assembly or on anything in it attach to the robot. The catalogue's
-    ``simulation_mount_link`` becomes the link Add Tool and Add Mesh attach to; a robot whose catalogue entry names none stores no mount link, and Add
+    placed at the entered offset (meters) and rotation (XYZ Euler degrees), read in
+    the attaching prim's frame, where the robot's ghost shows. Auto-calculate
+    Placement parks the ghost where loading the robot with no placement would: moved
+    along +X clear of the robots beside it and lifted onto the colliders of the prop
+    it stands in. It enters the result in the fields, which stay editable. Add puts
+    the robot where the ghost stands, except that a robot that would stand inside a
+    collider of the prop is still lifted onto it. The assembly holds everything Add
+    Tool and Add Mesh later attach to the robot, so moving or deleting it takes them
+    along. It targets the robot through ``telekinesis:assemblyRobot``, so Add Tool
+    and Add Mesh on the assembly or on anything in it attach to the robot. The
+    catalogue's ``simulation_mount_link`` becomes the link Add Tool and Add Mesh
+    attach to; a robot whose catalogue entry names none stores no mount link, and Add
     Tool and Add Mesh refuse to attach to it. When the attaching prim is, or lies
     inside, a rigid body, the robot is fixed to that body with a joint and moves with
     it, and the success message warns about it; what is then attached to the robot
@@ -44,23 +55,58 @@ class AddRobotWindow(AddAssetWindow):
         asset_library_service: AssetLibraryService,
         articulation_service: ArticulationService,
     ):
-        self._articulation_service = articulation_service
-        super().__init__("Add Robot", asset_library_service)
+        self._placement_fields: TransformationFields
+        super().__init__("Add Robot", asset_library_service, articulation_service)
 
     def asset_categories(self) -> list[str]:
         """Offer the robot arms of the catalogue."""
         return [ROBOT_CATEGORY]
 
+    def build_extra_fields(self):
+        """Add the robot's placement relative to the attaching prim."""
+        self._placement_fields = TransformationFields(on_changed_fn=self.update_ghost)
+
+    def build_extra_buttons(self):
+        """Add Auto-calculate Placement, left of Add."""
+        ui.Button(
+            "Auto-calculate Placement",
+            width=BUTTON_WIDTH,
+            clicked_fn=self._on_auto_placement_clicked,
+        )
+
+    def reset_extra_fields(self):
+        """Place the robot at the attaching prim's origin."""
+        self._placement_fields.reset()
+
+    async def place_ghost(self, attaching_prim_path: str):
+        """Stand the robot at the entered placement in the attaching prim's frame."""
+        self._ghost.place_under(
+            robot_assembler.offset_matrix(self._placement_fields.transformation())
+            * self._world_transform(attaching_prim_path)
+        )
+
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
-        """Register the robot as an articulation under ``attaching_prim_path``."""
+        """Register the robot as an articulation in an assembly placed under ``attaching_prim_path``."""
         robot_name = Tf.MakeValidIdentifier(asset["model"])
         assembly_path = self._free_destination_path(
             attaching_prim_path, f"{robot_name}_assembly"
         )
-        articulation = await self._articulation_service.create_articulation(
-            f"{assembly_path}/{robot_name}", None, asset_info=asset
-        )
+        placement = self._placement_fields.transformation()
         stage = omni.usd.get_context().get_stage()
+        # Placed before the robot is loaded into it, so the robot binds where the ghost
+        # stood; the load parks only what it creates, which is now the robot alone.
+        assembly = UsdGeom.Xform.Define(stage, assembly_path)
+        assembly.AddTranslateOp().Set(Gf.Vec3d(*placement.translation))
+        assembly.AddRotateXYZOp().Set(Gf.Vec3f(*placement.rotation))
+        try:
+            articulation = await self._articulation_service.create_articulation(
+                f"{assembly_path}/{robot_name}", None, asset_info=asset
+            )
+        except (HTTPException, RuntimeError):
+            # A load that failed before the robot arrived leaves nothing to hold.
+            if not stage.GetPrimAtPath(assembly_path).GetChildren():
+                stage.RemovePrim(assembly_path)
+            raise
         stage.GetPrimAtPath(assembly_path).CreateRelationship(
             ASSEMBLY_ROBOT_RELATIONSHIP
         ).SetTargets([articulation["prim_path"]])
@@ -76,3 +122,46 @@ class AddRobotWindow(AddAssetWindow):
                 "a joint and moves with it instead of being fixed to the world."
             )
         return status
+
+    def _on_auto_placement_clicked(self):
+        """Park the ghost as loading the robot would, and enter where it ends up in the fields.
+
+        The parking starts from the entered placement, so pressing it again on a
+        parked ghost changes nothing. Needs the ghost of the selected robot to be
+        shown and up to date; otherwise the status line says what to do.
+        """
+        if self._ghost_asset is None or not self._ghost_refresh.done():
+            self._status_label.text = (
+                "Auto-calculate Placement places the preview: press it once the robot "
+                "shows."
+            )
+            return
+        attaching_prim_path = self._attaching_prim_field.get_value()
+        assembly_path = self._free_destination_path(
+            attaching_prim_path,
+            f"{Tf.MakeValidIdentifier(self._ghost_asset['model'])}_assembly",
+        )
+        shift = asset_loader.parking_shift(
+            omni.usd.get_context().get_stage(),
+            self._ghost.world_bounds(),
+            assembly_path,
+        )
+        # The parking shift is in world axes; the fields are read in the attaching
+        # prim's frame.
+        attaching_shift = (
+            self._world_transform(attaching_prim_path).GetInverse().TransformDir(shift)
+        )
+        placement = self._placement_fields.transformation()
+        self._placement_fields.set_transformation(
+            models.Transformation(
+                translation=[
+                    value + delta
+                    for value, delta in zip(placement.translation, attaching_shift)
+                ],
+                rotation=placement.rotation,
+            )
+        )
+        self._status_label.text = (
+            f"Auto-calculate Placement moved the robot {shift[0]:.3f} m along +X and "
+            f"{shift[2]:.3f} m along +Z."
+        )

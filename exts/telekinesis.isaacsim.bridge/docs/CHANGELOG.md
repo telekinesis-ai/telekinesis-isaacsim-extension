@@ -11,12 +11,31 @@
 - Right-click Create → Telekinesis Isaac Sim Bridge → Add Robot in the Stage panel and viewport
   opens a window to pick a robot (Manufacturer, Model) from the Telekinesis asset library and
   load it under the right-clicked prim, at `<model>_assembly/<model>`. The robot is registered
-  as an articulation, as with `PUT /articulations`. The `<model>_assembly` Xform is parked
-  clear of other robots and holds what Add Tool and Add Mesh attach to the robot, so moving or
+  as an articulation, as with `PUT /articulations`. The `<model>_assembly` Xform is placed at
+  the window's Offset and Rotation (XYZ Euler degrees), read in the right-clicked prim's frame.
+  Auto-calculate Placement fills them with where loading would park the robot: moved along +X clear of
+  the robots beside it and lifted onto the colliders of the prop it stands in; the values stay
+  editable. A robot that would stand inside a collider of the prop is still lifted onto it when
+  added. The assembly holds what Add Tool and Add Mesh attach to the robot, so moving or
   deleting it takes them along. It targets the robot through the `telekinesis:assemblyRobot`
   relationship, so Add Tool and Add Mesh on the assembly, or on anything in it, attach to the
   robot. When the right-clicked prim is, or lies inside, a rigid body,
   the success message warns that the robot is fixed to that body.
+- While the Add Robot, Add Tool or Add Mesh window is open, a see-through #41d1ff ghost of the
+  selected model shows where Add will put it. It follows every change of the model, the
+  Attaching Prim and the Position and Rotation fields: a tool or mesh
+  on a robot sits on its mount link at the entered offset. The ghost lives only in the session
+  layer: it is never saved, cannot be selected, stays out of undo and takes no part in physics.
+  Its first preview of a URDF model imports the URDF once. A model that cannot be previewed
+  shows "No preview: ..." and can still be added. Add (with Auto-calculate Placement left of
+  it in Add Robot) sits in a centered row. The Position and Rotation are entered in one row of
+  X, Y and Z fields each. The Attaching Prim is the right-clicked prim and is read-only.
+- Auto-calculate Placement in the Add Tool window enters the offset that stands the gripper in
+  front of the robot's flange: its Z and X axes along the flange's, its base origin on the
+  flange axis and its backmost point on the flange face. The flange is the robot's `tool0`
+  under the mount link (Z out of the face), or the mount link itself when it has none. It
+  assumes the gripper's +Z points from its base towards its fingers.
+- The Add Robot, Add Tool and Add Mesh windows close when a stage is opened or closed.
 - The Add Robot, Add Tool and Add Mesh windows close when Add is pressed and report progress
   and the outcome as notifications; an error stays until dismissed. Add is refused, with the
   window left open, when no model is selected or the Attaching Prim is not a prim in the stage.
@@ -48,9 +67,9 @@
   `POST /articulations/{id}/mount_prim`; omitted, the robot's stored mount link is used, and a
   robot that stores none is refused with 422.
 - `PUT /articulations` refuses with 422 to load a robot inside an articulation. A robot loaded
-  inside a rigid body keeps that place in the hierarchy, gets `!resetXformStack!` so PhysX
-  treats it as standalone, and is fixed to the nearest rigid body with a fixed joint, so it
-  moves with that body. It is no longer fixed to the world.
+  inside a rigid body is fixed to the nearest rigid body instead of the world: its root joint
+  welds it to its own root prim, which PhysX resolves to that body. It moves with the body
+  while simulating, and moving it in the editor moves it relative to the body.
 - `PUT /surface_grippers` refuses with 422 to load a gripper inside a rigid body or an
   articulation, where PhysX would not move it with its parent.
 - A robot, gripper or prop loaded under a prim other than the stage root or the default prim,

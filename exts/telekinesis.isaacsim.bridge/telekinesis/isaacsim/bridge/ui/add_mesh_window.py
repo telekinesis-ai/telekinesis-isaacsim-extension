@@ -5,7 +5,7 @@ from ..comm.services.articulations import ArticulationService
 from ..comm.services.asset_library import AssetLibraryService
 from ..comm.services.stage import StageService
 from .add_asset_window import AddAssetWindow
-from .mount_offset_fields import MountOffsetFields
+from .transformation_fields import TransformationFields
 
 ATTACHMENT_CATEGORY = "attachments"
 
@@ -21,7 +21,9 @@ class AddMeshWindow(AddAssetWindow):
     carries, and its meshes collide as convex hulls. A robot that stores no mount
     link refuses the add before anything is loaded. Otherwise the mesh is added under
     the attaching prim as it is: an OBJ, GLB or glTF mesh arrives without physics, a
-    USD asset with whatever physics it authors.
+    USD asset with whatever physics it authors. The window's ghost shows the mesh on
+    the mount link at the entered offset, following every edit of it, or at the
+    attaching prim off a robot.
 
     Example:
         window = AddMeshWindow(bridge_server.asset_library_service,
@@ -36,10 +38,9 @@ class AddMeshWindow(AddAssetWindow):
         articulation_service: ArticulationService,
         stage_service: StageService,
     ):
-        self._articulation_service = articulation_service
         self._stage_service = stage_service
-        self._mount_offset_fields: MountOffsetFields
-        super().__init__("Add Mesh", asset_library_service)
+        self._mount_offset_fields: TransformationFields
+        super().__init__("Add Mesh", asset_library_service, articulation_service)
 
     def asset_categories(self) -> list[str]:
         """Offer the attachment meshes of the catalogue."""
@@ -47,11 +48,20 @@ class AddMeshWindow(AddAssetWindow):
 
     def build_extra_fields(self):
         """Add the offset the mesh is mounted at, used only when mounting on a robot."""
-        self._mount_offset_fields = MountOffsetFields()
+        self._mount_offset_fields = TransformationFields(
+            on_changed_fn=self.update_ghost
+        )
 
     def reset_extra_fields(self):
         """Zero the mount offset."""
         self._mount_offset_fields.reset()
+
+    async def place_ghost(self, attaching_prim_path: str):
+        """Stand the mesh on the robot's mount link at the entered offset, or at the
+        Attaching Prim when it is part of no robot."""
+        await self._place_ghost_on_robot_mount(
+            attaching_prim_path, self._mount_offset_fields.transformation()
+        )
 
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Add the mesh and, when ``attaching_prim_path`` is part of a robot, mount it there."""

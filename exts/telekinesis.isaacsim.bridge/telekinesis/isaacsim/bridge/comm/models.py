@@ -50,7 +50,8 @@ class CreateArticulationRequest(BaseModel):
 
     Loading fails with 422 when ``prim_path`` lies inside an articulation. A robot
     loaded inside a rigid body is fixed to the nearest such body with a joint, so it
-    moves with that body, and stops being fixed to the world.
+    moves with that body, and stops being fixed to the world. Moving the robot in the
+    editor moves it relative to that body.
     """
 
     prim_path: str = Field(min_length=1)
