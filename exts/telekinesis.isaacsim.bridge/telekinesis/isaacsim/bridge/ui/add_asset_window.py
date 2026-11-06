@@ -23,6 +23,9 @@ from .transformation_fields import TransformationFields
 
 # Shown in the Manufacturer dropdown for catalogue entries listed without a manufacturer.
 GENERIC_MANUFACTURER_LABEL = "Generic"
+# First entry of the Manufacturer and Model dropdowns; it matches no catalogue entry, so
+# nothing is loaded while it is selected.
+NO_SELECTION_LABEL = "None"
 # Width, in pixels, of every button in the windows' centered button rows.
 BUTTON_WIDTH = 180
 # Size, in pixels, every Add window opens at, so the Add windows all look alike.
@@ -41,7 +44,8 @@ class AddAssetWindow(abc.ABC):
     """A window that adds one asset from the Telekinesis asset library to the stage.
 
     The user picks a manufacturer and model from the catalogue categories the window
-    covers; the prim the asset is added at, the Attaching Prim, is the right-clicked
+    covers. Both read None whenever the window opens, and picking a manufacturer sets
+    Model back to None, so no model is loaded until one is picked. The prim the asset is added at, the Attaching Prim, is the right-clicked
     prim and cannot be edited. While the window is open, a see-through ghost of the
     selected model shows where Add will put it and follows every change of the model
     and the window's other fields; the ghost is never saved, cannot be selected and
@@ -134,10 +138,9 @@ class AddAssetWindow(abc.ABC):
                 self._transformation_fields = TransformationFields(
                     on_changed_fn=self.update_ghost
                 )
-                # A callout in the preview's colour, shown only while the gizmo is,
-                # since the keys switch the gizmo.
-                self._gizmo_hint = ui.ZStack(height=0, visible=False)
-                with self._gizmo_hint:
+                # A callout in the preview's colour, always shown so the buttons below
+                # it never move.
+                with ui.ZStack(height=0):
                     ui.Rectangle(
                         style={
                             "background_color": HINT_BACKGROUND_COLOR,
@@ -247,12 +250,16 @@ class AddAssetWindow(abc.ABC):
 
         The catalogue is loaded on the first open, and retried on later opens until
         it yields any asset. Opening the window while it loads starts no second load.
-        Position and Rotation are reset to zero unless an add is running.
+        Manufacturer and Model are set to None, and Position and Rotation are reset to
+        zero unless an add is running.
         """
         self._attaching_prim_model.set_value(attaching_prim_path)
         # Add is disabled exactly while an add runs, and that add still reads the fields.
         if self._add_button.enabled:
             self._transformation_fields.reset()
+        if self._manufacturer_dropdown.get_items():
+            # Selecting the manufacturer's None also sets Model to None.
+            self._manufacturer_dropdown.set_selection(NO_SELECTION_LABEL)
         self._window.visible = True
         if not self._assets and (
             self._catalogue_load is None or self._catalogue_load.done()
@@ -313,12 +320,7 @@ class AddAssetWindow(abc.ABC):
         """Remove the ghost and the gizmo standing on it."""
         self._ghost.remove()
         self._ghost_asset = None
-        self._hide_gizmo()
-
-    def _hide_gizmo(self):
-        """Remove the gizmo and the hint on how to use it."""
         self._gizmo.hide()
-        self._gizmo_hint.visible = False
 
     @staticmethod
     def _build_key_cap(key: str):
@@ -403,14 +405,13 @@ class AddAssetWindow(abc.ABC):
         transformation_frame = await self.transformation_frame(attaching_prim_path)
         self.place_ghost(attaching_prim_path, transformation_frame)
         if transformation_frame is None:
-            self._hide_gizmo()
+            self._gizmo.hide()
             return
         self._gizmo_frame = transformation_frame
         self._gizmo.show(
             robot_assembler.offset_matrix(self._transformation_fields.transformation())
             * transformation_frame
         )
-        self._gizmo_hint.visible = True
 
     def _show_no_preview(self, reason):
         """Remove the ghost and say why the selected asset has no preview."""
@@ -454,7 +455,10 @@ class AddAssetWindow(abc.ABC):
             assets.extend({**entry, "category": category} for entry in entries)
         self._assets = assets
         self._manufacturer_dropdown.set_items(
-            sorted({self._manufacturer_label(asset) for asset in self._assets}),
+            [
+                NO_SELECTION_LABEL,
+                *sorted({self._manufacturer_label(asset) for asset in self._assets}),
+            ],
             select_index=0,
         )
         self._model_dropdown.repopulate()
@@ -462,13 +466,17 @@ class AddAssetWindow(abc.ABC):
         self.update_ghost()
 
     def _models_of_selected_manufacturer(self) -> list[str]:
-        """Return the models of the manufacturer selected in the Manufacturer dropdown."""
+        """Return None followed by the models of the manufacturer selected in the
+        Manufacturer dropdown."""
         manufacturer = self._manufacturer_dropdown.get_selection()
-        return sorted(
-            asset["model"]
-            for asset in self._assets
-            if self._manufacturer_label(asset) == manufacturer
-        )
+        return [
+            NO_SELECTION_LABEL,
+            *sorted(
+                asset["model"]
+                for asset in self._assets
+                if self._manufacturer_label(asset) == manufacturer
+            ),
+        ]
 
     def _selected_asset(self) -> dict | None:
         """Return the catalogue entry selected in the dropdowns, or ``None`` when there is none."""

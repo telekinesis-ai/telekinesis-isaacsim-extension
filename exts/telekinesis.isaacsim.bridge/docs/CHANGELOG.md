@@ -31,14 +31,15 @@
   it in Add Robot and Add Tool) sits in a centered row set apart below the fields. The Position
   and Rotation are entered in one row of X, Y and Z fields each, aligned with the fields above.
   The Attaching Prim is the right-clicked prim and is read-only. All three windows open at the
-  same size.
+  same size. Manufacturer and Model read None whenever a window opens, and picking a
+  manufacturer sets Model back to None, so nothing is loaded until a model is picked.
 - While the Add Robot, Add Tool or Add Mesh window previews a robot, or a tool or mesh on a
   robot, a move/rotate gizmo stands on the preview in the viewport. Dragging it enters the
   dragged pose in Position and Rotation, and typing in them moves the gizmo. It moves along and
   turns about the world axes, offers rotation while the viewport's Rotate tool (E) is selected
   and translation otherwise, and edits nothing in the stage: no saved changes, no undo entries.
   Nothing in the stage can be selected while one of these windows is open, so Kit's own gizmo
-  never shows beside it. While the gizmo shows, a line under Position and Rotation says to
+  never shows beside it. A highlighted note under Position and Rotation always says to
   press W to move and E to rotate, with the mouse over the viewport.
 - Auto-calculate Placement in the Add Tool window enters the offset that stands the gripper in
   front of the robot's flange: its Z and X axes along the flange's, its base origin on the
