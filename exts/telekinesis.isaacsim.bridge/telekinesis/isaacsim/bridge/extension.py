@@ -41,6 +41,7 @@ import carb
 from .comm.server import BridgeServer
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_TITLE
 from .ui.add_asset_window import AddAssetWindow
+from .ui.add_camera_window import AddCameraWindow
 from .ui.add_mesh_window import AddMeshWindow
 from .ui.add_robot_window import AddRobotWindow
 from .ui.add_tool_window import AddToolWindow
@@ -138,6 +139,11 @@ class Extension(omni.ext.IExt):
             self._bridge_server.articulation_service,
             self._bridge_server.stage_service,
         )
+        self._add_camera_window = AddCameraWindow(
+            self._bridge_server.asset_library_service,
+            self._bridge_server.articulation_service,
+            self._bridge_server.stage_service,
+        )
 
         # Shown under right-click -> Create in the Stage panel and viewport. The returned
         # subscription keeps the entry alive; dropping it in on_shutdown removes it.
@@ -166,6 +172,12 @@ class Extension(omni.ext.IExt):
                                 self._add_mesh_window, objects
                             ),
                         },
+                        {
+                            "name": "Add Camera",
+                            "onclick_fn": lambda objects: self._show_add_asset_window(
+                                self._add_camera_window, objects
+                            ),
+                        },
                     ],
                 },
                 "glyph": f"{extension_path}/data/icon.png",
@@ -179,6 +191,7 @@ class Extension(omni.ext.IExt):
         self._add_robot_window.destroy()
         self._add_tool_window.destroy()
         self._add_mesh_window.destroy()
+        self._add_camera_window.destroy()
         self._bridge_stage_event_sub = None
         if getattr(self, "_bridge_server", None) is not None:
             self._bridge_server.stop()
@@ -283,6 +296,7 @@ class Extension(omni.ext.IExt):
                 self._add_robot_window,
                 self._add_tool_window,
                 self._add_mesh_window,
+                self._add_camera_window,
             ):
                 window.close()
 
@@ -290,7 +304,7 @@ class Extension(omni.ext.IExt):
         """Open ``window`` with the right-clicked prim as its Attaching Prim.
 
         Args:
-            window: The Add Robot, Add Tool or Add Mesh window the menu entry opens.
+            window: The Add Robot, Add Tool, Add Mesh or Add Camera window the menu entry opens.
             objects: Kit context-menu payload. ``prim_list`` holds the right-clicked prims, as
                 ``Usd.Prim`` or ``Sdf.Path`` depending on the window, and is empty when the click
                 was on empty space; the stage's default prim is then the Attaching Prim, or the

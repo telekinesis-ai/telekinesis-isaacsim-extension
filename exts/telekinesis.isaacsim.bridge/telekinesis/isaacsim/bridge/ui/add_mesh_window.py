@@ -31,6 +31,8 @@ class AddMeshWindow(AddAssetWindow):
         window.show("/World/Table")
     """
 
+    window_title = "Add Mesh"
+
     def __init__(
         self,
         asset_library_service: AssetLibraryService,
@@ -38,7 +40,7 @@ class AddMeshWindow(AddAssetWindow):
         stage_service: StageService,
     ):
         self._stage_service = stage_service
-        super().__init__("Add Mesh", asset_library_service, articulation_service)
+        super().__init__(self.window_title, asset_library_service, articulation_service)
 
     def asset_categories(self) -> list[str]:
         """Offer the attachment meshes of the catalogue."""

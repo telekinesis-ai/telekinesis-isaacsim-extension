@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The shared flow of the Add Robot / Add Tool / Add Mesh windows."""
+"""The shared flow of the Add Robot / Add Tool / Add Mesh / Add Camera windows."""
 
 import abc
 import asyncio

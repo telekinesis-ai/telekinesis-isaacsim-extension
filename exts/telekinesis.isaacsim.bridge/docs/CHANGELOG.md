@@ -21,19 +21,19 @@
   relationship, so Add Tool and Add Mesh on the assembly, or on anything in it, attach to the
   robot. When the right-clicked prim is, or lies inside, a rigid body,
   the success message warns that the robot is fixed to that body.
-- While the Add Robot, Add Tool or Add Mesh window is open, a see-through #41d1ff ghost of the
+- While the Add Robot, Add Tool, Add Mesh or Add Camera window is open, a see-through #41d1ff ghost of the
   selected model shows where Add will put it. It follows every change of the model, the
-  Attaching Prim and the Position and Rotation fields: a tool or mesh
+  Attaching Prim and the Position and Rotation fields: a tool, mesh or camera
   on a robot sits on its mount link at the entered offset. The ghost lives only in the session
   layer: it is never saved, cannot be selected, stays out of undo and takes no part in physics.
   Its first preview of a URDF model imports the URDF once. A model that cannot be previewed
   shows "No preview: ..." and can still be added. Add (with Auto-calculate Placement left of
   it in Add Robot and Add Tool) sits in a centered row set apart below the fields. The Position
   and Rotation are entered in one row of X, Y and Z fields each, aligned with the fields above.
-  The Attaching Prim is the right-clicked prim and is read-only. All three windows open at the
+  The Attaching Prim is the right-clicked prim and is read-only. All four windows open at the
   same size. Manufacturer and Model read None whenever a window opens, and picking a
   manufacturer sets Model back to None, so nothing is loaded until a model is picked.
-- While the Add Robot, Add Tool or Add Mesh window previews a robot, or a tool or mesh on a
+- While the Add Robot, Add Tool, Add Mesh or Add Camera window previews a robot, or a tool, mesh or camera on a
   robot, a move/rotate gizmo stands on the preview in the viewport. Dragging it enters the
   dragged pose in Position and Rotation, and typing in them moves the gizmo. It moves along and
   turns about the world axes, offers rotation while the viewport's Rotate tool (E) is selected
@@ -46,8 +46,8 @@
   flange axis and its backmost point on the flange face. The flange is the robot's `tool0`
   under the mount link (Z out of the face), or the mount link itself when it has none. It
   assumes the gripper's +Z points from its base towards its fingers.
-- The Add Robot, Add Tool and Add Mesh windows close when a stage is opened or closed.
-- The Add Robot, Add Tool and Add Mesh windows close when Add is pressed and report progress
+- The Add Robot, Add Tool, Add Mesh and Add Camera windows close when a stage is opened or closed.
+- The Add Robot, Add Tool, Add Mesh and Add Camera windows close when Add is pressed and report progress
   and the outcome as notifications; an error stays until dismissed. Add is refused, with the
   window left open, when no model is selected or the Attaching Prim is not a prim in the stage.
   Every Add creates a new prim: a name already taken gets a numeric suffix.
@@ -68,7 +68,12 @@
   body the robot stands in, and mounted on the robot's mount link at the entered offset, as `mount_prim` does; elsewhere it is
   added under the right-clicked prim as it is. A robot that stores no mount link refuses the
   add before anything is loaded.
-- Right-clicking empty space for Add Robot, Add Tool or Add Mesh adds the asset under the
+- Right-click Create → Telekinesis Isaac Sim Bridge → Add Camera adds a camera from `cameras`
+  (e.g. the RealSense D405) the way Add Mesh adds a mesh: on a robot it is mounted on the
+  robot's mount link at the entered offset, elsewhere it is added under the right-clicked
+  prim. The camera is not registered for capture; register its camera prim with
+  `PUT /cameras` (`GET /cameras/discover` on the added prim lists it).
+- Right-clicking empty space for Add Robot, Add Tool, Add Mesh or Add Camera adds the asset under the
   stage's default prim, or under the stage root when the stage has none.
 - `PUT /articulations` takes an optional `mount_link`, stored on the articulation prim as the
   `telekinesis:mountLink` attribute. Without it, nothing is stored and no link is guessed.
