@@ -421,8 +421,8 @@ def add_convex_hull_colliders(prim):
     A mesh that already has a collider keeps it. A hull stays solid even for an open
     CAD surface, but fills the mesh's holes and concave pockets. The colliders belong
     to the nearest rigid body at or above each mesh, so they move with it and add to
-    its mass unless the body sets its mass itself; with no rigid body they are static. Meshes inside instanced prims are left as they
-    are, since they cannot be edited.
+    its mass unless the body sets its mass itself; with no rigid body they are static.
+    Meshes inside instanced prims are left as they are, since they cannot be edited.
     """
     for descendant in Usd.PrimRange(prim):
         if descendant.IsA(UsdGeom.Mesh) and not descendant.HasAPI(UsdPhysics.CollisionAPI):
