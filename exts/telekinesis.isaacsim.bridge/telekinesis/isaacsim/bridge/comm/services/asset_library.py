@@ -55,7 +55,8 @@ class AssetLibraryService:
     Example:
         service = AssetLibraryService()
         robot = await service.fetch_asset("robots/manipulators", "epson", "cx4a601s")
-        robot["local_path"]  # .../telekinesis_assets/urdf/robots/manipulators/epson/cx4a601s/....urdf
+        # .../telekinesis_assets/urdf/robots/manipulators/epson/cx4a601s/....urdf
+        robot["local_path"]
     """
 
     def __init__(self):
@@ -103,8 +104,8 @@ class AssetLibraryService:
         The bundle is downloaded and extracted on first use only. The returned entry
         gains ``local_path``: the absolute path of the bundle's main file in the cache
         -- its URDF (or USD) for a bundle in the ``urdf/`` tree, otherwise its USD,
-        OBJ, GLB or glTF file, the shallowest one when there are several. ``manufacturer`` is ``None`` for an
-        entry listed without one.
+        OBJ, GLB or glTF file, the shallowest one when there are several.
+        ``manufacturer`` is ``None`` for an entry listed without one.
 
         Raises:
             HTTPException: 404 if the catalogue has no such category or asset; 502 if
@@ -158,14 +159,17 @@ class AssetLibraryService:
         if not main_files:
             raise HTTPException(
                 status_code=502,
-                detail=f"asset bundle '{entry['bundle']}' contains no {sorted(main_file_suffixes)} file",
+                detail=(
+                    f"asset bundle '{entry['bundle']}' contains no "
+                    f"{sorted(main_file_suffixes)} file"
+                ),
             )
         # The main file sits above the layers, meshes and textures it references.
         main_file = min(main_files, key=lambda path: len(path.parts))
         return {**entry, "local_path": str(main_file)}
 
     async def _list_bucket_category(self, category: str) -> list[dict]:
-        """List ``<ASSET_LIBRARY_URL>/<category>/<manufacturer>/<model>.zip`` into catalogue entries.
+        """List ``<ASSET_LIBRARY_URL>/<category>/<manufacturer>/<model>.zip`` as catalogue entries.
 
         Raises:
             HTTPException: 502 if a listing fails or times out. A missing category
@@ -227,7 +231,9 @@ class AssetLibraryService:
             .get_extension_manager()
             .get_extension_path_by_module("telekinesis.isaacsim.bridge")
         )
-        index = json.loads(pathlib.Path(extension_path, LOCAL_ASSET_INDEX_FILE).read_text())
+        index = json.loads(
+            pathlib.Path(extension_path, LOCAL_ASSET_INDEX_FILE).read_text(encoding="utf-8")
+        )
         return index.get(category, [])
 
     @staticmethod

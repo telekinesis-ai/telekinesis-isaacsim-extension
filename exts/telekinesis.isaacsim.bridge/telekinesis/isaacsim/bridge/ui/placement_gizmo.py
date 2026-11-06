@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A move/rotate gizmo in the viewport that reports where it is dragged, without editing the stage."""
+"""A move/rotate gizmo in the viewport that reports where it is dragged,
+without editing the stage.
+"""
 
 from collections.abc import Callable
 

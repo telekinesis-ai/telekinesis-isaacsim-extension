@@ -80,7 +80,9 @@ class AddRobotWindow(AddAssetWindow):
         )
 
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
-        """Register the robot as an articulation in an assembly placed under ``attaching_prim_path``."""
+        """Register the robot as an articulation in an assembly placed under
+        ``attaching_prim_path``.
+        """
         robot_name = Tf.MakeValidIdentifier(asset["model"])
         assembly_path = self._free_destination_path(attaching_prim_path, f"{robot_name}_assembly")
         placement = self._transformation_fields.transformation()

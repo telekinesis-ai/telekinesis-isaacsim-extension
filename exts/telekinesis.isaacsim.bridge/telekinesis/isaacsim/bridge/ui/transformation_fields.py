@@ -21,16 +21,17 @@ class TransformationFields:
 
     Example:
         transformation_fields = TransformationFields(on_changed_fn=lambda: None)
-        transformation_fields.transformation()  # Transformation(translation=[0, 0, 0], rotation=[0, 0, 0])
+        transformation_fields.transformation()
+        # Transformation(translation=[0, 0, 0], rotation=[0, 0, 0])
     """
 
     def __init__(self, on_changed_fn: Callable[[], None]):
         """Build the fields; ``on_changed_fn`` is called whenever any of them changes value."""
         self._translation_models = self._build_xyz_row(
-            "Position (m)", step=0.001, format="%.3f", on_changed_fn=on_changed_fn
+            "Position (m)", step=0.001, value_format="%.3f", on_changed_fn=on_changed_fn
         )
         self._rotation_models = self._build_xyz_row(
-            "Rotation (deg)", step=1.0, format="%.2f", on_changed_fn=on_changed_fn
+            "Rotation (deg)", step=1.0, value_format="%.2f", on_changed_fn=on_changed_fn
         )
 
     def reset(self):
@@ -54,11 +55,11 @@ class TransformationFields:
 
     @staticmethod
     def _build_xyz_row(
-        label: str, step: float, format: str, on_changed_fn: Callable[[], None]
+        label: str, step: float, value_format: str, on_changed_fn: Callable[[], None]
     ) -> list[ui.AbstractValueModel]:
         """Build one row of ``label`` and an X, Y and Z drag field; return the fields' models.
 
-        ``step`` is the change per dragged pixel and ``format`` how the values are
+        ``step`` is the change per dragged pixel and ``value_format`` how the values are
         shown; ``on_changed_fn`` is called whenever any of the three changes value.
         """
         # The fields start right after the label and run to the row's end, like the
@@ -75,7 +76,7 @@ class TransformationFields:
                         min=-math.inf,
                         max=math.inf,
                         step=step,
-                        format=format,
+                        format=value_format,
                         tooltip=axis,
                     ).model
                     for axis in "XYZ"

@@ -46,8 +46,9 @@ class AddAssetWindow(abc.ABC):
 
     The user picks a manufacturer and model from the catalogue categories the window
     covers. Both read None whenever the window opens, and picking a manufacturer sets
-    Model back to None, so no model is loaded until one is picked. The prim the asset is added at, the Attaching Prim, is the right-clicked
-    prim and cannot be edited. While the window is open, a see-through ghost of the
+    Model back to None, so no model is loaded until one is picked. The prim the asset
+    is added at, the Attaching Prim, is the right-clicked prim and cannot be edited.
+    While the window is open, a see-through ghost of the
     selected model shows where Add will put it and follows every change of the model
     and the window's other fields; the ghost is never saved, cannot be selected and
     takes no part in physics. Position and Rotation place the asset in a frame the

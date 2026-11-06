@@ -15,7 +15,8 @@ GHOST_MATERIAL_PATH = f"{GHOST_ROOT_PATH}/Material"
 
 
 class AssetGhost:
-    """A see-through copy of one asset that shows where it would land, without being part of the scene.
+    """A see-through copy of one asset that shows where it would land,
+    without being part of the scene.
 
     The ghost is authored only in the stage's session layer, under
     :data:`GHOST_ROOT_PATH`, so it is never saved, never marks the stage modified and
@@ -82,7 +83,8 @@ class AssetGhost:
         omni.usd.get_context().set_pickable(GHOST_ROOT_PATH, False)
 
     def place_under(self, parent_world: Gf.Matrix4d):
-        """Place the ghost as an asset loaded under a prim whose world transform is ``parent_world``.
+        """Place the ghost as an asset loaded under a prim whose world transform is
+        ``parent_world``.
 
         The asset keeps the transform it authors, read relative to that prim, exactly as
         when it is loaded there.
