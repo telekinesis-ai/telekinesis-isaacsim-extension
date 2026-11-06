@@ -28,8 +28,10 @@
   layer: it is never saved, cannot be selected, stays out of undo and takes no part in physics.
   Its first preview of a URDF model imports the URDF once. A model that cannot be previewed
   shows "No preview: ..." and can still be added. Add (with Auto-calculate Placement left of
-  it in Add Robot) sits in a centered row. The Position and Rotation are entered in one row of
-  X, Y and Z fields each. The Attaching Prim is the right-clicked prim and is read-only.
+  it in Add Robot and Add Tool) sits in a centered row set apart below the fields. The Position
+  and Rotation are entered in one row of X, Y and Z fields each, aligned with the fields above.
+  The Attaching Prim is the right-clicked prim and is read-only. All three windows open at the
+  same size.
 - Auto-calculate Placement in the Add Tool window enters the offset that stands the gripper in
   front of the robot's flange: its Z and X axes along the flange's, its base origin on the
   flange axis and its backmost point on the flange face. The flange is the robot's `tool0`

@@ -136,7 +136,7 @@ class AddRobotWindow(AddAssetWindow):
                 "shows."
             )
             return
-        attaching_prim_path = self._attaching_prim_field.get_value()
+        attaching_prim_path = self._attaching_prim_model.get_value_as_string()
         assembly_path = self._free_destination_path(
             attaching_prim_path,
             f"{Tf.MakeValidIdentifier(self._ghost_asset['model'])}_assembly",

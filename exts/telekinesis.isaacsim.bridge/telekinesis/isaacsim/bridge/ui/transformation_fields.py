@@ -63,22 +63,25 @@ class TransformationFields:
         ``step`` is the change per dragged pixel and ``format`` how the values are
         shown; ``on_changed_fn`` is called whenever any of the three changes value.
         """
-        with ui.HStack(height=0, spacing=5):
+        # The fields start right after the label and run to the row's end, like the
+        # Add windows' other rows, so both edges line up with them.
+        with ui.HStack(height=0):
             ui.Label(
                 label,
                 width=templates.LABEL_WIDTH,
                 alignment=ui.Alignment.LEFT_CENTER,
             )
-            value_models = [
-                ui.FloatDrag(
-                    min=-math.inf,
-                    max=math.inf,
-                    step=step,
-                    format=format,
-                    tooltip=axis,
-                ).model
-                for axis in "XYZ"
-            ]
+            with ui.HStack(spacing=5):
+                value_models = [
+                    ui.FloatDrag(
+                        min=-math.inf,
+                        max=math.inf,
+                        step=step,
+                        format=format,
+                        tooltip=axis,
+                    ).model
+                    for axis in "XYZ"
+                ]
         for value_model in value_models:
             value_model.add_value_changed_fn(lambda _: on_changed_fn())
         return value_models

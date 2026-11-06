@@ -9,6 +9,7 @@ import omni.usd
 from fastapi import HTTPException
 from omni import ui
 from omni.kit import notification_manager
+from omni.kit.window.property import templates
 from pxr import Tf
 from isaacsim.gui.components import element_wrappers
 
@@ -22,6 +23,11 @@ from .asset_ghost import AssetGhost
 GENERIC_MANUFACTURER_LABEL = "Generic"
 # Width, in pixels, of every button in the windows' centered button rows.
 BUTTON_WIDTH = 180
+# Size, in pixels, every Add window opens at, so the Add windows all look alike.
+WINDOW_WIDTH = 640
+WINDOW_HEIGHT = 280
+# Extra gap, in pixels, between the input fields and the button row.
+BUTTON_ROW_GAP = 15
 
 
 class AddAssetWindow(abc.ABC):
@@ -75,26 +81,38 @@ class AddAssetWindow(abc.ABC):
         self._ghost_refresh: asyncio.Future | None = None
         self._ghost_outdated = False
 
-        self._window = ui.Window(title, width=420, height=0, visible=False)
+        self._window = ui.Window(
+            title, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, visible=False
+        )
         self._window.set_visibility_changed_fn(self._on_visibility_changed)
         with self._window.frame:
             with ui.VStack(spacing=5, height=0):
+                # Every row is a label of the property panel's label width and a field
+                # filling the rest, so the fields line up on both edges.
                 self._manufacturer_dropdown = element_wrappers.DropDown(
                     "Manufacturer",
                     on_selection_fn=self._on_manufacturer_selected,
+                    add_flourish=False,
                 )
                 self._model_dropdown = element_wrappers.DropDown(
                     "Model",
                     populate_fn=self._models_of_selected_manufacturer,
                     on_selection_fn=lambda _: self.update_ghost(),
+                    add_flourish=False,
                 )
-                # Read-only: the right-clicked prim the window was opened on.
-                self._attaching_prim_field = element_wrappers.StringField(
-                    "Attaching Prim",
-                    tooltip="Prim the asset is added at",
-                    read_only=True,
-                )
+                # Built directly because Isaac's StringField always ends its row with a
+                # decoration the other rows do not have.
+                with ui.HStack(height=0):
+                    ui.Label(
+                        "Attaching Prim",
+                        width=templates.LABEL_WIDTH,
+                        alignment=ui.Alignment.LEFT_CENTER,
+                        tooltip="Prim the asset is added at",
+                    )
+                    # Read-only: the right-clicked prim the window was opened on.
+                    self._attaching_prim_model = ui.StringField(read_only=True).model
                 self.build_extra_fields()
+                ui.Spacer(height=BUTTON_ROW_GAP)
                 # The button row is centered by a stretching spacer on either side.
                 with ui.HStack(spacing=5, height=0):
                     ui.Spacer()
@@ -175,7 +193,7 @@ class AddAssetWindow(abc.ABC):
         it yields any asset. Opening the window while it loads starts no second load.
         The extra fields are reset to their defaults unless an add is running.
         """
-        self._attaching_prim_field.set_value(attaching_prim_path)
+        self._attaching_prim_model.set_value(attaching_prim_path)
         # Add is disabled exactly while an add runs, and that add still reads the fields.
         if self._add_button.enabled:
             self.reset_extra_fields()
@@ -243,7 +261,7 @@ class AddAssetWindow(abc.ABC):
         not the one shown already.
         """
         asset = self._selected_asset()
-        attaching_prim_path = self._attaching_prim_field.get_value()
+        attaching_prim_path = self._attaching_prim_model.get_value_as_string()
         stage = omni.usd.get_context().get_stage()
         if (
             not self._window.visible
@@ -381,7 +399,7 @@ class AddAssetWindow(abc.ABC):
         if asset is None:
             self._status_label.text = "Select a manufacturer and model first."
             return
-        attaching_prim_path = self._attaching_prim_field.get_value()
+        attaching_prim_path = self._attaching_prim_model.get_value_as_string()
         if not omni.usd.get_context().get_stage().GetPrimAtPath(attaching_prim_path):
             self._status_label.text = (
                 f"'{attaching_prim_path}' is not a prim in the stage."

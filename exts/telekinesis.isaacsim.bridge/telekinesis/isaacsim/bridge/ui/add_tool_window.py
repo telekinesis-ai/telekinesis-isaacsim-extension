@@ -98,7 +98,7 @@ class AddToolWindow(AddAssetWindow):
             )
             return
         robot_id = await self._articulation_service.find_robot_for_prim(
-            self._attaching_prim_field.get_value()
+            self._attaching_prim_model.get_value_as_string()
         )
         if robot_id is None:
             self._status_label.text = (
