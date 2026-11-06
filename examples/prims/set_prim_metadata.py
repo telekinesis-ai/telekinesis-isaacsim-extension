@@ -33,9 +33,7 @@ def _request(base, method, path, params=None, body=None):
 
 def main():
     """Store {category, type} metadata on a prim under customData."""
-    parser = argparse.ArgumentParser(
-        description="Store {category, type} metadata on a prim."
-    )
+    parser = argparse.ArgumentParser(description="Store {category, type} metadata on a prim.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--prim", required=True, help="prim path, e.g. /World/Cube")

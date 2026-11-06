@@ -140,9 +140,7 @@ class BridgeServer:
         app = fastapi.FastAPI(title="telekinesis isaac-sim bridge")
 
         @app.exception_handler(Exception)
-        async def _unhandled_exception_handler(
-            request: fastapi.Request, exc: Exception
-        ):
+        async def _unhandled_exception_handler(request: fastapi.Request, exc: Exception):
             # Backstop for anything a service didn't translate into an HTTPException:
             # guarantees the client always gets JSON with a "detail", never Starlette's
             # bare-text 500, which the client's own error-detail printing can't parse.
@@ -156,9 +154,7 @@ class BridgeServer:
         # The services that load assets download a catalogue asset through this one.
         asset_library_service = AssetLibraryService()
         surface_gripper_service = SurfaceGripperService(asset_library_service)
-        articulation_service = ArticulationService(
-            surface_gripper_service, asset_library_service
-        )
+        articulation_service = ArticulationService(surface_gripper_service, asset_library_service)
         camera_service = CameraService()
         lidar_service = LidarService()
         lightbeam_service = LightBeamService()
@@ -170,9 +166,7 @@ class BridgeServer:
         # surface gripper loaded from a USD asset also stops the timeline, so the
         # articulation service repairs the handles that stop invalidated.
         surface_gripper_service.on_deleted = articulation_service.forget_assembly
-        surface_gripper_service.on_timeline_stopped = (
-            articulation_service.rebind_stale_devices
-        )
+        surface_gripper_service.on_timeline_stopped = articulation_service.rebind_stale_devices
 
         app.state.articulation_service = articulation_service
         app.state.surface_gripper_service = surface_gripper_service

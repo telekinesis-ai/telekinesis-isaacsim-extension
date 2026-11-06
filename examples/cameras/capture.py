@@ -65,9 +65,9 @@ def _decode(payload):
         if isinstance(dtype, list):  # record dtype, sent as numpy's descr
             dtype = np.dtype([tuple(field) for field in dtype])
         arrays.append(
-            np.frombuffer(
-                payload[start : start + entry["nbytes"]], dtype=dtype
-            ).reshape(entry["shape"])
+            np.frombuffer(payload[start : start + entry["nbytes"]], dtype=dtype).reshape(
+                entry["shape"]
+            )
         )
     return _restore(manifest["structure"], arrays)
 
@@ -91,9 +91,7 @@ def main():
     parser.add_argument(
         "--id", required=True, dest="camera_id", help="camera_id from put_camera.py"
     )
-    parser.add_argument(
-        "--data-types", nargs="+", default=None, help="subset to capture"
-    )
+    parser.add_argument("--data-types", nargs="+", default=None, help="subset to capture")
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"

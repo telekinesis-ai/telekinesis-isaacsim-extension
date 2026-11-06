@@ -40,9 +40,7 @@ class TransformationFields:
     def transformation(self) -> models.Transformation:
         """Return the entered transformation as the bridge routes take it."""
         return models.Transformation(
-            translation=[
-                model.get_value_as_float() for model in self._translation_models
-            ],
+            translation=[model.get_value_as_float() for model in self._translation_models],
             rotation=[model.get_value_as_float() for model in self._rotation_models],
         )
 

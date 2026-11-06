@@ -85,9 +85,7 @@ class AssetLibraryService:
                 else:
                     tree_entries = await self._list_bucket_category(tree_category)
                 for entry in tree_entries:
-                    entries_by_identity.setdefault(
-                        (entry["manufacturer"], entry["model"]), entry
-                    )
+                    entries_by_identity.setdefault((entry["manufacturer"], entry["model"]), entry)
             entries = list(entries_by_identity.values())
             if not entries:
                 raise HTTPException(
@@ -99,9 +97,7 @@ class AssetLibraryService:
             )
         return self._entries_by_category[category]
 
-    async def fetch_asset(
-        self, category: str, manufacturer: str | None, model: str
-    ) -> dict:
+    async def fetch_asset(self, category: str, manufacturer: str | None, model: str) -> dict:
         """Make the asset available locally and return its catalogue entry.
 
         The bundle is downloaded and extracted on first use only. The returned entry
@@ -121,8 +117,7 @@ class AssetLibraryService:
             (
                 candidate
                 for candidate in entries
-                if candidate["manufacturer"] == manufacturer
-                and candidate["model"] == model
+                if candidate["manufacturer"] == manufacturer and candidate["model"] == model
             ),
             None,
         )
@@ -184,9 +179,7 @@ class AssetLibraryService:
             if not manufacturer_folder.flags & omni.client.ItemFlags.CAN_HAVE_CHILDREN:
                 continue
             manufacturer = manufacturer_folder.relative_path.rstrip("/")
-            for bundle_file in await self._list_bucket_folder(
-                f"{category}/{manufacturer}/"
-            ):
+            for bundle_file in await self._list_bucket_folder(f"{category}/{manufacturer}/"):
                 if bundle_file.relative_path.endswith(".zip"):
                     entries.append(
                         {
@@ -211,15 +204,11 @@ class AssetLibraryService:
                 omni.client.list_async(url), timeout=LISTING_TIMEOUT_SECONDS
             )
         except asyncio.TimeoutError as exc:
-            raise HTTPException(
-                status_code=502, detail=f"listing {url} timed out"
-            ) from exc
+            raise HTTPException(status_code=502, detail=f"listing {url} timed out") from exc
         if result == omni.client.Result.ERROR_NOT_FOUND:
             return []
         if result != omni.client.Result.OK:
-            raise HTTPException(
-                status_code=502, detail=f"failed to list {url}: {result.name}"
-            )
+            raise HTTPException(status_code=502, detail=f"failed to list {url}: {result.name}")
         return list(entries)
 
     @staticmethod
@@ -238,9 +227,7 @@ class AssetLibraryService:
             .get_extension_manager()
             .get_extension_path_by_module("telekinesis.isaacsim.bridge")
         )
-        index = json.loads(
-            pathlib.Path(extension_path, LOCAL_ASSET_INDEX_FILE).read_text()
-        )
+        index = json.loads(pathlib.Path(extension_path, LOCAL_ASSET_INDEX_FILE).read_text())
         return index.get(category, [])
 
     @staticmethod
@@ -255,9 +242,7 @@ class AssetLibraryService:
         Raises:
             HTTPException: 502 if the archive is not a valid ZIP.
         """
-        partial_directory = bundle_directory.with_name(
-            bundle_directory.name + ".partial"
-        )
+        partial_directory = bundle_directory.with_name(bundle_directory.name + ".partial")
         shutil.rmtree(partial_directory, ignore_errors=True)
         partial_directory.mkdir(parents=True)
         try:

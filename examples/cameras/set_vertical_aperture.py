@@ -21,9 +21,7 @@ DEFAULT_TIMEOUT = 30.0
 
 def _request(base, method, path, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
-    response = requests.request(
-        method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
-    )
+    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
     response.raise_for_status()
     return response.json() if response.content else None
 
@@ -36,9 +34,7 @@ def main():
     parser.add_argument(
         "--id", required=True, dest="camera_id", help="camera_id from put_camera.py"
     )
-    parser.add_argument(
-        "--value", type=float, required=True, help="aperture in stage units"
-    )
+    parser.add_argument("--value", type=float, required=True, help="aperture in stage units")
     parser.add_argument(
         "--no-square",
         action="store_false",

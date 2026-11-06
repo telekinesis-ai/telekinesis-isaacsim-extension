@@ -73,9 +73,7 @@ ATTACH_OFFSET = None
 try:
     robot_description = telekinesis_urdfs.load("UniversalRobotsUR10e")
     if not robot_description.urdf_path.is_file():
-        raise ValueError(
-            f"No urdf found, i.e. {robot_description.urdf_path} is not a file"
-        )
+        raise ValueError(f"No urdf found, i.e. {robot_description.urdf_path} is not a file")
 except Exception as e:
     raise RuntimeError(
         "Failed to load robot description 'UniversalRobotsUR10e'. "
@@ -96,21 +94,15 @@ DEFAULT_TIMEOUT = 120.0
 
 def _request(base, method, path, body=None):
     """Send one request and return the decoded JSON (None for an empty body)."""
-    response = requests.request(
-        method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
-    )
+    response = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
     response.raise_for_status()
     return response.json() if response.content else None
 
 
-def run(
-    base, arm_prim, arm_urdf, gripper_prim, arm_mount_link, gripper_mount_link, offset
-):
+def run(base, arm_prim, arm_urdf, gripper_prim, arm_mount_link, gripper_mount_link, offset):
     """Create the arm and suction gripper, attach them, then move and grip."""
     # 1) Create the arm (urdf_path imports it if arm_prim isn't in the stage).
-    arm = _request(
-        base, "PUT", "/articulations", {"prim_path": arm_prim, "urdf_path": arm_urdf}
-    )
+    arm = _request(base, "PUT", "/articulations", {"prim_path": arm_prim, "urdf_path": arm_urdf})
     arm_id = arm["articulation_id"]
     print(
         f"created arm: articulation_id={arm_id} prim_path={arm['prim_path']} dof={arm['num_dof']}"
@@ -196,9 +188,7 @@ def main():
         default=GRIPPER_PRIM_PATH,
         help="prim path of the suction gripper asset in the stage",
     )
-    parser.add_argument(
-        "--arm-urdf", default=ARM_URDF_PATH, help="path to the arm URDF to import"
-    )
+    parser.add_argument("--arm-urdf", default=ARM_URDF_PATH, help="path to the arm URDF to import")
     parser.add_argument(
         "--arm-mount-link",
         default=ARM_MOUNT_LINK,
@@ -212,9 +202,7 @@ def main():
     args = parser.parse_args()
 
     base = f"http://{args.host}:{args.port}"
-    print(
-        f"bridge: {base}  surface grippers: {_request(base, 'GET', '/surface_grippers')}"
-    )
+    print(f"bridge: {base}  surface grippers: {_request(base, 'GET', '/surface_grippers')}")
     run(
         base,
         args.arm_prim,

@@ -92,9 +92,7 @@ class AddCameraWindow(AddAssetWindow):
 
     async def transformation_frame(self, attaching_prim_path: str) -> Gf.Matrix4d:
         """Read Position and Rotation in the frame of the prim the camera is added under."""
-        return self._world_transform(
-            await self._camera_parent_path(attaching_prim_path)
-        )
+        return self._world_transform(await self._camera_parent_path(attaching_prim_path))
 
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Add the camera under the prim it rides on, at the entered pose, with colliders."""
@@ -138,9 +136,7 @@ class AddCameraWindow(AddAssetWindow):
             return
         camera_in_asset = self._ghost.camera_in_mount_frame()
         if camera_in_asset is None:
-            self._status_label.text = (
-                "Auto-calculate Placement needs a model that holds a camera."
-            )
+            self._status_label.text = "Auto-calculate Placement needs a model that holds a camera."
             return
 
         flange_path = robot_assembler.find_flange_frame(
@@ -157,9 +153,7 @@ class AddCameraWindow(AddAssetWindow):
         # Gf composes row-vector first: the camera's pose in the asset is divided out of
         # the camera's world pose, and the rest read in the transformation frame.
         placement = (
-            camera_in_asset.GetInverse()
-            * camera_world
-            * transformation_frame.GetInverse()
+            camera_in_asset.GetInverse() * camera_world * transformation_frame.GetInverse()
         ).RemoveScaleShear()
         _, rotation = robot_assembler.matrix_to_translation_rotation(placement)
         self._transformation_fields.set_transformation(
@@ -196,9 +190,7 @@ class AddCameraWindow(AddAssetWindow):
                 ASSEMBLY_ROBOT_RELATIONSHIP
             ):
                 break
-        robot_id = await self._articulation_service.find_robot_for_prim(
-            attaching_prim_path
-        )
+        robot_id = await self._articulation_service.find_robot_for_prim(attaching_prim_path)
         if robot_id is not None:
             return self._arm_mount_path(robot_id)
         return attaching_prim_path

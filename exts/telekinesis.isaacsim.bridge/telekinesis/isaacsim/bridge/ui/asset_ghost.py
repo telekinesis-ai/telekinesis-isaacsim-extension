@@ -59,12 +59,8 @@ class AssetGhost:
             # Tinted and glowing #41d1ff; MDL reads colours as linear, the hex is sRGB.
             # The glow strength is the one Isaac Sim's conveyor builder gives its preview.
             ghost_color = Gf.ConvertDisplayToLinear(Gf.Vec3f(0x41, 0xD1, 0xFF) / 255.0)
-            shader.CreateInput("transmission_color", Sdf.ValueTypeNames.Color3f).Set(
-                ghost_color
-            )
-            shader.CreateInput("emission_color", Sdf.ValueTypeNames.Color3f).Set(
-                ghost_color
-            )
+            shader.CreateInput("transmission_color", Sdf.ValueTypeNames.Color3f).Set(ghost_color)
+            shader.CreateInput("emission_color", Sdf.ValueTypeNames.Color3f).Set(ghost_color)
             shader.CreateInput("emissive_scale", Sdf.ValueTypeNames.Float).Set(300.0)
             shader_output = shader.CreateOutput("out", Sdf.ValueTypeNames.Token)
             material.CreateSurfaceOutput("mdl").ConnectToSource(shader_output)
@@ -102,14 +98,10 @@ class AssetGhost:
         """
         stage = omni.usd.get_context().get_stage()
         mount_body = self._mount_body(stage.GetPrimAtPath(GHOST_ASSET_PATH))
-        root_world = omni.usd.get_world_transform_matrix(
-            stage.GetPrimAtPath(GHOST_ROOT_PATH)
-        )
+        root_world = omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(GHOST_ROOT_PATH))
         # Gf matrices compose row-vector first: the mount body's pose in the ghost root's
         # frame is divided out of the pose the mount body is to take.
-        mount_in_root = (
-            omni.usd.get_world_transform_matrix(mount_body) * root_world.GetInverse()
-        )
+        mount_in_root = omni.usd.get_world_transform_matrix(mount_body) * root_world.GetInverse()
         self._set_root_world_transform(mount_in_root.GetInverse() * mount_world)
 
     def world_bounds(self) -> Gf.Range3d:
@@ -132,9 +124,7 @@ class AssetGhost:
         bounds = UsdGeom.BBoxCache(
             Usd.TimeCode.Default(), [UsdGeom.Tokens.default_]
         ).ComputeWorldBound(asset)
-        bounds.Transform(
-            omni.usd.get_world_transform_matrix(self._mount_body(asset)).GetInverse()
-        )
+        bounds.Transform(omni.usd.get_world_transform_matrix(self._mount_body(asset)).GetInverse())
         return bounds.ComputeAlignedRange()
 
     def camera_in_mount_frame(self) -> Gf.Matrix4d | None:
@@ -174,11 +164,7 @@ class AssetGhost:
     def _mount_body(asset: Usd.Prim) -> Usd.Prim:
         """Return the asset's first rigid body, or the asset itself when it has none."""
         return next(
-            (
-                prim
-                for prim in Usd.PrimRange(asset)
-                if prim.HasAPI(UsdPhysics.RigidBodyAPI)
-            ),
+            (prim for prim in Usd.PrimRange(asset) if prim.HasAPI(UsdPhysics.RigidBodyAPI)),
             asset,
         )
 
@@ -187,9 +173,7 @@ class AssetGhost:
         """Set the ghost root's world transform; the root sits directly under the stage root."""
         stage = omni.usd.get_context().get_stage()
         with Usd.EditContext(stage, stage.GetSessionLayer()):
-            UsdGeom.Xform(stage.GetPrimAtPath(GHOST_ROOT_PATH)).MakeMatrixXform().Set(
-                world
-            )
+            UsdGeom.Xform(stage.GetPrimAtPath(GHOST_ROOT_PATH)).MakeMatrixXform().Set(world)
 
     @staticmethod
     def _switch_off_physics(asset: Usd.Prim):
@@ -210,6 +194,4 @@ class AssetGhost:
             if prim.IsA(UsdPhysics.Joint):
                 UsdPhysics.Joint(prim).CreateJointEnabledAttr(False)
             if prim.HasAPI(UsdPhysics.ArticulationRootAPI):
-                PhysxSchema.PhysxArticulationAPI.Apply(
-                    prim
-                ).CreateArticulationEnabledAttr(False)
+                PhysxSchema.PhysxArticulationAPI.Apply(prim).CreateArticulationEnabledAttr(False)

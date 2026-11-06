@@ -85,19 +85,14 @@ class AddToolWindow(AddAssetWindow):
             omni.usd.get_context().get_stage(), arm_mount_path
         )
         flange_in_mount = (
-            self._world_transform(flange_path)
-            * self._world_transform(arm_mount_path).GetInverse()
+            self._world_transform(flange_path) * self._world_transform(arm_mount_path).GetInverse()
         )
         # Moves the gripper's backmost point onto the flange face.
         distance = -self._ghost.bounds_in_mount_frame().GetMin()[2]
         # Gf composes row-vector first: the gripper in the flange's frame, then the
         # flange in the mount link's frame, where the offset is read.
-        placement = (
-            Gf.Matrix4d().SetTranslate(Gf.Vec3d(0.0, 0.0, distance)) * flange_in_mount
-        )
-        translation, rotation = robot_assembler.matrix_to_translation_rotation(
-            placement
-        )
+        placement = Gf.Matrix4d().SetTranslate(Gf.Vec3d(0.0, 0.0, distance)) * flange_in_mount
+        translation, rotation = robot_assembler.matrix_to_translation_rotation(placement)
         self._transformation_fields.set_transformation(
             models.Transformation(translation=translation, rotation=rotation)
         )
@@ -108,9 +103,7 @@ class AddToolWindow(AddAssetWindow):
 
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Load the gripper and, when ``attaching_prim_path`` is part of a robot, assemble it on."""
-        robot_id = await self._articulation_service.find_robot_for_prim(
-            attaching_prim_path
-        )
+        robot_id = await self._articulation_service.find_robot_for_prim(attaching_prim_path)
         robot_prim_path = None
         if robot_id is not None:
             # Checked before anything is loaded, so a robot that stores no mount link

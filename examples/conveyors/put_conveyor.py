@@ -64,9 +64,7 @@ def main():
     parser = argparse.ArgumentParser(description="Register a prim as a conveyor.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument(
-        "--prim", default=CONVEYOR_PRIM_PATH, help="conveyor prim path to register"
-    )
+    parser.add_argument("--prim", default=CONVEYOR_PRIM_PATH, help="conveyor prim path to register")
     parser.add_argument(
         "--cargo-root",
         default=None,

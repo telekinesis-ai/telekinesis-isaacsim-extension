@@ -96,9 +96,7 @@ class JointPositionsRequest(BaseModel):
     joint_positions: list[float]
     indices: list[int] | None = None
     asynchronous: bool = False
-    position_stall_tolerance: float | None = Field(
-        default=None, gt=0, allow_inf_nan=False
-    )
+    position_stall_tolerance: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     position_stall_duration: float = Field(default=0.25, gt=0, allow_inf_nan=False)
     joint_speeds: list[float] | None = None
     max_efforts: list[float] | None = None

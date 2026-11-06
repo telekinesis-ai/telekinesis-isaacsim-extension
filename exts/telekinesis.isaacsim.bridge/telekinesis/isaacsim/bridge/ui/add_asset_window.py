@@ -111,9 +111,7 @@ class AddAssetWindow(abc.ABC):
         # Clears every selection while the window is open; None while it is closed.
         self._selection_subscription = None
 
-        self._window = ui.Window(
-            title, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, visible=False
-        )
+        self._window = ui.Window(title, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, visible=False)
         self._window.set_visibility_changed_fn(self._on_visibility_changed)
         with self._window.frame:
             with ui.VStack(spacing=5, height=0):
@@ -141,9 +139,7 @@ class AddAssetWindow(abc.ABC):
                     )
                     # Read-only: the right-clicked prim the window was opened on.
                     self._attaching_prim_model = ui.StringField(read_only=True).model
-                self._transformation_fields = TransformationFields(
-                    on_changed_fn=self.update_ghost
-                )
+                self._transformation_fields = TransformationFields(on_changed_fn=self.update_ghost)
                 # Always shown, so the buttons below it never move.
                 with self._hint_callout():
                     ui.Label("Hover over the viewport and press", width=0)
@@ -187,9 +183,7 @@ class AddAssetWindow(abc.ABC):
         like the move/rotate hint.
         """
 
-    async def transformation_frame(
-        self, attaching_prim_path: str
-    ) -> Gf.Matrix4d | None:
+    async def transformation_frame(self, attaching_prim_path: str) -> Gf.Matrix4d | None:
         """Return the world frame Position and Rotation are read in, or ``None`` when
         they do not place the asset.
 
@@ -202,16 +196,12 @@ class AddAssetWindow(abc.ABC):
         Optional; the default is the stored mount link of the robot the Attaching
         Prim is part of, and ``None`` when it is part of no robot.
         """
-        robot_id = await self._articulation_service.find_robot_for_prim(
-            attaching_prim_path
-        )
+        robot_id = await self._articulation_service.find_robot_for_prim(attaching_prim_path)
         if robot_id is None:
             return None
         return self._world_transform(self._arm_mount_path(robot_id))
 
-    def place_ghost(
-        self, attaching_prim_path: str, transformation_frame: Gf.Matrix4d | None
-    ):
+    def place_ghost(self, attaching_prim_path: str, transformation_frame: Gf.Matrix4d | None):
         """Move the ghost to where :meth:`add_selected_asset` would put the selected asset.
 
         Called on every ghost refresh, once the ghost shows the selected asset, with
@@ -275,9 +265,7 @@ class AddAssetWindow(abc.ABC):
             # Selecting the manufacturer's None also sets Model to None.
             self._manufacturer_dropdown.set_selection(NO_SELECTION_LABEL)
         self._window.visible = True
-        if not self._assets and (
-            self._catalogue_load is None or self._catalogue_load.done()
-        ):
+        if not self._assets and (self._catalogue_load is None or self._catalogue_load.done()):
             self._catalogue_load = asyncio.ensure_future(self._load_catalogue())
         self.update_ghost()
 
@@ -428,9 +416,9 @@ class AddAssetWindow(abc.ABC):
             )
             main_file = fetched["local_path"]
             if main_file not in self._preview_asset_paths:
-                self._preview_asset_paths[
+                self._preview_asset_paths[main_file] = await asset_loader.build_preview_asset(
                     main_file
-                ] = await asset_loader.build_preview_asset(main_file)
+                )
             if self._ghost_outdated:
                 # The window changed while the preview loaded; the next pass shows the
                 # latest selection instead of this one.
@@ -467,15 +455,16 @@ class AddAssetWindow(abc.ABC):
         """
         if self._ghost_asset is None or not self._ghost_refresh.done():
             self._status_label.text = (
-                "Auto-calculate Placement places the preview: press it once the "
-                "preview shows."
+                "Auto-calculate Placement places the preview: press it once the preview shows."
             )
             return None
         robot_id = await self._articulation_service.find_robot_for_prim(
             self._attaching_prim_model.get_value_as_string()
         )
         if robot_id is None:
-            self._status_label.text = "Auto-calculate Placement needs an Attaching Prim that is part of a robot."
+            self._status_label.text = (
+                "Auto-calculate Placement needs an Attaching Prim that is part of a robot."
+            )
             return None
         try:
             return self._arm_mount_path(robot_id)
@@ -572,9 +561,7 @@ class AddAssetWindow(abc.ABC):
             return
         attaching_prim_path = self._attaching_prim_model.get_value_as_string()
         if not omni.usd.get_context().get_stage().GetPrimAtPath(attaching_prim_path):
-            self._status_label.text = (
-                f"'{attaching_prim_path}' is not a prim in the stage."
-            )
+            self._status_label.text = f"'{attaching_prim_path}' is not a prim in the stage."
             return
 
         self._status_label.text = ""
@@ -605,9 +592,7 @@ class AddAssetWindow(abc.ABC):
             f"Adding {asset_label} failed: {reason}",
             hide_after_timeout=False,
             status=notification_manager.NotificationStatus.WARNING,
-            button_infos=[
-                notification_manager.NotificationButtonInfo("OK", on_complete=None)
-            ],
+            button_infos=[notification_manager.NotificationButtonInfo("OK", on_complete=None)],
         )
 
     @staticmethod
@@ -629,9 +614,7 @@ class AddAssetWindow(abc.ABC):
         if robot_prim_path is None:
             path = f"{attaching_prim_path.rstrip('/')}/{prim_name}"
         else:
-            path = asset_loader.path_beside_clear_of_rigid_bodies(
-                stage, robot_prim_path, prim_name
-            )
+            path = asset_loader.path_beside_clear_of_rigid_bodies(stage, robot_prim_path, prim_name)
         return omni.usd.get_stage_next_free_path(stage, path, False)
 
     @staticmethod

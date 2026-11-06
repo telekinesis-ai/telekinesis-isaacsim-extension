@@ -65,9 +65,7 @@ def joint_prims(stage, prim_path):
     instanced prims included.
     """
     root = stage.GetPrimAtPath(prim_path)
-    if root.IsA(
-        UsdPhysics.Joint
-    ):  # importer may return the root joint, not the container
+    if root.IsA(UsdPhysics.Joint):  # importer may return the root joint, not the container
         root = root.GetParent()
     return {
         p.GetName(): p
@@ -86,9 +84,7 @@ def is_mimic_joint(prim):
     loaded -- and the mimic schema belongs to whichever backend is not running.
     """
     schemas = prim.GetMetadata("apiSchemas")
-    return bool(schemas) and any(
-        "Mimic" in name for name in schemas.GetAddedOrExplicitItems()
-    )
+    return bool(schemas) and any("Mimic" in name for name in schemas.GetAddedOrExplicitItems())
 
 
 def find_driver_joint(stage, prim_path, dof_names):
@@ -101,9 +97,7 @@ def find_driver_joint(stage, prim_path, dof_names):
     the extension (exposed as the ``/driver_joint`` getter).
     """
     if not dof_names:
-        raise ValueError(
-            f"articulation at {prim_path} has no driven joints to search for a driver"
-        )
+        raise ValueError(f"articulation at {prim_path} has no driven joints to search for a driver")
 
     joints = joint_prims(stage, prim_path)
 
@@ -256,9 +250,7 @@ class SingleArticulation:
         joints = joint_prims(self._articulation.prim.GetStage(), self.prim_path)
 
         corrected = {}
-        for name, index, props in zip(
-            self.dof_names, self.joint_indices, self.dof_properties()
-        ):
+        for name, index, props in zip(self.dof_names, self.joint_indices, self.dof_properties()):
             prim = joints.get(name)
             if prim is None or not prim.IsA(UsdPhysics.PrismaticJoint):
                 continue
@@ -266,9 +258,7 @@ class SingleArticulation:
             urdf_velocity = attribute.Get() if attribute else None
             if not urdf_velocity or urdf_velocity <= 0.0:
                 continue
-            if not np.isclose(
-                props["max_velocity"], np.degrees(urdf_velocity), rtol=1e-3
-            ):
+            if not np.isclose(props["max_velocity"], np.degrees(urdf_velocity), rtol=1e-3):
                 continue
             self._articulation._articulation_view.set_max_joint_velocities(
                 np.array([[urdf_velocity]], dtype=float), joint_indices=[index]
@@ -482,17 +472,13 @@ class SingleArticulation:
         if position_stall_tolerance is not None and (
             not np.isfinite(position_stall_tolerance) or position_stall_tolerance <= 0
         ):
-            raise ValueError(
-                "position_stall_tolerance must be finite and positive, or None"
-            )
+            raise ValueError("position_stall_tolerance must be finite and positive, or None")
         if not np.isfinite(position_stall_duration) or position_stall_duration <= 0:
             raise ValueError("position_stall_duration must be finite and positive")
         target = np.asarray(positions, dtype=float)
         idx = list(self.joint_indices) if indices is None else list(indices)
         if target.shape != (len(idx),):
-            raise ValueError(
-                f"expected {len(idx)} joint positions, got {target.shape[0]}"
-            )
+            raise ValueError(f"expected {len(idx)} joint positions, got {target.shape[0]}")
         self._validate_indices(idx)
 
         if (joint_speeds is None) != (max_efforts is None):
@@ -516,9 +502,7 @@ class SingleArticulation:
             for index in idx:
                 joint = joints.get(self._articulation.dof_names[index])
                 if joint is None:
-                    raise ValueError(
-                        "velocity control requires a joint belonging to this device"
-                    )
+                    raise ValueError("velocity control requires a joint belonging to this device")
                 kind = "linear" if joint.IsA(UsdPhysics.PrismaticJoint) else "angular"
                 if UsdPhysics.DriveAPI.Get(joint, kind).GetTypeAttr().Get() != "force":
                     raise ValueError(
@@ -542,8 +526,7 @@ class SingleArticulation:
                     view.get_max_efforts(joint_indices=idx),
                 )
                 velocities = (
-                    np.sign(target - self._articulation.get_joint_positions()[idx])
-                    * joint_speeds
+                    np.sign(target - self._articulation.get_joint_positions()[idx]) * joint_speeds
                 )
                 self._velocity_motion = ArticulationAction(
                     joint_positions=target,
@@ -580,15 +563,12 @@ class SingleArticulation:
             dof_names = self._articulation.dof_names
             linear = np.array(
                 [
-                    dof_names[i] in joints
-                    and joints[dof_names[i]].IsA(UsdPhysics.PrismaticJoint)
+                    dof_names[i] in joints and joints[dof_names[i]].IsA(UsdPhysics.PrismaticJoint)
                     for i in idx
                 ]
             )
             reach_tolerance = np.where(linear, _REACH_TOLERANCE_M, _REACH_TOLERANCE_RAD)
-            settled_speed = np.where(
-                linear, _SETTLED_VELOCITY_M_S, _SETTLED_VELOCITY_RAD_S
-            )
+            settled_speed = np.where(linear, _SETTLED_VELOCITY_M_S, _SETTLED_VELOCITY_RAD_S)
 
             reached = False
             timed_out = False
@@ -613,11 +593,7 @@ class SingleArticulation:
                 if position_stall_tolerance is not None:
                     step = SimulationManager.get_num_physics_steps()
                     now = SimulationManager.get_simulation_time()
-                    if (
-                        not timeline.is_playing()
-                        or step < previous_step
-                        or now < previous_time
-                    ):
+                    if not timeline.is_playing() or step < previous_step or now < previous_time:
                         best_error = np.abs(q - target)
                         stable_since = previous_time = now
                         previous_step = step
@@ -643,9 +619,7 @@ class SingleArticulation:
                     exit_reason = "reached: every joint within its reach tolerance"
                     break
                 velocities = self._articulation.get_joint_velocities()
-                settled = velocities is None or np.all(
-                    np.abs(velocities[idx]) < settled_speed
-                )
+                settled = velocities is None or np.all(np.abs(velocities[idx]) < settled_speed)
                 stalled_frames = stalled_frames + 1 if settled else 0
                 if position_stalled:
                     exit_reason = (
@@ -707,9 +681,7 @@ class SingleArticulation:
         view.set_max_efforts(saved_properties[2], joint_indices=motion.joint_indices)
         self._articulation.apply_action(
             ArticulationAction(
-                joint_positions=self._articulation.get_joint_positions()[
-                    motion.joint_indices
-                ],
+                joint_positions=self._articulation.get_joint_positions()[motion.joint_indices],
                 joint_velocities=np.zeros(len(motion.joint_indices)),
                 joint_indices=motion.joint_indices,
             )
@@ -729,9 +701,7 @@ class SingleArticulation:
             self.stop_velocity_drive()
             return
         positions = self._articulation.get_joint_positions()[motion.joint_indices]
-        remaining = np.sign(motion.joint_velocities) * (
-            motion.joint_positions - positions
-        )
+        remaining = np.sign(motion.joint_velocities) * (motion.joint_positions - positions)
         newly_completed = (remaining <= 0) & ~self._velocity_completed
         self._velocity_completed |= newly_completed
         if np.all(self._velocity_completed):
@@ -753,9 +723,7 @@ class SingleArticulation:
         self._articulation.apply_action(
             ArticulationAction(
                 joint_positions=motion.joint_positions,
-                joint_velocities=np.where(
-                    self._velocity_completed, 0.0, motion.joint_velocities
-                ),
+                joint_velocities=np.where(self._velocity_completed, 0.0, motion.joint_velocities),
                 joint_indices=motion.joint_indices,
             )
         )
@@ -777,9 +745,7 @@ class SingleArticulation:
         target = np.asarray(positions, dtype=float)
         idx = list(self.joint_indices) if indices is None else list(indices)
         if target.shape != (len(idx),):
-            raise ValueError(
-                f"expected {len(idx)} joint positions, got {target.shape[0]}"
-            )
+            raise ValueError(f"expected {len(idx)} joint positions, got {target.shape[0]}")
         self._validate_indices(idx)
 
         async with self._move_lock:
@@ -824,9 +790,7 @@ class SingleArticulation:
         target = np.asarray(positions, dtype=float)
         idx = list(self.joint_indices) if indices is None else list(indices)
         if target.shape != (len(idx),):
-            raise ValueError(
-                f"expected {len(idx)} joint positions, got {target.shape[0]}"
-            )
+            raise ValueError(f"expected {len(idx)} joint positions, got {target.shape[0]}")
         self._validate_indices(idx)
 
         self.stop_velocity_drive()
@@ -854,9 +818,7 @@ class SingleArticulation:
         target = np.asarray(velocities, dtype=float)
         idx = list(self.joint_indices) if indices is None else list(indices)
         if target.shape != (len(idx),):
-            raise ValueError(
-                f"expected {len(idx)} joint velocities, got {target.shape[0]}"
-            )
+            raise ValueError(f"expected {len(idx)} joint velocities, got {target.shape[0]}")
         self._validate_indices(idx)
 
         self.stop_velocity_drive()
@@ -902,10 +864,7 @@ class SingleArticulation:
         joint positions at all, and a caller sampling this every frame wants to skip
         such a frame and carry on.
         """
-        if (
-            not self.handles_initialized()
-            or self._articulation.get_joint_positions() is None
-        ):
+        if not self.handles_initialized() or self._articulation.get_joint_positions() is None:
             return None
 
         position, orientation = self._articulation.get_world_pose()
@@ -968,9 +927,7 @@ class SingleArticulation:
 
     def handles_initialized(self):
         """Whether the underlying handle is currently valid, without a re-bind."""
-        return bool(
-            self._articulation is not None and self._articulation.handles_initialized
-        )
+        return bool(self._articulation is not None and self._articulation.handles_initialized)
 
     def num_bodies(self):
         """Number of rigid-body links in the underlying articulation (the whole
@@ -1010,9 +967,7 @@ class SingleArticulation:
             for i in self.joint_indices
         ]
 
-    def set_dof_gains(
-        self, stiffness=None, damping=None, max_effort=None, indices=None
-    ):
+    def set_dof_gains(self, stiffness=None, damping=None, max_effort=None, indices=None):
         """Set the position drive's gains and effort ceiling on the chosen joint
         ``indices`` (defaults to this device's driven subset).
 
@@ -1103,9 +1058,7 @@ class SingleArticulation:
             return {"joint_positions": None, "joint_velocities": None}
         return {
             "joint_positions": np.asarray(state.positions)[self.joint_indices].tolist(),
-            "joint_velocities": np.asarray(state.velocities)[
-                self.joint_indices
-            ].tolist(),
+            "joint_velocities": np.asarray(state.velocities)[self.joint_indices].tolist(),
         }
 
     def set_joints_default_state(
@@ -1138,15 +1091,9 @@ class SingleArticulation:
             full[self.joint_indices] = target
             return full
 
-        positions = _merged(
-            joint_positions, current.positions if current is not None else None
-        )
-        velocities = _merged(
-            joint_velocities, current.velocities if current is not None else None
-        )
-        efforts = _merged(
-            joint_efforts, None
-        )  # Isaac never reports a stored default effort back
+        positions = _merged(joint_positions, current.positions if current is not None else None)
+        velocities = _merged(joint_velocities, current.velocities if current is not None else None)
+        efforts = _merged(joint_efforts, None)  # Isaac never reports a stored default effort back
         self._articulation.set_joints_default_state(
             positions=positions, velocities=velocities, efforts=efforts
         )
@@ -1186,9 +1133,7 @@ class SingleArticulation:
         target = np.asarray(efforts, dtype=float)
         idx = list(self.joint_indices) if indices is None else list(indices)
         if target.shape != (len(idx),):
-            raise ValueError(
-                f"expected {len(idx)} joint efforts, got {target.shape[0]}"
-            )
+            raise ValueError(f"expected {len(idx)} joint efforts, got {target.shape[0]}")
         self._validate_indices(idx)
         self.stop_velocity_drive()
         self._articulation.set_joint_efforts(target, joint_indices=idx)
@@ -1221,9 +1166,7 @@ class SingleArticulation:
         :meth:`get_world_velocity`."""
         target = np.asarray(velocity, dtype=float)
         if target.shape != (6,):
-            raise ValueError(
-                f"expected 6 values (linear xyz + angular xyz), got {target.shape[0]}"
-            )
+            raise ValueError(f"expected 6 values (linear xyz + angular xyz), got {target.shape[0]}")
         self._articulation.set_world_velocity(target)
 
     def get_linear_velocity(self):
@@ -1259,9 +1202,7 @@ class SingleArticulation:
     def set_solver_position_iteration_count(self, count):
         """Set the PhysX position-solver iteration count (accuracy vs. perf)."""
         if count < 0:
-            raise ValueError(
-                f"solver position iteration count must be >= 0, got {count}"
-            )
+            raise ValueError(f"solver position iteration count must be >= 0, got {count}")
         self._set_physx_setting("solverPositionIterationCount", int(count))
 
     def get_solver_velocity_iteration_count(self):
@@ -1273,9 +1214,7 @@ class SingleArticulation:
     def set_solver_velocity_iteration_count(self, count):
         """Set the PhysX velocity-solver iteration count (accuracy vs. perf)."""
         if count < 0:
-            raise ValueError(
-                f"solver velocity iteration count must be >= 0, got {count}"
-            )
+            raise ValueError(f"solver velocity iteration count must be >= 0, got {count}")
         self._set_physx_setting("solverVelocityIterationCount", int(count))
 
     def get_stabilization_threshold(self):
@@ -1345,6 +1284,4 @@ class SingleArticulation:
         settings live. ``prim_path`` is the handle's resolved root, not the path the
         device was registered at (a container prim holding the articulation below it).
         """
-        return self._articulation.prim.GetStage().GetPrimAtPath(
-            self._articulation.prim_path
-        )
+        return self._articulation.prim.GetStage().GetPrimAtPath(self._articulation.prim_path)

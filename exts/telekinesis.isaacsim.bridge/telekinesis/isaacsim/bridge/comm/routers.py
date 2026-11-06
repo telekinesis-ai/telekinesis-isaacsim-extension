@@ -182,9 +182,7 @@ async def delete_articulation(
     return articulation_service.delete_articulation(articulation_id)
 
 
-@articulations.post(
-    "/articulations/{articulation_id}/move_j", summary="Move Joint Positions"
-)
+@articulations.post("/articulations/{articulation_id}/move_j", summary="Move Joint Positions")
 async def move_j(
     articulation_id: str,
     req: JointPositionsRequest,
@@ -203,18 +201,14 @@ async def move_j(
     )
 
 
-@articulations.post(
-    "/articulations/{articulation_id}/set_j", summary="Set Joint Positions"
-)
+@articulations.post("/articulations/{articulation_id}/set_j", summary="Set Joint Positions")
 async def set_j(
     articulation_id: str,
     req: SetJointPositionsRequest,
     articulation_service=Depends(get_articulation_service),
 ):
     """Teleport the joints directly to the targets (radians); immediate, no blocking."""
-    return await articulation_service.set_j(
-        articulation_id, req.joint_positions, req.indices
-    )
+    return await articulation_service.set_j(articulation_id, req.joint_positions, req.indices)
 
 
 @articulations.websocket("/articulations/{articulation_id}/stream_joint_positions")
@@ -305,9 +299,7 @@ async def set_joint_velocities(
     )
 
 
-@articulations.get(
-    "/articulations/{articulation_id}/joints_state", summary="Get Joints State"
-)
+@articulations.get("/articulations/{articulation_id}/joints_state", summary="Get Joints State")
 async def get_joints_state(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
@@ -384,9 +376,7 @@ async def stream_articulation_state(websocket: WebSocket, articulation_id: str):
     await run_until_first_finished(send_state_frames(), watch_for_disconnect())
 
 
-@articulations.get(
-    "/articulations/{articulation_id}/dof_limits", summary="Get Dof Limits"
-)
+@articulations.get("/articulations/{articulation_id}/dof_limits", summary="Get Dof Limits")
 async def get_dof_limits(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
@@ -394,9 +384,7 @@ async def get_dof_limits(
     return articulation_service.get_dof_limits(articulation_id)
 
 
-@articulations.get(
-    "/articulations/{articulation_id}/driver_joint", summary="Get Driver Joint"
-)
+@articulations.get("/articulations/{articulation_id}/driver_joint", summary="Get Driver Joint")
 async def get_driver_joint(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
@@ -404,9 +392,7 @@ async def get_driver_joint(
     return articulation_service.get_driver_joint(articulation_id)
 
 
-@articulations.put(
-    "/articulations/{articulation_id}/driven_joints", summary="Set Driven Joints"
-)
+@articulations.put("/articulations/{articulation_id}/driven_joints", summary="Set Driven Joints")
 async def set_driven_joints(
     articulation_id: str,
     req: SetDrivenJointsRequest,
@@ -416,9 +402,7 @@ async def set_driven_joints(
     return articulation_service.set_driven_joints(articulation_id, req.joint_names)
 
 
-@articulations.post(
-    "/articulations/{articulation_id}/assemble_robot", summary="Assemble Robot"
-)
+@articulations.post("/articulations/{articulation_id}/assemble_robot", summary="Assemble Robot")
 async def assemble_robot(
     articulation_id: str,
     req: AssembleRobotRequest,
@@ -488,9 +472,7 @@ async def get_handles_initialized(
     return articulation_service.get_handles_initialized(articulation_id)
 
 
-@articulations.get(
-    "/articulations/{articulation_id}/num_bodies", summary="Get Num Bodies"
-)
+@articulations.get("/articulations/{articulation_id}/num_bodies", summary="Get Num Bodies")
 async def get_num_bodies(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
@@ -498,9 +480,7 @@ async def get_num_bodies(
     return articulation_service.get_num_bodies(articulation_id)
 
 
-@articulations.get(
-    "/articulations/{articulation_id}/dof_properties", summary="Get Dof Properties"
-)
+@articulations.get("/articulations/{articulation_id}/dof_properties", summary="Get Dof Properties")
 async def get_dof_properties(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
@@ -508,9 +488,7 @@ async def get_dof_properties(
     return articulation_service.get_dof_properties(articulation_id)
 
 
-@articulations.post(
-    "/articulations/{articulation_id}/dof_gains", summary="Set Dof Gains"
-)
+@articulations.post("/articulations/{articulation_id}/dof_gains", summary="Set Dof Gains")
 async def set_dof_gains(
     articulation_id: str,
     req: DofGainsRequest,
@@ -583,9 +561,7 @@ async def set_joints_default_state(
     )
 
 
-@articulations.get(
-    "/articulations/{articulation_id}/applied_action", summary="Get Applied Action"
-)
+@articulations.get("/articulations/{articulation_id}/applied_action", summary="Get Applied Action")
 async def get_applied_action(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
@@ -593,23 +569,17 @@ async def get_applied_action(
     return articulation_service.get_applied_action(articulation_id)
 
 
-@articulations.post(
-    "/articulations/{articulation_id}/joint_efforts", summary="Set Joint Efforts"
-)
+@articulations.post("/articulations/{articulation_id}/joint_efforts", summary="Set Joint Efforts")
 async def set_joint_efforts(
     articulation_id: str,
     req: JointEffortsRequest,
     articulation_service=Depends(get_articulation_service),
 ):
     """Command raw torque/force directly on the chosen joints; bypasses the drive."""
-    return articulation_service.set_joint_efforts(
-        articulation_id, req.joint_efforts, req.indices
-    )
+    return articulation_service.set_joint_efforts(articulation_id, req.joint_efforts, req.indices)
 
 
-@articulations.post(
-    "/articulations/{articulation_id}/enable_gravity", summary="Enable Gravity"
-)
+@articulations.post("/articulations/{articulation_id}/enable_gravity", summary="Enable Gravity")
 async def enable_gravity(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
@@ -617,9 +587,7 @@ async def enable_gravity(
     return articulation_service.enable_gravity(articulation_id)
 
 
-@articulations.post(
-    "/articulations/{articulation_id}/disable_gravity", summary="Disable Gravity"
-)
+@articulations.post("/articulations/{articulation_id}/disable_gravity", summary="Disable Gravity")
 async def disable_gravity(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
@@ -627,9 +595,7 @@ async def disable_gravity(
     return articulation_service.disable_gravity(articulation_id)
 
 
-@articulations.get(
-    "/articulations/{articulation_id}/world_velocity", summary="Get World Velocity"
-)
+@articulations.get("/articulations/{articulation_id}/world_velocity", summary="Get World Velocity")
 async def get_world_velocity(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
@@ -637,9 +603,7 @@ async def get_world_velocity(
     return articulation_service.get_world_velocity(articulation_id)
 
 
-@articulations.put(
-    "/articulations/{articulation_id}/world_velocity", summary="Set World Velocity"
-)
+@articulations.put("/articulations/{articulation_id}/world_velocity", summary="Set World Velocity")
 async def set_world_velocity(
     articulation_id: str,
     req: SetWorldVelocityRequest,
@@ -714,9 +678,7 @@ async def set_solver_position_iteration_count(
     articulation_service=Depends(get_articulation_service),
 ):
     """Set the PhysX position-solver iteration count (accuracy vs. perf)."""
-    return articulation_service.set_solver_position_iteration_count(
-        articulation_id, req.count
-    )
+    return articulation_service.set_solver_position_iteration_count(articulation_id, req.count)
 
 
 @articulations.get(
@@ -740,9 +702,7 @@ async def set_solver_velocity_iteration_count(
     articulation_service=Depends(get_articulation_service),
 ):
     """Set the PhysX velocity-solver iteration count (accuracy vs. perf)."""
-    return articulation_service.set_solver_velocity_iteration_count(
-        articulation_id, req.count
-    )
+    return articulation_service.set_solver_velocity_iteration_count(articulation_id, req.count)
 
 
 @articulations.get(
@@ -766,9 +726,7 @@ async def set_stabilization_threshold(
     articulation_service=Depends(get_articulation_service),
 ):
     """Set the stabilization threshold."""
-    return articulation_service.set_stabilization_threshold(
-        articulation_id, req.threshold
-    )
+    return articulation_service.set_stabilization_threshold(articulation_id, req.threshold)
 
 
 @articulations.get(
@@ -792,9 +750,7 @@ async def set_enabled_self_collisions(
     articulation_service=Depends(get_articulation_service),
 ):
     """Enable/disable self-collision between this articulation's own links."""
-    return articulation_service.set_enabled_self_collisions(
-        articulation_id, req.enabled
-    )
+    return articulation_service.set_enabled_self_collisions(articulation_id, req.enabled)
 
 
 @articulations.get(
@@ -861,9 +817,7 @@ async def open_scene(req: OpenSceneRequest, stage_service=Depends(get_stage_serv
 
 
 @stage.post("/scene/reference", summary="Add To Scene")
-async def add_to_scene(
-    req: AddToSceneRequest, stage_service=Depends(get_stage_service)
-):
+async def add_to_scene(req: AddToSceneRequest, stage_service=Depends(get_stage_service)):
     """Reference a USD, OBJ, GLB or glTF asset into the open stage at ``prim_path``.
 
     The stage stays open; nothing already in it is replaced.
@@ -888,17 +842,13 @@ async def get_stage_units(stage_service=Depends(get_stage_service)):
 
 
 @stage.put("/units", summary="Update Stage Units")
-async def update_stage_units(
-    units: StageUnits, stage_service=Depends(get_stage_service)
-):
+async def update_stage_units(units: StageUnits, stage_service=Depends(get_stage_service)):
     """Set the stage's meters-per-unit scale."""
     stage_service.update_units(units.meters_per_unit)
 
 
 @stage.patch("/simulation/timeline/{action}", summary="Timeline Action")
-async def timeline_action(
-    action: TimelineAction, stage_service=Depends(get_stage_service)
-):
+async def timeline_action(action: TimelineAction, stage_service=Depends(get_stage_service)):
     """Drive the simulation timeline: play / pause / stop."""
     stage_service.timeline_action(action)
 
@@ -909,9 +859,7 @@ async def simulation_state(stage_service=Depends(get_stage_service)):
     return stage_service.simulation_state()
 
 
-@stage.put(
-    "/physics/solve_articulation_contact_last", summary="Set Articulation Contact Order"
-)
+@stage.put("/physics/solve_articulation_contact_last", summary="Set Articulation Contact Order")
 async def set_solve_articulation_contact_last(
     req: SetEnabledRequest, stage_service=Depends(get_stage_service)
 ):
@@ -924,9 +872,7 @@ async def set_solve_articulation_contact_last(
 
 
 @stage.put("/viewport/guides", summary="Set Guides Visible")
-async def set_guides_visible(
-    req: SetEnabledRequest, stage_service=Depends(get_stage_service)
-):
+async def set_guides_visible(req: SetEnabledRequest, stage_service=Depends(get_stage_service)):
     """Show or hide guide-purpose prims (e.g. TCP marker axes) in the viewport.
 
     Same as Display > Show By Purpose > Guide: applies to every guide prim and persists
@@ -983,9 +929,7 @@ async def set_scale(req: SetScaleRequest, prim_service=Depends(get_prim_service)
 async def get_relative_pose(
     prim_path_1: str,
     prim_path_2: str,
-    mode: str = Query(
-        "normal", pattern="^(normal|inverse_first|inverse_second|inverse_both)$"
-    ),
+    mode: str = Query("normal", pattern="^(normal|inverse_first|inverse_second|inverse_both)$"),
     rotation_type: str = Query("cartesian", pattern="^(cartesian|quaternions)$"),
     prim_service=Depends(get_prim_service),
 ):
@@ -998,9 +942,7 @@ async def apply_relative_pose(
     req: ApplyRelativePoseRequest, prim_service=Depends(get_prim_service)
 ):
     """Pre/post-multiply a prim's world pose by a relative ``WSPose``."""
-    prim_service.apply_relative_pose(
-        req.prim_path, req.relative_pose.pose, req.object_first
-    )
+    prim_service.apply_relative_pose(req.prim_path, req.relative_pose.pose, req.object_first)
 
 
 @prims.get("/poses/default", summary="List Default Poses")
@@ -1010,9 +952,7 @@ async def list_default_poses(prim_service=Depends(get_prim_service)):
 
 
 @prims.put("/poses/default", summary="Assign Default Poses")
-async def assign_default_poses(
-    req: PrimPathRequest, prim_service=Depends(get_prim_service)
-):
+async def assign_default_poses(req: PrimPathRequest, prim_service=Depends(get_prim_service)):
     """Record the prim's current local pose as its default (for later reset)."""
     prim_service.assign_default_pose(req.prim_path)
 
@@ -1024,17 +964,13 @@ async def clear_default_poses(prim_service=Depends(get_prim_service)):
 
 
 @prims.post("/poses/default/reset", summary="Reset Prim Poses To Default")
-async def reset_to_default_poses(
-    req: PrimPathRequest, prim_service=Depends(get_prim_service)
-):
+async def reset_to_default_poses(req: PrimPathRequest, prim_service=Depends(get_prim_service)):
     """Restore a prim to its stored default pose (404 if none was assigned)."""
     prim_service.reset_to_default_pose(req.prim_path)
 
 
 @prims.put("/metadata", summary="Set Prim Metadata")
-async def set_prim_metadata(
-    req: SetPrimMetadataRequest, prim_service=Depends(get_prim_service)
-):
+async def set_prim_metadata(req: SetPrimMetadataRequest, prim_service=Depends(get_prim_service)):
     """Store user metadata (category/type) on a prim under customData."""
     prim_service.set_metadata(req.prim_path, req.metadata.model_dump())
 
@@ -1046,33 +982,25 @@ async def remove_prim_metadata(prim_path: str, prim_service=Depends(get_prim_ser
 
 
 @prims.patch("/visibility", summary="Set Prim Visibility")
-async def set_prim_visibility(
-    req: SetVisibilityRequest, prim_service=Depends(get_prim_service)
-):
+async def set_prim_visibility(req: SetVisibilityRequest, prim_service=Depends(get_prim_service)):
     """Show or hide a prim (UsdGeom imageable visibility)."""
     prim_service.set_visibility(req.prim_path, req.visibility == VisibilityAction.show)
 
 
 @prims.patch("/physics/joints", summary="Set Joints")
-async def set_joint_state(
-    req: SetJointStateRequest, prim_service=Depends(get_prim_service)
-):
+async def set_joint_state(req: SetJointStateRequest, prim_service=Depends(get_prim_service)):
     """Enable or disable a physics joint."""
     prim_service.set_joint_state(req.prim_path, req.enable)
 
 
 @prims.patch("/physics/colliders/", summary="Update Colliders")
-async def update_colliders(
-    req: UpdateCollidersRequest, prim_service=Depends(get_prim_service)
-):
+async def update_colliders(req: UpdateCollidersRequest, prim_service=Depends(get_prim_service)):
     """Enable or disable collision on a prim (applies the CollisionAPI as needed)."""
     prim_service.update_colliders(req.prim_path, req.enable)
 
 
 @prims.put("/physics/rigid_body", summary="Set Rigid Body")
-async def set_rigid_body(
-    req: SetRigidBodyRequest, prim_service=Depends(get_prim_service)
-):
+async def set_rigid_body(req: SetRigidBodyRequest, prim_service=Depends(get_prim_service)):
     """Make a prim one dynamic rigid body of ``mass`` kg, colliding through the convex
     hull of every mesh beneath it with a friction of 1.0 (``max`` combine mode). Meant
     for a prop with no rigid body of its own.
@@ -1129,15 +1057,11 @@ async def fetch_asset(
     req: FetchAssetRequest, asset_library_service=Depends(get_asset_library_service)
 ):
     """Download the asset into the bridge's cache (once); returns its entry plus local_path."""
-    return await asset_library_service.fetch_asset(
-        req.category, req.manufacturer, req.model
-    )
+    return await asset_library_service.fetch_asset(req.category, req.manufacturer, req.model)
 
 
 @asset_library.get("/{category:path}", summary="List Assets")
-async def list_assets(
-    category: str, asset_library_service=Depends(get_asset_library_service)
-):
+async def list_assets(category: str, asset_library_service=Depends(get_asset_library_service)):
     """The assets of one category, e.g. robots/manipulators, from the usd/ and urdf/ trees.
 
     404 if empty.
@@ -1203,9 +1127,7 @@ async def get_motion_group(prim_path: str):
     not_implemented()
 
 
-@manipulators.put(
-    "/motion-groups/{prim_path:path}", summary="Update Motion Group Motion Stream"
-)
+@manipulators.put("/motion-groups/{prim_path:path}", summary="Update Motion Group Motion Stream")
 async def update_motion_group_motion_stream(prim_path: str):
     """Mirrored from the spec; not yet implemented."""
     not_implemented()
@@ -1234,14 +1156,10 @@ cameras = APIRouter(tags=["cameras"])
 
 
 @cameras.put("/cameras", summary="Create Camera")
-async def create_camera(
-    req: CreateCameraRequest, camera_service=Depends(get_camera_service)
-):
+async def create_camera(req: CreateCameraRequest, camera_service=Depends(get_camera_service)):
     """Register (and bind) one camera; returns its id, prim, resolution, optics, and
     its active and supported data types."""
-    return await camera_service.create_camera(
-        req.prim_path, req.resolution, req.frequency
-    )
+    return await camera_service.create_camera(req.prim_path, req.resolution, req.frequency)
 
 
 @cameras.get("/cameras", summary="List Cameras")
@@ -1266,9 +1184,7 @@ async def discover_cameras(prim_path: str, camera_service=Depends(get_camera_ser
     response_class=Response,
     responses=binary.OCTET_STREAM_RESPONSES,
 )
-async def capture_cameras(
-    req: MultiCaptureRequest, camera_service=Depends(get_camera_service)
-):
+async def capture_cameras(req: MultiCaptureRequest, camera_service=Depends(get_camera_service)):
     """Pump one frame and return the requested outputs of several cameras as one
     binary frame (see :mod:`.binary`), keyed by ``camera_id``. Every output comes from
     the same rendering frame."""
@@ -1295,9 +1211,7 @@ async def delete_camera(camera_id: str, camera_service=Depends(get_camera_servic
     response_class=Response,
     responses=binary.OCTET_STREAM_RESPONSES,
 )
-async def capture(
-    camera_id: str, req: CaptureRequest, camera_service=Depends(get_camera_service)
-):
+async def capture(camera_id: str, req: CaptureRequest, camera_service=Depends(get_camera_service)):
     """Pump one frame and return the requested outputs (all active ones if omitted)
     as one binary frame (see :mod:`.binary`).
 
@@ -1315,9 +1229,7 @@ async def capture(
 async def get_rgb(camera_id: str, camera_service=Depends(get_camera_service)):
     """Latest RGB image (H, W, 3) uint8, as a binary frame (see :mod:`.binary`); the
     output is null in the frame if it is not ready."""
-    return Response(
-        binary.encode(camera_service.get_rgb(camera_id)), media_type=binary.MEDIA_TYPE
-    )
+    return Response(binary.encode(camera_service.get_rgb(camera_id)), media_type=binary.MEDIA_TYPE)
 
 
 @cameras.get(
@@ -1328,9 +1240,7 @@ async def get_rgb(camera_id: str, camera_service=Depends(get_camera_service)):
 )
 async def get_rgba(camera_id: str, camera_service=Depends(get_camera_service)):
     """Latest RGBA image (H, W, 4) uint8, as a binary frame (see :mod:`.binary`)."""
-    return Response(
-        binary.encode(camera_service.get_rgba(camera_id)), media_type=binary.MEDIA_TYPE
-    )
+    return Response(binary.encode(camera_service.get_rgba(camera_id)), media_type=binary.MEDIA_TYPE)
 
 
 @cameras.get(
@@ -1383,9 +1293,7 @@ async def set_camera_world_pose(
     camera_service=Depends(get_camera_service),
 ):
     """Set the world-frame pose; returns the resulting pose."""
-    return camera_service.set_world_pose(
-        camera_id, req.position, req.orientation, req.camera_axes
-    )
+    return camera_service.set_world_pose(camera_id, req.position, req.orientation, req.camera_axes)
 
 
 @cameras.get("/cameras/{camera_id}/local_pose", summary="Get Local Pose")
@@ -1411,9 +1319,7 @@ async def set_camera_local_pose(
 
 
 @cameras.get("/cameras/{camera_id}/resolution", summary="Get Resolution")
-async def get_camera_resolution(
-    camera_id: str, camera_service=Depends(get_camera_service)
-):
+async def get_camera_resolution(camera_id: str, camera_service=Depends(get_camera_service)):
     """Current [width, height] in pixels."""
     return camera_service.get_resolution(camera_id)
 
@@ -1445,9 +1351,7 @@ async def set_focal_length(
 
 
 @cameras.get("/cameras/{camera_id}/focus_distance", summary="Get Focus Distance")
-async def get_focus_distance(
-    camera_id: str, camera_service=Depends(get_camera_service)
-):
+async def get_focus_distance(camera_id: str, camera_service=Depends(get_camera_service)):
     """Distance from camera to focus plane (stage units)."""
     return camera_service.get_focus_distance(camera_id)
 
@@ -1478,34 +1382,24 @@ async def set_lens_aperture(
     return camera_service.set_lens_aperture(camera_id, req.value)
 
 
-@cameras.get(
-    "/cameras/{camera_id}/horizontal_aperture", summary="Get Horizontal Aperture"
-)
-async def get_horizontal_aperture(
-    camera_id: str, camera_service=Depends(get_camera_service)
-):
+@cameras.get("/cameras/{camera_id}/horizontal_aperture", summary="Get Horizontal Aperture")
+async def get_horizontal_aperture(camera_id: str, camera_service=Depends(get_camera_service)):
     """Horizontal aperture / sensor width (stage units)."""
     return camera_service.get_horizontal_aperture(camera_id)
 
 
-@cameras.put(
-    "/cameras/{camera_id}/horizontal_aperture", summary="Set Horizontal Aperture"
-)
+@cameras.put("/cameras/{camera_id}/horizontal_aperture", summary="Set Horizontal Aperture")
 async def set_horizontal_aperture(
     camera_id: str,
     req: CameraApertureRequest,
     camera_service=Depends(get_camera_service),
 ):
     """Set the horizontal aperture (stage units)."""
-    return camera_service.set_horizontal_aperture(
-        camera_id, req.value, req.maintain_square_pixels
-    )
+    return camera_service.set_horizontal_aperture(camera_id, req.value, req.maintain_square_pixels)
 
 
 @cameras.get("/cameras/{camera_id}/vertical_aperture", summary="Get Vertical Aperture")
-async def get_vertical_aperture(
-    camera_id: str, camera_service=Depends(get_camera_service)
-):
+async def get_vertical_aperture(camera_id: str, camera_service=Depends(get_camera_service)):
     """Vertical aperture / sensor height (stage units)."""
     return camera_service.get_vertical_aperture(camera_id)
 
@@ -1517,15 +1411,11 @@ async def set_vertical_aperture(
     camera_service=Depends(get_camera_service),
 ):
     """Set the vertical aperture (stage units)."""
-    return camera_service.set_vertical_aperture(
-        camera_id, req.value, req.maintain_square_pixels
-    )
+    return camera_service.set_vertical_aperture(camera_id, req.value, req.maintain_square_pixels)
 
 
 @cameras.get("/cameras/{camera_id}/clipping_range", summary="Get Clipping Range")
-async def get_clipping_range(
-    camera_id: str, camera_service=Depends(get_camera_service)
-):
+async def get_clipping_range(camera_id: str, camera_service=Depends(get_camera_service)):
     """[near, far] clipping distances (stage units)."""
     return camera_service.get_clipping_range(camera_id)
 
@@ -1537,15 +1427,11 @@ async def set_clipping_range(
     camera_service=Depends(get_camera_service),
 ):
     """Set near/far clipping distances; either may be null to leave unchanged."""
-    return camera_service.set_clipping_range(
-        camera_id, req.near_distance, req.far_distance
-    )
+    return camera_service.set_clipping_range(camera_id, req.near_distance, req.far_distance)
 
 
 @cameras.get("/cameras/{camera_id}/frequency", summary="Get Frequency")
-async def get_camera_frequency(
-    camera_id: str, camera_service=Depends(get_camera_service)
-):
+async def get_camera_frequency(camera_id: str, camera_service=Depends(get_camera_service)):
     """Current acquisition frequency (Hz)."""
     return camera_service.get_frequency(camera_id)
 
@@ -1561,9 +1447,7 @@ async def set_camera_frequency(
 
 
 @cameras.get("/cameras/{camera_id}/projection_mode", summary="Get Projection Mode")
-async def get_projection_mode(
-    camera_id: str, camera_service=Depends(get_camera_service)
-):
+async def get_projection_mode(camera_id: str, camera_service=Depends(get_camera_service)):
     """perspective or orthographic."""
     return camera_service.get_projection_mode(camera_id)
 
@@ -1594,19 +1478,13 @@ async def set_stereo_role(
     return camera_service.set_stereo_role(camera_id, req.value)
 
 
-@cameras.get(
-    "/cameras/{camera_id}/lens_distortion_model", summary="Get Lens Distortion Model"
-)
-async def get_lens_distortion_model(
-    camera_id: str, camera_service=Depends(get_camera_service)
-):
+@cameras.get("/cameras/{camera_id}/lens_distortion_model", summary="Get Lens Distortion Model")
+async def get_lens_distortion_model(camera_id: str, camera_service=Depends(get_camera_service)):
     """Lens distortion model name (pinhole if unset)."""
     return camera_service.get_lens_distortion_model(camera_id)
 
 
-@cameras.put(
-    "/cameras/{camera_id}/lens_distortion_model", summary="Set Lens Distortion Model"
-)
+@cameras.put("/cameras/{camera_id}/lens_distortion_model", summary="Set Lens Distortion Model")
 async def set_lens_distortion_model(
     camera_id: str,
     req: CameraStringValueRequest,
@@ -1617,9 +1495,7 @@ async def set_lens_distortion_model(
 
 
 @cameras.get("/cameras/{camera_id}/intrinsics_matrix", summary="Get Intrinsics Matrix")
-async def get_intrinsics_matrix(
-    camera_id: str, camera_service=Depends(get_camera_service)
-):
+async def get_intrinsics_matrix(camera_id: str, camera_service=Depends(get_camera_service)):
     """3x3 intrinsics matrix (pinhole models only)."""
     return camera_service.get_intrinsics_matrix(camera_id)
 
@@ -1630,22 +1506,14 @@ async def get_fov(camera_id: str, camera_service=Depends(get_camera_service)):
     return camera_service.get_fov(camera_id)
 
 
-@cameras.get(
-    "/cameras/{camera_id}/render_product_path", summary="Get Render Product Path"
-)
-async def get_render_product_path(
-    camera_id: str, camera_service=Depends(get_camera_service)
-):
+@cameras.get("/cameras/{camera_id}/render_product_path", summary="Get Render Product Path")
+async def get_render_product_path(camera_id: str, camera_service=Depends(get_camera_service)):
     """Path to the render product attached to this camera."""
     return camera_service.get_render_product_path(camera_id)
 
 
-@cameras.get(
-    "/cameras/{camera_id}/supported_annotators", summary="Get Supported Annotators"
-)
-async def get_supported_annotators(
-    camera_id: str, camera_service=Depends(get_camera_service)
-):
+@cameras.get("/cameras/{camera_id}/supported_annotators", summary="Get Supported Annotators")
+async def get_supported_annotators(camera_id: str, camera_service=Depends(get_camera_service)):
     """Annotator names that can be attached to this camera."""
     return camera_service.get_supported_annotators(camera_id)
 
@@ -1678,9 +1546,7 @@ lidars = APIRouter(tags=["lidars"])
 
 
 @lidars.put("/lidars", summary="Create Lidar")
-async def create_lidar(
-    req: CreateLidarRequest, lidar_service=Depends(get_lidar_service)
-):
+async def create_lidar(req: CreateLidarRequest, lidar_service=Depends(get_lidar_service)):
     """Register (and bind) one lidar; returns its id, prim, and scan configuration."""
     return await lidar_service.create_lidar(
         req.prim_path,
@@ -1785,9 +1651,7 @@ async def get_lidar_depth(lidar_id: str, lidar_service=Depends(get_lidar_service
 
 
 @lidars.get("/lidars/{lidar_id}/linear_depth", summary="Get Linear Depth")
-async def get_lidar_linear_depth(
-    lidar_id: str, lidar_service=Depends(get_lidar_service)
-):
+async def get_lidar_linear_depth(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """Latest linear depth buffer in meters (num_rows, num_cols), or null."""
     return lidar_service.get_linear_depth_data(lidar_id)
 
@@ -1811,9 +1675,7 @@ async def get_lidar_azimuth(lidar_id: str, lidar_service=Depends(get_lidar_servi
 
 
 @lidars.get("/lidars/{lidar_id}/point_cloud", summary="Get Point Cloud")
-async def get_lidar_point_cloud(
-    lidar_id: str, lidar_service=Depends(get_lidar_service)
-):
+async def get_lidar_point_cloud(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """Latest hit points in world frame (N, 3), or null."""
     return lidar_service.get_point_cloud_data(lidar_id)
 
@@ -1881,9 +1743,7 @@ async def set_lidar_max_range(
 
 
 @lidars.get("/lidars/{lidar_id}/horizontal_fov", summary="Get Horizontal Fov")
-async def get_lidar_horizontal_fov(
-    lidar_id: str, lidar_service=Depends(get_lidar_service)
-):
+async def get_lidar_horizontal_fov(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """Horizontal field of view (degrees)."""
     return lidar_service.get_horizontal_fov(lidar_id)
 
@@ -1897,9 +1757,7 @@ async def set_lidar_horizontal_fov(
 
 
 @lidars.get("/lidars/{lidar_id}/vertical_fov", summary="Get Vertical Fov")
-async def get_lidar_vertical_fov(
-    lidar_id: str, lidar_service=Depends(get_lidar_service)
-):
+async def get_lidar_vertical_fov(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """Vertical field of view (degrees)."""
     return lidar_service.get_vertical_fov(lidar_id)
 
@@ -1912,19 +1770,13 @@ async def set_lidar_vertical_fov(
     return lidar_service.set_vertical_fov(lidar_id, req.value)
 
 
-@lidars.get(
-    "/lidars/{lidar_id}/horizontal_resolution", summary="Get Horizontal Resolution"
-)
-async def get_lidar_horizontal_resolution(
-    lidar_id: str, lidar_service=Depends(get_lidar_service)
-):
+@lidars.get("/lidars/{lidar_id}/horizontal_resolution", summary="Get Horizontal Resolution")
+async def get_lidar_horizontal_resolution(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """Horizontal angular resolution (degrees per column)."""
     return lidar_service.get_horizontal_resolution(lidar_id)
 
 
-@lidars.put(
-    "/lidars/{lidar_id}/horizontal_resolution", summary="Set Horizontal Resolution"
-)
+@lidars.put("/lidars/{lidar_id}/horizontal_resolution", summary="Set Horizontal Resolution")
 async def set_lidar_horizontal_resolution(
     lidar_id: str, req: LidarFloatValueRequest, lidar_service=Depends(get_lidar_service)
 ):
@@ -1933,9 +1785,7 @@ async def set_lidar_horizontal_resolution(
 
 
 @lidars.get("/lidars/{lidar_id}/vertical_resolution", summary="Get Vertical Resolution")
-async def get_lidar_vertical_resolution(
-    lidar_id: str, lidar_service=Depends(get_lidar_service)
-):
+async def get_lidar_vertical_resolution(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """Vertical angular resolution (degrees per row)."""
     return lidar_service.get_vertical_resolution(lidar_id)
 
@@ -1949,9 +1799,7 @@ async def set_lidar_vertical_resolution(
 
 
 @lidars.get("/lidars/{lidar_id}/rotation_rate", summary="Get Rotation Rate")
-async def get_lidar_rotation_rate(
-    lidar_id: str, lidar_service=Depends(get_lidar_service)
-):
+async def get_lidar_rotation_rate(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """Rotation rate (Hz); 0 means an instantaneous full-sweep lidar."""
     return lidar_service.get_rotation_rate(lidar_id)
 
@@ -1993,9 +1841,7 @@ async def set_lidar_high_lod(
 
 
 @lidars.get("/lidars/{lidar_id}/draw_points", summary="Get Draw Points")
-async def get_lidar_draw_points(
-    lidar_id: str, lidar_service=Depends(get_lidar_service)
-):
+async def get_lidar_draw_points(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """Whether hit points are drawn in the viewport."""
     return lidar_service.get_draw_points(lidar_id)
 
@@ -2023,9 +1869,7 @@ async def set_lidar_draw_lines(
 
 
 @lidars.get("/lidars/{lidar_id}/enable_semantics", summary="Get Enable Semantics")
-async def get_lidar_enable_semantics(
-    lidar_id: str, lidar_service=Depends(get_lidar_service)
-):
+async def get_lidar_enable_semantics(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """Whether per-hit semantic labels are captured."""
     return lidar_service.get_enable_semantics(lidar_id)
 
@@ -2051,25 +1895,19 @@ async def get_lidar_num_cols(lidar_id: str, lidar_service=Depends(get_lidar_serv
 
 
 @lidars.get("/lidars/{lidar_id}/num_cols_ticked", summary="Get Num Cols Ticked")
-async def get_lidar_num_cols_ticked(
-    lidar_id: str, lidar_service=Depends(get_lidar_service)
-):
+async def get_lidar_num_cols_ticked(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """Number of scan columns completed so far this physics step."""
     return lidar_service.get_num_cols_ticked(lidar_id)
 
 
 @lidars.get("/lidars/{lidar_id}/azimuth_range", summary="Get Azimuth Range")
-async def get_lidar_azimuth_range(
-    lidar_id: str, lidar_service=Depends(get_lidar_service)
-):
+async def get_lidar_azimuth_range(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """[min, max] horizontal scan angles (radians)."""
     return lidar_service.get_azimuth_range(lidar_id)
 
 
 @lidars.get("/lidars/{lidar_id}/zenith_range", summary="Get Zenith Range")
-async def get_lidar_zenith_range(
-    lidar_id: str, lidar_service=Depends(get_lidar_service)
-):
+async def get_lidar_zenith_range(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """[min, max] vertical scan angles (radians)."""
     return lidar_service.get_zenith_range(lidar_id)
 
@@ -2130,18 +1968,14 @@ async def list_conveyors(conveyor_service=Depends(get_conveyor_service)):
 
 
 @conveyors.get("/conveyors/{conveyor_id}", summary="Get Conveyor")
-async def get_conveyor(
-    conveyor_id: str, conveyor_service=Depends(get_conveyor_service)
-):
+async def get_conveyor(conveyor_id: str, conveyor_service=Depends(get_conveyor_service)):
     """Id + description (prims, drive, authored direction and speed, current speed,
     whether it is running). 404 if unknown."""
     return conveyor_service.get_conveyor(conveyor_id)
 
 
 @conveyors.delete("/conveyors/{conveyor_id}", summary="Delete Conveyor")
-async def delete_conveyor(
-    conveyor_id: str, conveyor_service=Depends(get_conveyor_service)
-):
+async def delete_conveyor(conveyor_id: str, conveyor_service=Depends(get_conveyor_service)):
     """Unregister the conveyor (the USD prim is left in the stage, and a running belt
     keeps running -- stop it first)."""
     return conveyor_service.delete_conveyor(conveyor_id)
@@ -2163,9 +1997,7 @@ async def start_conveyor(
 
 
 @conveyors.post("/conveyors/{conveyor_id}/stop", summary="Stop Conveyor")
-async def stop_conveyor(
-    conveyor_id: str, conveyor_service=Depends(get_conveyor_service)
-):
+async def stop_conveyor(conveyor_id: str, conveyor_service=Depends(get_conveyor_service)):
     """Stop the belt, leaving the running velocity its scene authored on the stage."""
     return conveyor_service.stop(conveyor_id)
 
@@ -2196,25 +2028,19 @@ async def list_lightbeams(lightbeam_service=Depends(get_lightbeam_service)):
 
 
 @lightbeams.get("/lightbeams/{lightbeam_id}", summary="Get Lightbeam")
-async def get_lightbeam(
-    lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)
-):
+async def get_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
     """Id + static description (prim, beam layout, range). 404 if unknown."""
     return lightbeam_service.get_lightbeam(lightbeam_id)
 
 
 @lightbeams.delete("/lightbeams/{lightbeam_id}", summary="Delete Lightbeam")
-async def delete_lightbeam(
-    lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)
-):
+async def delete_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
     """Unregister the sensor (the USD prim is left in the stage)."""
     return lightbeam_service.delete_lightbeam(lightbeam_id)
 
 
 @lightbeams.get("/lightbeams/{lightbeam_id}/reading", summary="Read Lightbeam")
-async def read_lightbeam(
-    lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)
-):
+async def read_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
     """The beams as of the last physics step: num_rays, broken, beam_hit, linear_depth
     and hit_pos.
 
@@ -2228,9 +2054,7 @@ async def read_lightbeam(
     return lightbeam_service.read(lightbeam_id)
 
 
-@lightbeams.patch(
-    "/lightbeams/{lightbeam_id}/configuration", summary="Set Configuration"
-)
+@lightbeams.patch("/lightbeams/{lightbeam_id}/configuration", summary="Set Configuration")
 async def set_lightbeam_configuration(
     lightbeam_id: str,
     req: LightBeamConfigurationRequest,
@@ -2253,25 +2077,19 @@ async def set_lightbeam_configuration(
 
 
 @lightbeams.post("/lightbeams/{lightbeam_id}/pause", summary="Pause Lightbeam")
-async def pause_lightbeam(
-    lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)
-):
+async def pause_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
     """Pause sensor computation."""
     return lightbeam_service.pause(lightbeam_id)
 
 
 @lightbeams.post("/lightbeams/{lightbeam_id}/resume", summary="Resume Lightbeam")
-async def resume_lightbeam(
-    lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)
-):
+async def resume_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
     """Resume sensor computation."""
     return lightbeam_service.resume(lightbeam_id)
 
 
 @lightbeams.get("/lightbeams/{lightbeam_id}/is_paused", summary="Get Is Paused")
-async def is_lightbeam_paused(
-    lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)
-):
+async def is_lightbeam_paused(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
     """Whether sensor computation is currently paused."""
     return lightbeam_service.is_paused(lightbeam_id)
 
@@ -2311,9 +2129,7 @@ async def list_surface_grippers(
     return surface_gripper_service.list_surface_grippers()
 
 
-@surface_grippers.get(
-    "/surface_grippers/{surface_gripper_id}", summary="Get Surface Gripper"
-)
+@surface_grippers.get("/surface_grippers/{surface_gripper_id}", summary="Get Surface Gripper")
 async def get_surface_gripper(
     surface_gripper_id: str,
     surface_gripper_service=Depends(get_surface_gripper_service),
@@ -2322,9 +2138,7 @@ async def get_surface_gripper(
     return surface_gripper_service.get_surface_gripper(surface_gripper_id)
 
 
-@surface_grippers.delete(
-    "/surface_grippers/{surface_gripper_id}", summary="Delete Surface Gripper"
-)
+@surface_grippers.delete("/surface_grippers/{surface_gripper_id}", summary="Delete Surface Gripper")
 async def delete_surface_gripper(
     surface_gripper_id: str,
     surface_gripper_service=Depends(get_surface_gripper_service),
@@ -2333,37 +2147,27 @@ async def delete_surface_gripper(
     return surface_gripper_service.delete_surface_gripper(surface_gripper_id)
 
 
-@surface_grippers.post(
-    "/surface_grippers/{surface_gripper_id}/close", summary="Close Gripper"
-)
+@surface_grippers.post("/surface_grippers/{surface_gripper_id}/close", summary="Close Gripper")
 async def close_gripper(
     surface_gripper_id: str,
     req: GripperActionRequest,
     surface_gripper_service=Depends(get_surface_gripper_service),
 ):
     """Grip whatever the gripper's attachment points can reach; blocks unless asynchronous."""
-    return await surface_gripper_service.close_gripper(
-        surface_gripper_id, req.asynchronous
-    )
+    return await surface_gripper_service.close_gripper(surface_gripper_id, req.asynchronous)
 
 
-@surface_grippers.post(
-    "/surface_grippers/{surface_gripper_id}/open", summary="Open Gripper"
-)
+@surface_grippers.post("/surface_grippers/{surface_gripper_id}/open", summary="Open Gripper")
 async def open_gripper(
     surface_gripper_id: str,
     req: GripperActionRequest,
     surface_gripper_service=Depends(get_surface_gripper_service),
 ):
     """Release everything the gripper holds; blocks unless asynchronous."""
-    return await surface_gripper_service.open_gripper(
-        surface_gripper_id, req.asynchronous
-    )
+    return await surface_gripper_service.open_gripper(surface_gripper_id, req.asynchronous)
 
 
-@surface_grippers.get(
-    "/surface_grippers/{surface_gripper_id}/status", summary="Get Gripper Status"
-)
+@surface_grippers.get("/surface_grippers/{surface_gripper_id}/status", summary="Get Gripper Status")
 async def get_gripper_status(
     surface_gripper_id: str,
     surface_gripper_service=Depends(get_surface_gripper_service),
@@ -2372,9 +2176,7 @@ async def get_gripper_status(
     return surface_gripper_service.get_status(surface_gripper_id)
 
 
-@surface_grippers.get(
-    "/surface_grippers/{surface_gripper_id}/properties", summary="Get Properties"
-)
+@surface_grippers.get("/surface_grippers/{surface_gripper_id}/properties", summary="Get Properties")
 async def get_surface_gripper_properties(
     surface_gripper_id: str,
     surface_gripper_service=Depends(get_surface_gripper_service),
@@ -2524,9 +2326,7 @@ async def export_ghost_objects():
 
 # -- trajectory planner -----------------------------------------------------
 
-trajectory_planner = APIRouter(
-    prefix="/trajectory-planner", tags=["trajectory-planner"]
-)
+trajectory_planner = APIRouter(prefix="/trajectory-planner", tags=["trajectory-planner"])
 
 
 @trajectory_planner.get("/export", summary="Export Trajectory Plans")

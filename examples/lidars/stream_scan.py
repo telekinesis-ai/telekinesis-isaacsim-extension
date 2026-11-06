@@ -33,9 +33,7 @@ def _shape(value):
 def _brief(frame):
     """One-line summary of a frame (shapes for arrays, values otherwise)."""
     parts = (
-        f"{key}: shape {_shape(value)}"
-        if isinstance(value, list)
-        else f"{key}: {value}"
+        f"{key}: shape {_shape(value)}" if isinstance(value, list) else f"{key}: {value}"
         for key, value in frame.items()
     )
     return "{" + ", ".join(parts) + "}"
@@ -57,9 +55,7 @@ def main():
     parser = argparse.ArgumentParser(description="Stream scans from a lidar.")
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
-    parser.add_argument(
-        "--id", required=True, dest="lidar_id", help="lidar_id from put_lidar.py"
-    )
+    parser.add_argument("--id", required=True, dest="lidar_id", help="lidar_id from put_lidar.py")
     parser.add_argument(
         "--count",
         type=int,

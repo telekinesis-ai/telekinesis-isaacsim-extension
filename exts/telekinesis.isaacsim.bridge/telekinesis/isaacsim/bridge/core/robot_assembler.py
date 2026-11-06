@@ -113,9 +113,7 @@ def matrix_to_translation_rotation(matrix):
     another convention and would not round-trip.
     """
     quaternion = matrix.ExtractRotationQuat()
-    rotation = transform.Rotation.from_quat(
-        [*quaternion.GetImaginary(), quaternion.GetReal()]
-    )
+    rotation = transform.Rotation.from_quat([*quaternion.GetImaginary(), quaternion.GetReal()])
     return (
         [float(value) for value in matrix.ExtractTranslation()],
         [float(angle) for angle in rotation.as_euler("xyz", degrees=True)],
@@ -239,9 +237,7 @@ def _disable_world_welds(stage, gripper_prim):
         joint = UsdPhysics.Joint(prim)
         if not joint:
             continue
-        bodies = list(joint.GetBody0Rel().GetTargets()) + list(
-            joint.GetBody1Rel().GetTargets()
-        )
+        bodies = list(joint.GetBody0Rel().GetTargets()) + list(joint.GetBody1Rel().GetTargets())
         if len(bodies) == 2 and all(
             stage.GetPrimAtPath(body).HasAPI(UsdPhysics.RigidBodyAPI) for body in bodies
         ):
@@ -343,9 +339,7 @@ async def attach_surface_gripper(
     return fixed_joint.GetPath().pathString
 
 
-async def mount_prim(
-    stage, arm_prim, arm_mount_link, prim_path, offset, mask_collisions=True
-):
+async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_collisions=True):
     """Fix any prim to the arm's mount link so it moves with the arm.
 
     The counterpart to :func:`attach_surface_gripper` for a prim that is not a
@@ -402,8 +396,7 @@ async def mount_prim(
     # Checked apart from the rigid body: a stage kept from an earlier mount already
     # holds the prim as a rigid body, possibly without a mass.
     if not any(
-        descendant.HasAPI(UsdPhysics.MassAPI)
-        or descendant.HasAPI(UsdPhysics.CollisionAPI)
+        descendant.HasAPI(UsdPhysics.MassAPI) or descendant.HasAPI(UsdPhysics.CollisionAPI)
         for descendant in Usd.PrimRange(prim, Usd.TraverseInstanceProxies())
     ):
         _set_mass_from_bounds(prim)
@@ -432,9 +425,7 @@ def add_convex_hull_colliders(prim):
     are, since they cannot be edited.
     """
     for descendant in Usd.PrimRange(prim):
-        if descendant.IsA(UsdGeom.Mesh) and not descendant.HasAPI(
-            UsdPhysics.CollisionAPI
-        ):
+        if descendant.IsA(UsdGeom.Mesh) and not descendant.HasAPI(UsdPhysics.CollisionAPI):
             UsdPhysics.CollisionAPI.Apply(descendant)
             # PhysX cannot simulate a triangle mesh on a moving body.
             UsdPhysics.MeshCollisionAPI.Apply(descendant).CreateApproximationAttr(
@@ -469,9 +460,7 @@ def place_tcp(stage, arm_prim, arm_mount_link, tcp_name, offset):
     marker.MakeMatrixXform().Set(offset_matrix(offset))
 
     for axis, color in (("X", (1, 0, 0)), ("Y", (0, 1, 0)), ("Z", (0, 0, 1))):
-        cylinder = UsdGeom.Cylinder.Define(
-            stage, marker.GetPath().AppendChild(f"axis_{axis}")
-        )
+        cylinder = UsdGeom.Cylinder.Define(stage, marker.GetPath().AppendChild(f"axis_{axis}"))
         cylinder.CreateAxisAttr(axis)
         cylinder.CreateHeightAttr(_TCP_AXIS_LENGTH)
         cylinder.CreateRadiusAttr(_TCP_AXIS_RADIUS)
@@ -503,9 +492,7 @@ def _remove_previous_mount_joints(stage, gripper_prim):
         if prim.GetName().startswith(MOUNT_JOINT_NAME)
     ]
     if stale:
-        carb.log_info(
-            f"[bridge] removing stale mount joints before re-assembly: {stale}"
-        )
+        carb.log_info(f"[bridge] removing stale mount joints before re-assembly: {stale}")
         omni.kit.commands.execute("DeletePrims", paths=stale, destructive=True)
 
 
@@ -526,18 +513,14 @@ def _place_at_mount(stage, arm_mount_path, gripper_prim, gripper_mount_path, off
     gripper = stage.GetPrimAtPath(gripper_prim)
     gripper_world = omni.usd.get_world_transform_matrix(gripper)
     parent_world = omni.usd.get_world_transform_matrix(gripper.GetParent())
-    arm_mount_world = omni.usd.get_world_transform_matrix(
-        stage.GetPrimAtPath(arm_mount_path)
-    )
+    arm_mount_world = omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(arm_mount_path))
     gripper_mount_world = omni.usd.get_world_transform_matrix(
         stage.GetPrimAtPath(gripper_mount_path)
     )
 
     # Mount body expressed in the gripper root's frame, so it can be divided out.
     mount_in_gripper = gripper_mount_world * gripper_world.GetInverse()
-    target_world = (
-        mount_in_gripper.GetInverse() * offset_matrix(offset) * arm_mount_world
-    )
+    target_world = mount_in_gripper.GetInverse() * offset_matrix(offset) * arm_mount_world
 
     omni.kit.commands.execute(
         "TransformPrimCommand",
@@ -604,9 +587,7 @@ def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
     from the articulation can within its solver tolerance. A fixed joint adds no
     DOF, so the arm's DOF are unchanged; its link count grows by one.
     """
-    joint = UsdPhysics.FixedJoint.Define(
-        stage, f"{gripper_mount_path}/{MOUNT_JOINT_NAME}"
-    )
+    joint = UsdPhysics.FixedJoint.Define(stage, f"{gripper_mount_path}/{MOUNT_JOINT_NAME}")
     joint.CreateBody0Rel().SetTargets([Sdf.Path(arm_mount_path)])
     joint.CreateBody1Rel().SetTargets([Sdf.Path(gripper_mount_path)])
 
@@ -690,6 +671,4 @@ async def bind_shared_articulation(prim_path, name):
             pass
         await app.next_update_async()
 
-    raise RuntimeError(
-        f"shared articulation at {prim_path} did not become valid after assembly"
-    )
+    raise RuntimeError(f"shared articulation at {prim_path} did not become valid after assembly")

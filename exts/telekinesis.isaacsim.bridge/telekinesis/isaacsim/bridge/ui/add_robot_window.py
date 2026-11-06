@@ -82,9 +82,7 @@ class AddRobotWindow(AddAssetWindow):
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Register the robot as an articulation in an assembly placed under ``attaching_prim_path``."""
         robot_name = Tf.MakeValidIdentifier(asset["model"])
-        assembly_path = self._free_destination_path(
-            attaching_prim_path, f"{robot_name}_assembly"
-        )
+        assembly_path = self._free_destination_path(attaching_prim_path, f"{robot_name}_assembly")
         placement = self._transformation_fields.transformation()
         stage = omni.usd.get_context().get_stage()
         # Placed before the robot is loaded into it, so the robot binds where the ghost
@@ -104,12 +102,8 @@ class AddRobotWindow(AddAssetWindow):
         stage.GetPrimAtPath(assembly_path).CreateRelationship(
             ASSEMBLY_ROBOT_RELATIONSHIP
         ).SetTargets([articulation["prim_path"]])
-        status = (
-            f"Added {articulation['articulation_id']} at {articulation['prim_path']}."
-        )
-        rigid_body_path = asset_loader.find_rigid_body_ancestor(
-            stage, articulation["prim_path"]
-        )
+        status = f"Added {articulation['articulation_id']} at {articulation['prim_path']}."
+        rigid_body_path = asset_loader.find_rigid_body_ancestor(stage, articulation["prim_path"])
         if rigid_body_path is not None:
             status += (
                 f" Warning: {rigid_body_path} is a rigid body, so the robot is fixed to it with "
@@ -126,8 +120,7 @@ class AddRobotWindow(AddAssetWindow):
         """
         if self._ghost_asset is None or not self._ghost_refresh.done():
             self._status_label.text = (
-                "Auto-calculate Placement places the preview: press it once the robot "
-                "shows."
+                "Auto-calculate Placement places the preview: press it once the robot shows."
             )
             return
         attaching_prim_path = self._attaching_prim_model.get_value_as_string()
@@ -149,8 +142,7 @@ class AddRobotWindow(AddAssetWindow):
         self._transformation_fields.set_transformation(
             models.Transformation(
                 translation=[
-                    value + delta
-                    for value, delta in zip(placement.translation, attaching_shift)
+                    value + delta for value, delta in zip(placement.translation, attaching_shift)
                 ],
                 rotation=placement.rotation,
             )

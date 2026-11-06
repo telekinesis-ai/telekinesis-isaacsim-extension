@@ -78,12 +78,12 @@ def main():
     base = f"http://{args.host}:{args.port}"
     info = create_articulation(base, args.prim)
     articulation_id = info["articulation_id"]
-    print(
-        f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}"
-    )
+    print(f"created robot: articulation_id={articulation_id} prim_path={info['prim_path']}")
     print(f"  num_dof={info['num_dof']} dof_names={info['dof_names']}")
 
-    ws_url = f"ws://{args.host}:{args.port}/articulations/{articulation_id}/stream_articulation_state"
+    ws_url = (
+        f"ws://{args.host}:{args.port}/articulations/{articulation_id}/stream_articulation_state"
+    )
     print(f"reading {NUM_FRAMES} frames <- {ws_url}")
     asyncio.run(print_state_frames(ws_url))
     print("stream complete")

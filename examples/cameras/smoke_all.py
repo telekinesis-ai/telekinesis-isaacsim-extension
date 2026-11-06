@@ -48,9 +48,9 @@ def _decode(payload):
         if isinstance(dtype, list):  # record dtype, sent as numpy's descr
             dtype = np.dtype([tuple(field) for field in dtype])
         arrays.append(
-            np.frombuffer(
-                payload[start : start + entry["nbytes"]], dtype=dtype
-            ).reshape(entry["shape"])
+            np.frombuffer(payload[start : start + entry["nbytes"]], dtype=dtype).reshape(
+                entry["shape"]
+            )
         )
     return _restore(manifest["structure"], arrays)
 
@@ -85,9 +85,7 @@ def _call(base, method, path, body=None):
     content type decides how the body is read. An error is JSON on every route.
     """
     try:
-        resp = requests.request(
-            method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT
-        )
+        resp = requests.request(method, base.rstrip("/") + path, json=body, timeout=DEFAULT_TIMEOUT)
     except requests.exceptions.RequestException as exc:
         return False, "ERR", str(exc)
     if resp.ok and "application/octet-stream" in resp.headers.get("content-type", ""):
@@ -210,9 +208,7 @@ def _exercise_property_routes(base, root):
         )
 
     _roundtrip(base, f"{root}/focal_length", f"{root}/focal_length", "focal_length")
-    _roundtrip(
-        base, f"{root}/focus_distance", f"{root}/focus_distance", "focus_distance"
-    )
+    _roundtrip(base, f"{root}/focus_distance", f"{root}/focus_distance", "focus_distance")
     _roundtrip(base, f"{root}/lens_aperture", f"{root}/lens_aperture", "lens_aperture")
     _roundtrip(
         base,
@@ -241,9 +237,7 @@ def _exercise_property_routes(base, root):
             ),
         )
 
-    _roundtrip(
-        base, f"{root}/projection_mode", f"{root}/projection_mode", "projection_mode"
-    )
+    _roundtrip(base, f"{root}/projection_mode", f"{root}/projection_mode", "projection_mode")
     _roundtrip(base, f"{root}/stereo_role", f"{root}/stereo_role", "stereo_role")
     _roundtrip(
         base,
@@ -301,9 +295,7 @@ def main():
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--prim", required=True, help="camera prim path to register")
-    parser.add_argument(
-        "--keep", action="store_true", help="don't delete the camera at the end"
-    )
+    parser.add_argument("--keep", action="store_true", help="don't delete the camera at the end")
     args = parser.parse_args()
     base = f"http://{args.host}:{args.port}"
     _exercise_routes(base, args)
@@ -315,9 +307,7 @@ def _summary():
     for _, verdict, _detail in _results:
         counts[verdict] += 1
     print("\n" + "=" * 60)
-    print(
-        f"SUMMARY: {counts['PASS']} passed, {counts['FAIL']} failed, {counts['SKIP']} skipped"
-    )
+    print(f"SUMMARY: {counts['PASS']} passed, {counts['FAIL']} failed, {counts['SKIP']} skipped")
     if counts["FAIL"]:
         print("\nFailures:")
         for label, verdict, detail in _results:

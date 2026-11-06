@@ -60,9 +60,7 @@ def main():
             "object_first": False,
         },
     )
-    print(
-        f"pose (after +1cm X nudge): {_request(base, 'GET', '/prims/poses', params=params)}"
-    )
+    print(f"pose (after +1cm X nudge): {_request(base, 'GET', '/prims/poses', params=params)}")
 
 
 if __name__ == "__main__":
