@@ -35,6 +35,7 @@ from fastapi import (
 from . import binary
 from .dependencies import (
     get_articulation_service,
+    get_asset_library_service,
     get_camera_service,
     get_conveyor_service,
     get_general_service,
@@ -68,6 +69,7 @@ from .models import (
     CreateSurfaceGripperRequest,
     DefaultJointStateRequest,
     DofGainsRequest,
+    FetchAssetRequest,
     GripperActionRequest,
     JointEffortsRequest,
     JointPositionsRequest,
@@ -150,7 +152,11 @@ async def create_articulation(
 ):
     """Register (and bind) one articulation; returns its id, prim, dof and state."""
     return await articulation_service.create_articulation(
-        req.prim_path, req.urdf_path, req.usd_path, req.default_joint_positions
+        req.prim_path,
+        req.urdf_path,
+        req.usd_path,
+        req.mount_link,
+        req.asset_info.model_dump() if req.asset_info else None,
     )
 
 
@@ -816,7 +822,11 @@ async def add_to_scene(req: AddToSceneRequest, stage_service=Depends(get_stage_s
 
     The stage stays open; nothing already in it is replaced.
     """
-    return await stage_service.add_to_scene(req.uri, req.prim_path)
+    return await stage_service.add_to_scene(
+        req.uri,
+        req.prim_path,
+        req.asset_info.model_dump() if req.asset_info else None,
+    )
 
 
 @stage.get("/motion-groups", summary="List Stage Motion Groups")
@@ -1035,6 +1045,28 @@ async def select_prims():
 async def list_selected_prims():
     """Mirrored from the spec; not yet implemented."""
     not_implemented()
+
+
+# -- asset library ----------------------------------------------------------
+
+asset_library = APIRouter(prefix="/asset_library", tags=["asset_library"])
+
+
+@asset_library.post("/fetch", summary="Fetch Asset")
+async def fetch_asset(
+    req: FetchAssetRequest, asset_library_service=Depends(get_asset_library_service)
+):
+    """Download the asset into the bridge's cache (once); returns its entry plus local_path."""
+    return await asset_library_service.fetch_asset(req.category, req.manufacturer, req.model)
+
+
+@asset_library.get("/{category:path}", summary="List Assets")
+async def list_assets(category: str, asset_library_service=Depends(get_asset_library_service)):
+    """The assets of one category, e.g. robots/manipulators, from the usd/ and urdf/ trees.
+
+    404 if empty.
+    """
+    return await asset_library_service.list_assets(category)
 
 
 # -- nucleus ----------------------------------------------------------------
@@ -2082,7 +2114,11 @@ async def create_surface_gripper(
     surface_gripper_service=Depends(get_surface_gripper_service),
 ):
     """Register (and bind) one suction gripper; returns its id, prims and state."""
-    return await surface_gripper_service.create_surface_gripper(req.prim_path, req.usd_path)
+    return await surface_gripper_service.create_surface_gripper(
+        req.prim_path,
+        req.usd_path,
+        req.asset_info.model_dump() if req.asset_info else None,
+    )
 
 
 @surface_grippers.get("/surface_grippers", summary="List Surface Grippers")
@@ -2337,6 +2373,7 @@ ALL_ROUTERS = (
     general,
     stage,
     prims,
+    asset_library,
     nucleus,
     manipulators,
     trajectories,

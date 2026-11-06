@@ -8186,6 +8186,87 @@
         }
       }
     },
+    "/asset_library/fetch": {
+      "post": {
+        "tags": [
+          "asset_library"
+        ],
+        "summary": "Fetch Asset",
+        "description": "Download the asset into the bridge's cache (once); returns its entry plus local_path.",
+        "operationId": "fetch_asset_asset_library_fetch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FetchAssetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/asset_library/{category}": {
+      "get": {
+        "tags": [
+          "asset_library"
+        ],
+        "summary": "List Assets",
+        "description": "The assets of one category, e.g. robots/manipulators, from the usd/ and urdf/ trees.\n\n404 if empty.",
+        "operationId": "list_assets_asset_library__category__get",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Category"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/nucleus/server": {
       "post": {
         "tags": [
@@ -8880,9 +8961,26 @@
       "AddToSceneRequest": {
         "properties": {
           "uri": {
-            "type": "string",
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Uri"
+          },
+          "asset_info": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FetchAssetRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "prim_path": {
             "type": "string",
@@ -8892,11 +8990,10 @@
         },
         "type": "object",
         "required": [
-          "uri",
           "prim_path"
         ],
         "title": "AddToSceneRequest",
-        "description": "Body of POST /stage/scene/reference.\n\n``uri`` is a USD, OBJ, GLB or glTF asset on the machine running Isaac Sim, not a URL:\na client fetches the asset's bundle itself and hands over the extracted asset. An\nOBJ, GLB or glTF mesh is converted to USD first. The asset is referenced onto\n``prim_path``, so it arrives as one prim with everything it owns below it, beside\nwhatever is already in the stage."
+        "description": "Body of POST /stage/scene/reference.\n\n``uri`` is a USD, OBJ, GLB or glTF asset on the machine running Isaac Sim, not a URL:\na client fetches the asset's bundle itself and hands over the extracted asset.\n``asset_info`` instead names a catalogue asset, which the bridge downloads into\nits cache once and loads. Exactly one of the two is given (400 otherwise); an\n``asset_info`` naming no catalogue asset fails with 404, a failed download with\n502. An OBJ, GLB or glTF mesh is converted to USD first. The asset is referenced\nonto ``prim_path``, so it arrives as one prim with everything it owns below it,\nbeside whatever is already in the stage."
       },
       "ApplyRelativePoseRequest": {
         "properties": {
@@ -8928,7 +9025,14 @@
             "title": "Gripper Id"
           },
           "arm_mount_link": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Arm Mount Link"
           },
           "gripper_mount_link": {
@@ -8960,11 +9064,10 @@
         },
         "type": "object",
         "required": [
-          "gripper_id",
-          "arm_mount_link"
+          "gripper_id"
         ],
         "title": "AssembleRobotRequest",
-        "description": "Body of POST /articulations/{articulation_id}/assemble_robot.\n\nThe path ``articulation_id`` is the arm. ``gripper_id`` names the gripper to\nassemble onto it -- either an ``articulation_id`` from PUT /articulations or a\n``surface_gripper_id`` from PUT /surface_grippers. Which one it is decides how\nthe gripper is attached: an articulated gripper is merged into the arm, so\nafterwards the two share one articulation and each keeps driving only its own\njoints; a suction gripper is bolted on with a fixed joint and stays a device of\nits own, keeping its own close/open routes.\n\n``arm_mount_link`` is the arm's flange (e.g. UR ``wrist_3_link``) -- a\nRigidBodyAPI link or a Site, not an empty frame like ``tool0``.\n\n``gripper_mount_link`` is where on the gripper to join it. Leave it\nnull/omitted for the usual case: for an articulated gripper that\nauto-discovers its root link (its base), which is what the fixed joint must\nattach to; for a suction gripper it means the registered gripper prim itself,\nwhich has to be the gripper's rigid body.\n\n``offset`` is an optional mount transform baked into the fixed joint\n(null/omitted => flush attach). ``mask_collisions`` stops the arm and the\ngripper colliding with each other and only applies to a suction gripper -- for\nan articulated one the merged articulation settles collisions itself.\n\nAssembling the same pair again is a no-op (the bridge records that they are\nalready assembled and just returns the assembled info)."
+        "description": "Body of POST /articulations/{articulation_id}/assemble_robot.\n\nThe path ``articulation_id`` is the arm. ``gripper_id`` names the gripper to\nassemble onto it -- either an ``articulation_id`` from PUT /articulations or a\n``surface_gripper_id`` from PUT /surface_grippers. Which one it is decides how\nthe gripper is attached: an articulated gripper is merged into the arm, so\nafterwards the two share one articulation and each keeps driving only its own\njoints; a suction gripper is bolted on with a fixed joint and stays a device of\nits own, keeping its own close/open routes.\n\n``arm_mount_link`` is the arm's flange (e.g. UR ``wrist_3_link``) -- a\nRigidBodyAPI link or a Site, not an empty frame like ``tool0``. Omitted, the\narm's stored mount link is used (see ``CreateArticulationRequest.mount_link``).\n\n``gripper_mount_link`` is where on the gripper to join it. Leave it\nnull/omitted for the usual case: for an articulated gripper that\nauto-discovers its root link (its base), which is what the fixed joint must\nattach to; for a suction gripper it means the registered gripper prim itself,\nwhich has to be the gripper's rigid body.\n\n``offset`` is an optional mount transform baked into the fixed joint\n(null/omitted => flush attach). ``mask_collisions`` stops the arm and the\ngripper colliding with each other and only applies to a suction gripper -- for\nan articulated one the merged articulation settles collisions itself.\n\nAssembling the same pair again is a no-op (the bridge records that they are\nalready assembled and just returns the assembled info)."
       },
       "AttachmentPointPropertiesRequest": {
         "properties": {
@@ -9375,19 +9478,26 @@
             ],
             "title": "Usd Path"
           },
-          "default_joint_positions": {
+          "asset_info": {
             "anyOf": [
               {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
+                "$ref": "#/components/schemas/FetchAssetRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mount_link": {
+            "anyOf": [
+              {
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Default Joint Positions"
+            "title": "Mount Link"
           }
         },
         "type": "object",
@@ -9395,7 +9505,7 @@
           "prim_path"
         ],
         "title": "CreateArticulationRequest",
-        "description": "Body of PUT /articulations -- register (and bind) one articulation.\n\n``urdf_path`` and ``usd_path`` are the two descriptions the articulation can be\nloaded from when no prim is at ``prim_path`` yet: a URDF, which is imported, or a\nprepared USD asset, which is referenced. Either may be given, not both; a prim\nthat is already in the stage is used as it is and both are ignored.\n\n``default_joint_positions`` (radians, one per driven joint) is the pose a\nfreshly loaded articulation is placed at and resets to on Stop+Play. It applies\nonly when this request loads the prim; a prim already in the stage keeps its\npose."
+        "description": "Body of PUT /articulations -- register (and bind) one articulation.\n\n``urdf_path``, ``usd_path`` and ``asset_info`` are the three sources the\narticulation can be loaded from when no prim is at ``prim_path`` yet: a URDF,\nwhich is imported, a prepared USD asset, which is referenced, or a catalogue\nasset, which is downloaded into the bridge's cache once and then imported (a\nURDF) or referenced (a USD). At most one may be given; a prim that is already in\nthe stage is used as it is, all three are ignored and nothing is downloaded.\nFails with 404 when ``asset_info`` names no catalogue asset and 502 when its\ndownload fails.\n\n``mount_link`` is the link tools and prims are attached to when assemble_robot or\nmount_prim name none. It is stored on the articulation's prim, replacing any stored\nbefore; without it, a catalogue asset this request loads stores the catalogue's\nmount link, when it has one, and any other prim is left as it is. assemble_robot\nand mount_prim fail with 422 on an articulation that stores no mount link, unless\nthey are given an ``arm_mount_link``.\n\nLoading fails with 422 when ``prim_path`` lies inside an articulation. A robot\nloaded inside a rigid body is fixed to the nearest such body with a joint, so it\nmoves with that body, and stops being fixed to the world. Moving the robot in the\neditor moves it relative to that body."
       },
       "CreateCameraRequest": {
         "properties": {
@@ -9576,6 +9686,16 @@
               }
             ],
             "title": "Usd Path"
+          },
+          "asset_info": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FetchAssetRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -9583,7 +9703,7 @@
           "prim_path"
         ],
         "title": "CreateSurfaceGripperRequest",
-        "description": "Body of PUT /surface_grippers -- register (and bind) one suction gripper.\n\n``prim_path`` is the gripper prim itself or any ancestor of it -- usually the\ngripper asset's root, which is also the prim assemble_robot attaches to an arm.\nThe ``IsaacSurfaceGripper`` prim is found by searching that subtree.\n\nA suction gripper has no URDF representation, so there is no ``urdf_path``\ncounterpart to the articulation route. ``usd_path`` is a prepared USD asset that\nis referenced onto ``prim_path`` when no prim is there yet; a prim that is already\nin the stage is used as it is and ``usd_path`` is ignored."
+        "description": "Body of PUT /surface_grippers -- register (and bind) one suction gripper.\n\n``prim_path`` is the gripper prim itself or any ancestor of it -- usually the\ngripper asset's root, which is also the prim assemble_robot attaches to an arm.\nThe ``IsaacSurfaceGripper`` prim is found by searching that subtree.\n\nA suction gripper has no URDF representation, so there is no ``urdf_path``\ncounterpart to the articulation route. When no prim is at ``prim_path`` yet, the\ngripper is loaded from ``usd_path``, a prepared USD asset that is referenced onto\n``prim_path``, or from ``asset_info``, a catalogue asset the bridge downloads into\nits cache once and references the same way. At most one may be given; a prim\nthat is already in the stage is used as it is, both are ignored and nothing is\ndownloaded. Fails with 404 when ``asset_info`` names no catalogue asset and 502\nwhen its download fails."
       },
       "DefaultJointStateRequest": {
         "properties": {
@@ -9705,6 +9825,38 @@
         "type": "object",
         "title": "DofGainsRequest",
         "description": "Body of POST /articulations/{id}/dof_gains -- retune the position drive.\n\n``stiffness`` and ``damping`` are the drive's proportional and derivative\ngains, ``max_effort`` the largest torque/force it may apply. Each may be a\nsingle value for every addressed joint or one value per joint in ``indices``\norder; any field left ``None`` is not touched. ``indices`` defaults to the\ndevice's current driven joints, matching :class:`JointEffortsRequest`.\n\nUsed to correct gains a robot was imported with -- a URDF joint declaring a\nzero effort limit yields a drive that cannot move it -- and to retune tracking\nwithout re-importing. Applies to the running simulation, not the stage."
+      },
+      "FetchAssetRequest": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Category"
+          },
+          "manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer"
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category",
+          "model"
+        ],
+        "title": "FetchAssetRequest",
+        "description": "Body of POST /asset_library/fetch -- make one catalogue asset available locally.\n\n``category`` is a catalogue category such as ``robots/manipulators``;\n``manufacturer`` and ``model`` name the entry exactly as ``GET /asset_library``\nlists it (the manufacturer folder and the bundle ZIP name). Also the\n``asset_info`` of the routes that load an asset from the catalogue."
       },
       "GripperActionRequest": {
         "properties": {
@@ -10115,7 +10267,14 @@
             "title": "Prim Path"
           },
           "arm_mount_link": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Arm Mount Link"
           },
           "offset": {
@@ -10136,11 +10295,10 @@
         },
         "type": "object",
         "required": [
-          "prim_path",
-          "arm_mount_link"
+          "prim_path"
         ],
         "title": "MountPrimRequest",
-        "description": "Body of POST /articulations/{articulation_id}/mount_prim.\n\nFixes ``prim_path`` -- any prim, such as a camera, wherever it sits in the\nstage -- to the arm's ``arm_mount_link`` with a fixed joint, so it moves with\nthe arm. The prim's origin is placed at ``offset`` in the mount link's frame\n(null/omitted => at the mount link's origin). A prim that is not a rigid body\nbecomes one, with gravity off. ``mask_collisions`` stops the arm and the prim\ncolliding with each other. Mounting the same prim again replaces its earlier\njoint."
+        "description": "Body of POST /articulations/{articulation_id}/mount_prim.\n\nFixes ``prim_path`` -- any prim, such as a camera, wherever it sits in the\nstage -- to the arm's ``arm_mount_link`` with a fixed joint, so it moves with\nthe arm. The prim's origin is placed at ``offset`` in the mount link's frame\n(null/omitted => at the mount link's origin). A prim that is not a rigid body\nbecomes one, and the arm carries its weight. Every mesh beneath the prim that has\nno collider gets one, approximated by its convex hull, so the prim collides with\nthe scene. ``mask_collisions`` stops the arm and the prim colliding with each\nother. Mounting the same prim again replaces its earlier joint. ``arm_mount_link``\nomitted means the arm's stored mount link (see\n``CreateArticulationRequest.mount_link``)."
       },
       "MultiCaptureRequest": {
         "properties": {

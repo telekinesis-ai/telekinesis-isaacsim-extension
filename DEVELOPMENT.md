@@ -94,10 +94,7 @@ m.set_extension_enabled_immediate(
     True,
 )
 
-print(
-    "ACTIVE:",
-    m.get_enabled_extension_id("telekinesis.isaacsim.bridge")
-)
+print("ACTIVE:", m.get_enabled_extension_id("telekinesis.isaacsim.bridge"))
 ```
 
 Substitute the actual versions: the first ID is the stale copy to disable, the second is the

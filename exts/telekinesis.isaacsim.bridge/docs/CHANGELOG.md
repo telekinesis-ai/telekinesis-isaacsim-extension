@@ -1,4 +1,131 @@
 # Changelog
+## [0.9.1] - 2026-11-06
+### Added
+- `PUT /articulations`, `PUT /surface_grippers` and `POST /stage/scene/reference` take an
+  optional `asset_info` (`{"category", "manufacturer", "model"}`) in place of a file: the bridge
+  downloads that catalogue asset into its cache once and loads it. An articulation loaded this
+  way gets the catalogue's default joint configuration and mount link unless the request gives
+  its own. Nothing is downloaded when a prim is already at the path; giving `asset_info` with a
+  file is a 400. `uri` of `POST /stage/scene/reference` is now optional. The Add Robot, Add Tool
+  and Add Mesh windows load through `asset_info` too.
+- Right-click Create → Telekinesis Isaac Sim Bridge → Add Robot in the Stage panel and viewport
+  opens a window to pick a robot (Manufacturer, Model) from the Telekinesis asset library and
+  load it under the right-clicked prim, at `<model>_assembly/<model>`. The robot is registered
+  as an articulation, as with `PUT /articulations`. The `<model>_assembly` Xform is placed at
+  the window's Offset and Rotation (XYZ Euler degrees), read in the right-clicked prim's frame.
+  Auto-calculate Placement fills them with where loading would park the robot: moved along +X clear of
+  the robots beside it and lifted onto the colliders of the prop it stands in; the values stay
+  editable. A robot that would stand inside a collider of the prop is still lifted onto it when
+  added. The assembly holds what Add Tool and Add Mesh attach to the robot, so moving or
+  deleting it takes them along. It targets the robot through the `telekinesis:assemblyRobot`
+  relationship, so Add Tool and Add Mesh on the assembly, or on anything in it, attach to the
+  robot. When the right-clicked prim is, or lies inside, a rigid body,
+  the success message warns that the robot is fixed to that body.
+- While the Add Robot, Add Tool, Add Mesh or Add Camera window is open, a see-through #41d1ff ghost of the
+  selected model shows where Add will put it. It follows every change of the model, the
+  Attaching Prim and the Position and Rotation fields: a tool, mesh or camera
+  on a robot sits on its mount link at the entered offset. The ghost lives only in the session
+  layer: it is never saved, cannot be selected, stays out of undo and takes no part in physics.
+  Its first preview of a URDF model imports the URDF once. A model that cannot be previewed
+  shows "No preview: ..." and can still be added. Add (with Auto-calculate Placement left of
+  it in Add Robot, Add Tool and Add Camera) sits in a centered row set apart below the fields. The Position
+  and Rotation are entered in one row of X, Y and Z fields each, aligned with the fields above.
+  The Attaching Prim is the right-clicked prim and is read-only. All four windows open at the
+  same size. Manufacturer and Model read None whenever a window opens, and picking a
+  manufacturer sets Model back to None, so nothing is loaded until a model is picked.
+- While the Add Robot, Add Tool, Add Mesh or Add Camera window previews a robot, a camera, or a
+  tool or mesh on a robot, a move/rotate gizmo stands on the preview in the viewport. Dragging it
+  enters the dragged pose in Position and Rotation, and typing in them moves the gizmo. It is
+  drawn in the frame of what it places, not the world's, and moves along and turns about that
+  frame's axes; it offers rotation while the viewport's Rotate tool (E) is selected
+  and translation otherwise, and edits nothing in the stage: no saved changes, no undo entries.
+  Nothing in the stage can be selected while one of these windows is open, so Kit's own gizmo
+  never shows beside it. A highlighted note under Position and Rotation always says to
+  press W to move and E to rotate, with the mouse over the viewport.
+- Auto-calculate Placement in the Add Tool window enters the offset that stands the gripper in
+  front of the robot's flange: its Z and X axes along the flange's, its base origin on the
+  flange axis and its backmost point on the flange face. The flange is the robot's `tool0`
+  under the mount link (Z out of the face), or the mount link itself when it has none. It
+  assumes the gripper's +Z points from its base towards its fingers.
+- The Add Robot, Add Tool, Add Mesh and Add Camera windows close when a stage is opened or closed.
+- The Add Robot, Add Tool, Add Mesh and Add Camera windows close when Add is pressed and report progress
+  and the outcome as notifications; an error stays until dismissed. Add is refused, with the
+  window left open, when no model is selected or the Attaching Prim is not a prim in the stage.
+  Every Add creates a new prim: a name already taken gets a numeric suffix.
+- `GET /asset_library/{category}` lists the assets of a category (e.g. `robots/manipulators`)
+  from both the bucket's `usd/` and `urdf/` trees: each manufacturer folder and the model ZIPs
+  in it. A model found in both trees is taken from its USD bundle.
+  `POST /asset_library/fetch` downloads an asset bundle into the bridge's local cache once and
+  returns its entry with the local path of the bundle's main file (its URDF, or its USD, OBJ,
+  GLB or glTF file).
+- Add Robot uses a catalogue entry's `simulation_mount_link` as the robot's mount link.
+- Right-click Create → Telekinesis Isaac Sim Bridge → Add Tool loads a parallel or suction gripper.
+  On a robot, it is loaded beside the robot (in its `<model>_assembly` Xform), outside any rigid
+  body the robot stands in, and assembled onto the robot's mount link at the entered offset, as `assemble_robot` does;
+  elsewhere it is only loaded. A robot that stores no mount link refuses the add before
+  anything is loaded.
+- Right-click Create → Telekinesis Isaac Sim Bridge → Add Mesh adds a mesh from `attachments`.
+  On a robot, it is placed beside the robot (in its `<model>_assembly` Xform), outside any rigid
+  body the robot stands in, and mounted on the robot's mount link at the entered offset, as `mount_prim` does; elsewhere it is
+  added under the right-clicked prim as it is. A robot that stores no mount link refuses the
+  add before anything is loaded.
+- Right-click Create → Telekinesis Isaac Sim Bridge → Add Camera adds a camera from `cameras`
+  (e.g. the RealSense D405) as a child of the prim it rides on, with no rigid body or joint
+  of its own: the rigid body the right-clicked prim is or lies in (a robot link, or a mount
+  fixed to one), else the robot's mount link when the right-clicked prim is a robot or its
+  `<model>_assembly`, else the right-clicked prim. It follows that body while simulating
+  and can be moved with the timeline stopped or playing. Position and Rotation are its pose
+  in that prim's frame. Its meshes collide as convex hulls, as part of that body, and add
+  to its mass unless the body sets its own, as a robot link does; a camera that is to weigh
+  on the arm is mounted with `mount_prim` instead. The camera is not registered for
+  capture; register its camera prim with `PUT /cameras` (`GET /cameras/discover` on the
+  added prim lists it). The window's gizmo stands on the asset's first camera prim, and a
+  second note says the camera looks the opposite way to the gizmo's blue Z arrow; the
+  preview draws none of its camera prims. Auto-calculate Placement turns the camera to look
+  the way the robot's flange points (its Z axis opposite the flange's, its X axis along the
+  flange's), keeping Position.
+- Right-clicking empty space for Add Robot, Add Tool, Add Mesh or Add Camera adds the asset under the
+  stage's default prim, or under the stage root when the stage has none.
+- `PUT /articulations` takes an optional `mount_link`, stored on the articulation prim as the
+  `telekinesis:mountLink` attribute. Without it, nothing is stored and no link is guessed.
+
+### Changed
+- `arm_mount_link` is optional on `POST /articulations/{id}/assemble_robot` and
+  `POST /articulations/{id}/mount_prim`; omitted, the robot's stored mount link is used, and a
+  robot that stores none is refused with 422.
+- `PUT /articulations` refuses with 422 to load a robot inside an articulation. A robot loaded
+  inside a rigid body is fixed to the nearest rigid body instead of the world: its root joint
+  welds it to its own root prim, which PhysX resolves to that body. It moves with the body
+  while simulating, and moving it in the editor moves it relative to the body.
+- `PUT /surface_grippers` refuses with 422 to load a gripper inside a rigid body or an
+  articulation, where PhysX would not move it with its parent.
+- A robot, gripper or prop loaded under a prim other than the stage root or the default prim,
+  such as a box, that would land inside one of that prim's colliders is lifted along world +Z to
+  stand on it, after the existing +X parking clear of other robots. The lift repeats while it
+  brings the load into another collider, so an arm shorter than a table's cabinet ends up on the
+  tabletop rather than inside it. When the load also creates
+  the prim's parent, such as a robot's `<model>_assembly` Xform, that parent is what is parked
+  and lifted.
+- `POST /articulations/{id}/mount_prim` no longer turns gravity off on a prim it makes a rigid
+  body, so the arm carries the prim's weight. Every mesh beneath the prim without a collider
+  gets one, approximated by its convex hull, so the prim collides with the scene and PhysX
+  derives its mass from the hulls.
+
+### Fixed
+- `PUT /articulations` failed with "did not become valid (… 'is_homogeneous')" for a gripper merged
+  onto an arm by Add Tool or `assemble_robot`, whenever the bridge did not remember the merge: after
+  a restart or a stage reopen, or for another path into the gripper than the one first registered.
+  The merge is now read from the stage: the gripper binds to the arm's articulation, registering
+  the arm if needed, and the pair counts as assembled, so a later `assemble_robot` of the two
+  changes nothing. A device drives its own joints by default, those under its prim, so an arm no
+  longer drives the joints of a gripper merged onto it. A prim holding both, such as Add Robot's
+  `<model>_assembly` Xform, is refused with 422. A failed `PUT /articulations` no longer leaves a
+  broken device registered that every later request tried to re-bind.
+- A robot, tool or mesh added onto part of a prop that keeps its colliders elsewhere, such as the
+  visible tabletop mesh of a table whose colliders sit in a separate scope, landed inside the prop.
+  It is now lifted onto every collider of the prop (the prim directly under the default prim
+  that holds it), not only the colliders below the prim it was added to.
+
 ## [0.8.1] - 2026-11-02
 ### Added
 - A "Telekinesis Isaac Sim Bridge" entry in the right-click Create menu of the Stage panel and

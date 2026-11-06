@@ -15,24 +15,50 @@ from enum import Enum
 from pydantic import BaseModel, Field, PositiveFloat
 
 
+class FetchAssetRequest(BaseModel):
+    """Body of POST /asset_library/fetch -- make one catalogue asset available locally.
+
+    ``category`` is a catalogue category such as ``robots/manipulators``;
+    ``manufacturer`` and ``model`` name the entry exactly as ``GET /asset_library``
+    lists it (the manufacturer folder and the bundle ZIP name). Also the
+    ``asset_info`` of the routes that load an asset from the catalogue.
+    """
+
+    category: str = Field(min_length=1)
+    manufacturer: str | None = None
+    model: str = Field(min_length=1)
+
+
 class CreateArticulationRequest(BaseModel):
     """Body of PUT /articulations -- register (and bind) one articulation.
 
-    ``urdf_path`` and ``usd_path`` are the two descriptions the articulation can be
-    loaded from when no prim is at ``prim_path`` yet: a URDF, which is imported, or a
-    prepared USD asset, which is referenced. Either may be given, not both; a prim
-    that is already in the stage is used as it is and both are ignored.
+    ``urdf_path``, ``usd_path`` and ``asset_info`` are the three sources the
+    articulation can be loaded from when no prim is at ``prim_path`` yet: a URDF,
+    which is imported, a prepared USD asset, which is referenced, or a catalogue
+    asset, which is downloaded into the bridge's cache once and then imported (a
+    URDF) or referenced (a USD). At most one may be given; a prim that is already in
+    the stage is used as it is, all three are ignored and nothing is downloaded.
+    Fails with 404 when ``asset_info`` names no catalogue asset and 502 when its
+    download fails.
 
-    ``default_joint_positions`` (radians, one per driven joint) is the pose a
-    freshly loaded articulation is placed at and resets to on Stop+Play. It applies
-    only when this request loads the prim; a prim already in the stage keeps its
-    pose.
+    ``mount_link`` is the link tools and prims are attached to when assemble_robot or
+    mount_prim name none. It is stored on the articulation's prim, replacing any stored
+    before; without it, a catalogue asset this request loads stores the catalogue's
+    mount link, when it has one, and any other prim is left as it is. assemble_robot
+    and mount_prim fail with 422 on an articulation that stores no mount link, unless
+    they are given an ``arm_mount_link``.
+
+    Loading fails with 422 when ``prim_path`` lies inside an articulation. A robot
+    loaded inside a rigid body is fixed to the nearest such body with a joint, so it
+    moves with that body, and stops being fixed to the world. Moving the robot in the
+    editor moves it relative to that body.
     """
 
     prim_path: str = Field(min_length=1)
     urdf_path: str | None = None
     usd_path: str | None = None
-    default_joint_positions: list[float] | None = None
+    asset_info: FetchAssetRequest | None = None
+    mount_link: str | None = None
 
 
 class JointPositionsRequest(BaseModel):
@@ -226,7 +252,8 @@ class AssembleRobotRequest(BaseModel):
     its own, keeping its own close/open routes.
 
     ``arm_mount_link`` is the arm's flange (e.g. UR ``wrist_3_link``) -- a
-    RigidBodyAPI link or a Site, not an empty frame like ``tool0``.
+    RigidBodyAPI link or a Site, not an empty frame like ``tool0``. Omitted, the
+    arm's stored mount link is used (see ``CreateArticulationRequest.mount_link``).
 
     ``gripper_mount_link`` is where on the gripper to join it. Leave it
     null/omitted for the usual case: for an articulated gripper that
@@ -244,7 +271,7 @@ class AssembleRobotRequest(BaseModel):
     """
 
     gripper_id: str
-    arm_mount_link: str
+    arm_mount_link: str | None = None
     gripper_mount_link: str | None = None
     offset: Transformation | None = None
     mask_collisions: bool = True
@@ -257,13 +284,16 @@ class MountPrimRequest(BaseModel):
     stage -- to the arm's ``arm_mount_link`` with a fixed joint, so it moves with
     the arm. The prim's origin is placed at ``offset`` in the mount link's frame
     (null/omitted => at the mount link's origin). A prim that is not a rigid body
-    becomes one, with gravity off. ``mask_collisions`` stops the arm and the prim
-    colliding with each other. Mounting the same prim again replaces its earlier
-    joint.
+    becomes one, and the arm carries its weight. Every mesh beneath the prim that has
+    no collider gets one, approximated by its convex hull, so the prim collides with
+    the scene. ``mask_collisions`` stops the arm and the prim colliding with each
+    other. Mounting the same prim again replaces its earlier joint. ``arm_mount_link``
+    omitted means the arm's stored mount link (see
+    ``CreateArticulationRequest.mount_link``).
     """
 
     prim_path: str
-    arm_mount_link: str
+    arm_mount_link: str | None = None
     offset: Transformation | None = None
     mask_collisions: bool = True
 
@@ -294,13 +324,17 @@ class AddToSceneRequest(BaseModel):
     """Body of POST /stage/scene/reference.
 
     ``uri`` is a USD, OBJ, GLB or glTF asset on the machine running Isaac Sim, not a URL:
-    a client fetches the asset's bundle itself and hands over the extracted asset. An
-    OBJ, GLB or glTF mesh is converted to USD first. The asset is referenced onto
-    ``prim_path``, so it arrives as one prim with everything it owns below it, beside
-    whatever is already in the stage.
+    a client fetches the asset's bundle itself and hands over the extracted asset.
+    ``asset_info`` instead names a catalogue asset, which the bridge downloads into
+    its cache once and loads. Exactly one of the two is given (400 otherwise); an
+    ``asset_info`` naming no catalogue asset fails with 404, a failed download with
+    502. An OBJ, GLB or glTF mesh is converted to USD first. The asset is referenced
+    onto ``prim_path``, so it arrives as one prim with everything it owns below it,
+    beside whatever is already in the stage.
     """
 
-    uri: str = Field(min_length=1)
+    uri: str | None = Field(default=None, min_length=1)
+    asset_info: FetchAssetRequest | None = None
     prim_path: str = Field(min_length=1)  # where the asset arrives, e.g. "/World/belt"
 
 
@@ -531,13 +565,18 @@ class CreateSurfaceGripperRequest(BaseModel):
     The ``IsaacSurfaceGripper`` prim is found by searching that subtree.
 
     A suction gripper has no URDF representation, so there is no ``urdf_path``
-    counterpart to the articulation route. ``usd_path`` is a prepared USD asset that
-    is referenced onto ``prim_path`` when no prim is there yet; a prim that is already
-    in the stage is used as it is and ``usd_path`` is ignored.
+    counterpart to the articulation route. When no prim is at ``prim_path`` yet, the
+    gripper is loaded from ``usd_path``, a prepared USD asset that is referenced onto
+    ``prim_path``, or from ``asset_info``, a catalogue asset the bridge downloads into
+    its cache once and references the same way. At most one may be given; a prim
+    that is already in the stage is used as it is, both are ignored and nothing is
+    downloaded. Fails with 404 when ``asset_info`` names no catalogue asset and 502
+    when its download fails.
     """
 
     prim_path: str = Field(min_length=1)
     usd_path: str | None = None
+    asset_info: FetchAssetRequest | None = None
 
 
 class GripperActionRequest(BaseModel):

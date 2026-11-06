@@ -32,6 +32,7 @@ import omni.usd
 from omni import ui
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 from omni.usd import StageEventType
+from pxr import Usd
 from isaacsim.gui.components.element_wrappers import ScrollingWindow
 from isaacsim.gui.components.menu import MenuItemDescription
 
@@ -39,6 +40,11 @@ import carb
 
 from .comm.server import BridgeServer
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_TITLE
+from .ui.add_asset_window import AddAssetWindow
+from .ui.add_camera_window import AddCameraWindow
+from .ui.add_mesh_window import AddMeshWindow
+from .ui.add_robot_window import AddRobotWindow
+from .ui.add_tool_window import AddToolWindow
 from .ui_builder import UIBuilder
 
 
@@ -116,14 +122,61 @@ class Extension(omni.ext.IExt):
             )
         )
 
+        # Drive the same service instances as the HTTP routes, so GUI and clients behave alike.
+        self._add_robot_window = AddRobotWindow(
+            self._bridge_server.asset_library_service,
+            self._bridge_server.articulation_service,
+        )
+        self._add_tool_window = AddToolWindow(
+            self._bridge_server.asset_library_service,
+            self._bridge_server.articulation_service,
+            self._bridge_server.surface_gripper_service,
+        )
+        self._add_mesh_window = AddMeshWindow(
+            self._bridge_server.asset_library_service,
+            self._bridge_server.articulation_service,
+            self._bridge_server.stage_service,
+        )
+        self._add_camera_window = AddCameraWindow(
+            self._bridge_server.asset_library_service,
+            self._bridge_server.articulation_service,
+            self._bridge_server.stage_service,
+        )
+
         # Shown under right-click -> Create in the Stage panel and viewport. The returned
         # subscription keeps the entry alive; dropping it in on_shutdown removes it.
         extension_path = omni.kit.app.get_app().get_extension_manager().get_extension_path(ext_id)
         self._create_context_menu = omni.kit.context_menu.add_menu(
             {
-                "name": "Telekinesis Isaac Sim Bridge",
+                "name": {
+                    "Telekinesis Isaac Sim Bridge": [
+                        {
+                            "name": "Add Robot",
+                            "onclick_fn": lambda objects: self._show_add_asset_window(
+                                self._add_robot_window, objects
+                            ),
+                        },
+                        {
+                            "name": "Add Tool",
+                            "onclick_fn": lambda objects: self._show_add_asset_window(
+                                self._add_tool_window, objects
+                            ),
+                        },
+                        {
+                            "name": "Add Mesh",
+                            "onclick_fn": lambda objects: self._show_add_asset_window(
+                                self._add_mesh_window, objects
+                            ),
+                        },
+                        {
+                            "name": "Add Camera",
+                            "onclick_fn": lambda objects: self._show_add_asset_window(
+                                self._add_camera_window, objects
+                            ),
+                        },
+                    ],
+                },
                 "glyph": f"{extension_path}/data/icon.png",
-                "onclick_fn": self._on_create_context_menu_clicked,
             },
             "CREATE",
         )
@@ -131,6 +184,10 @@ class Extension(omni.ext.IExt):
     def on_shutdown(self):
         """Stop the bridge server and release all subscriptions, menu items, and UI resources."""
         self._create_context_menu = None
+        self._add_robot_window.destroy()
+        self._add_tool_window.destroy()
+        self._add_mesh_window.destroy()
+        self._add_camera_window.destroy()
         self._bridge_stage_event_sub = None
         if getattr(self, "_bridge_server", None) is not None:
             self._bridge_server.stop()
@@ -209,25 +266,45 @@ class Extension(omni.ext.IExt):
         self.ui_builder.on_physics_step(step)
 
     def _on_bridge_stage_event(self, event):
-        """Clear the bridge's device registry when the stage is opened or closed.
+        """Clear the bridge's device registry and close the Add windows when the stage
+        is opened or closed.
 
         The articulation handles held by the bridge belong to the stage that was
         active when they were created; replacing the stage strands them. We clear
         rather than restart the server so the port stays bound and clients can
-        simply re-PUT their articulations against the new stage.
+        simply re-PUT their articulations against the new stage. The Add windows'
+        Attaching Prim names a prim of the old stage too.
         """
         if event.type == int(StageEventType.OPENED) or event.type == int(StageEventType.CLOSED):
             if getattr(self, "_bridge_server", None) is not None:
                 self._bridge_server.reset_devices()
+            for window in (
+                self._add_robot_window,
+                self._add_tool_window,
+                self._add_mesh_window,
+                self._add_camera_window,
+            ):
+                window.close()
 
-    def _on_create_context_menu_clicked(self, objects: dict):
-        """Handle a click on the Telekinesis Isaac Sim Bridge entry in the right-click Create menu.
+    def _show_add_asset_window(self, window: AddAssetWindow, objects: dict):
+        """Open ``window`` with the right-clicked prim as its Attaching Prim.
 
         Args:
-            objects: Kit context-menu payload. ``prim_list`` holds the right-clicked prims and is
-                empty when the click was on empty space in the Stage panel.
+            window: The Add Robot, Add Tool, Add Mesh or Add Camera window the menu entry opens.
+            objects: Kit context-menu payload. ``prim_list`` holds the right-clicked prims, as
+                ``Usd.Prim`` or ``Sdf.Path`` depending on the window, and is empty when the click
+                was on empty space; the stage's default prim is then the Attaching Prim, or the
+                stage root when the stage has none.
         """
-        carb.log_info(f"[{EXTENSION_TITLE}] Create menu clicked, prims: {objects.get('prim_list')}")
+        prim_list = objects.get("prim_list") or []
+        if not prim_list:
+            default_prim = omni.usd.get_context().get_stage().GetDefaultPrim()
+            attaching_prim_path = str(default_prim.GetPath()) if default_prim else "/"
+        elif isinstance(prim_list[0], Usd.Prim):
+            attaching_prim_path = str(prim_list[0].GetPath())
+        else:
+            attaching_prim_path = str(prim_list[0])
+        window.show(attaching_prim_path)
 
     def _on_stage_event(self, event):
         """Clean up physics subscription on stage open/close; forward event to UIBuilder."""

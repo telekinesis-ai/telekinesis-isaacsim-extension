@@ -20,6 +20,11 @@ def get_articulation_service(request: Request):
     return request.app.state.articulation_service
 
 
+def get_asset_library_service(request: Request):
+    """The shared :class:`..services.asset_library.AssetLibraryService`."""
+    return request.app.state.asset_library_service
+
+
 def get_stage_service(request: Request):
     """The shared :class:`..services.stage.StageService`."""
     return request.app.state.stage_service

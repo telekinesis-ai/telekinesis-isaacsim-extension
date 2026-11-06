@@ -13,13 +13,13 @@ Two kinds of gripper, two paths:
   (resolved by joint name) -- see ``adopt_shared_articulation`` on the device class.
 * A **suction** gripper (:func:`attach_surface_gripper`) has no joints and no
   articulation to merge, so it is placed at the mount directly, bolted on with a
-  fixed joint that is excluded from the articulation, and its attachment points are
-  re-parked onto the arm. The arm's articulation is unchanged; the gripper stays its
-  own device.
+  fixed joint, and its attachment points are re-parked onto the arm. The joint is
+  part of the arm's articulation, so the gripper's body becomes a link of it with no
+  DOF of its own; the gripper stays its own device.
 
 Any other prim, such as a camera, is bolted on the suction way by :func:`mount_prim`,
-minus the attachment points: it becomes a rigid body if it is not one, gets a mass
-from its bounds when it has none, and is fixed to the mount link.
+minus the attachment points: it becomes a rigid body if it is not one, its meshes
+collide as convex hulls, and it is fixed to the mount link.
 
 omni/isaac imports live at module top (only imported inside Isaac Sim), matching
 :mod:`.asset_loader`. ``RobotAssembler`` ships as its own Kit extension, so it is
@@ -32,15 +32,21 @@ import omni.timeline
 import omni.usd
 from isaacsim.core.prims import SingleArticulation
 import carb
-from pxr import Gf, PhysxSchema, Sdf, Tf, Usd, UsdGeom, UsdPhysics
+from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics
+from scipy.spatial import transform
 
 _BIND_RETRIES = 60
-# Name of the fixed joint the suction path authors, matched on to clear out the ones
-# an earlier assembly of the same gripper left behind.
-_MOUNT_JOINT_NAME = "AssemblerFixedJoint"
+# Name of every fixed joint mounting something on an arm's mount link: the one
+# RobotAssembler authors to merge a gripper (with a numeric suffix when taken), and the
+# one the suction and mount_prim paths author. Its body0 is the arm's mount link, its
+# body1 the mounted body. Matched on to clear out the ones an earlier assembly of the
+# same gripper left behind, and to recognise a merged gripper.
+MOUNT_JOINT_NAME = "AssemblerFixedJoint"
 # PhysX's default density, in kg/m^3, used to weigh a mounted prim that has no mass.
 _MOUNTED_PRIM_DENSITY = 1000.0
 _TCP_XFORM_NAME = "tcp"
+# ROS-Industrial (REP-199) name of the frame on an arm's flange face, Z pointing out of it.
+_FLANGE_FRAME_NAME = "tool0"
 # Size of the TCP marker's axes, in meters.
 _TCP_AXIS_LENGTH = 0.05
 _TCP_AXIS_RADIUS = 0.002
@@ -97,6 +103,39 @@ def offset_matrix(offset):
     matrix = Gf.Matrix4d().SetRotate(rot)
     matrix.SetTranslateOnly(Gf.Vec3d(*offset.translation))
     return matrix
+
+
+def matrix_to_translation_rotation(matrix):
+    """Translation (meters) and XYZ Euler rotation (degrees) of ``matrix``, as two lists.
+
+    The inverse of :func:`offset_matrix`, which composes rotations about the fixed x,
+    then y, then z axes: scipy's extrinsic ``"xyz"``. ``Gf.Rotation.Decompose`` uses
+    another convention and would not round-trip.
+    """
+    quaternion = matrix.ExtractRotationQuat()
+    rotation = transform.Rotation.from_quat([*quaternion.GetImaginary(), quaternion.GetReal()])
+    return (
+        [float(value) for value in matrix.ExtractTranslation()],
+        [float(angle) for angle in rotation.as_euler("xyz", degrees=True)],
+    )
+
+
+def find_flange_frame(stage, arm_mount_path):
+    """Path of the frame on the arm's flange face whose Z axis points out of the flange.
+
+    That is the ROS-Industrial ``tool0`` under the mount link when the robot has one:
+    on ABB, KUKA and Fanuc arms the mount link's own X axis runs along the flange
+    axis, and ``tool0`` turns it to Z. Otherwise it is the mount link itself, taken to
+    have its origin on the flange face and its Z axis out of it.
+    """
+    return next(
+        (
+            prim.GetPath().pathString
+            for prim in Usd.PrimRange(stage.GetPrimAtPath(arm_mount_path))
+            if prim.GetName() == _FLANGE_FRAME_NAME
+        ),
+        arm_mount_path,
+    )
 
 
 def apply_attach_offset(prim_path, offset):
@@ -236,8 +275,8 @@ async def attach_surface_gripper(
     3. The gripper is freed from the stage -- any joint holding it to the world is
        disabled and it stops being kinematic -- so the new fixed joint is the only
        thing constraining it.
-    4. A fixed joint excluded from the articulation joins the arm's mount link to
-       the gripper's mount body, leaving the arm's articulation topology unchanged.
+    4. A fixed joint joins the arm's mount link to the gripper's mount body (see
+       :func:`_create_mount_joint`).
     5. Every attachment point is re-parked onto the arm's mount link: its
        ``physics:body1`` is re-pointed there and its local frame recomputed so the
        parked joint holds nothing. Until this is done the attachment points are
@@ -304,18 +343,22 @@ async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_co
     """Fix any prim to the arm's mount link so it moves with the arm.
 
     The counterpart to :func:`attach_surface_gripper` for a prim that is not a
-    gripper, such as a camera: a prim parented under an articulation link in USD
-    does not follow the simulated link, so it is bolted on with a fixed joint
-    instead, and can sit anywhere in the stage. The prim is moved so its origin
+    gripper, such as a camera that is to weigh on the arm. A prim nested under a link
+    follows it only while it is not a rigid body itself, and then adds no mass when
+    the link sets its own, so it is bolted on with a fixed joint instead and can sit
+    anywhere in the stage. The prim is moved so its origin
     lands at ``offset`` in the mount link's frame, any joint an earlier mount left
-    on it is removed, and a fixed joint excluded from the articulation joins the
-    two, leaving the arm's DOF unchanged.
+    on it is removed, and a fixed joint joins the two (see
+    :func:`_create_mount_joint`), leaving the arm's DOF unchanged.
 
     A fixed joint needs a rigid body on both ends, so a prim that is not one gets
-    ``RigidBodyAPI`` with gravity off: the joint is then all that holds it. A
-    kinematic prim is made dynamic for the same reason. A prim with neither mass
-    nor colliders anywhere beneath it gets the mass of a solid box filling its
-    bounds (see :func:`_set_mass_from_bounds`); one that has either keeps it.
+    ``RigidBodyAPI``. Gravity acts on it, so the arm carries its weight as well as
+    its inertia. A kinematic prim is made dynamic, since the joint must be what
+    holds it. Every mesh beneath the prim without a collider gets one, approximated
+    by the mesh's convex hull, so the prim collides with the scene and PhysX
+    derives its mass from the hulls at the default density. A prim with neither
+    mass nor colliders anywhere beneath it even then, such as a camera, gets the
+    mass of a solid box filling its bounds (see :func:`_set_mass_from_bounds`).
 
     Edits USD, so the timeline is stopped throughout; the caller plays it again
     and re-binds the arm. Returns the path of the fixed joint.
@@ -347,9 +390,9 @@ async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_co
 
     if not prim.HasAPI(UsdPhysics.RigidBodyAPI):
         UsdPhysics.RigidBodyAPI.Apply(prim)
-        PhysxSchema.PhysxRigidBodyAPI.Apply(prim).CreateDisableGravityAttr(True)
     if prim.HasAttribute("physics:kinematicEnabled"):
         prim.GetAttribute("physics:kinematicEnabled").Set(False)
+    add_convex_hull_colliders(prim)
     # Checked apart from the rigid body: a stage kept from an earlier mount already
     # holds the prim as a rigid body, possibly without a mass.
     if not any(
@@ -370,6 +413,24 @@ async def mount_prim(stage, arm_prim, arm_mount_link, prim_path, offset, mask_co
     await app.next_update_async()
 
     return fixed_joint.GetPath().pathString
+
+
+def add_convex_hull_colliders(prim):
+    """Make every mesh at or beneath ``prim`` that has no collider collide as its convex hull.
+
+    A mesh that already has a collider keeps it. A hull stays solid even for an open
+    CAD surface, but fills the mesh's holes and concave pockets. The colliders belong
+    to the nearest rigid body at or above each mesh, so they move with it and add to
+    its mass unless the body sets its mass itself; with no rigid body they are static.
+    Meshes inside instanced prims are left as they are, since they cannot be edited.
+    """
+    for descendant in Usd.PrimRange(prim):
+        if descendant.IsA(UsdGeom.Mesh) and not descendant.HasAPI(UsdPhysics.CollisionAPI):
+            UsdPhysics.CollisionAPI.Apply(descendant)
+            # PhysX cannot simulate a triangle mesh on a moving body.
+            UsdPhysics.MeshCollisionAPI.Apply(descendant).CreateApproximationAttr(
+                UsdPhysics.Tokens.convexHull
+            )
 
 
 def place_tcp(stage, arm_prim, arm_mount_link, tcp_name, offset):
@@ -428,7 +489,7 @@ def _remove_previous_mount_joints(stage, gripper_prim):
     stale = [
         prim.GetPath().pathString
         for prim in Usd.PrimRange(stage.GetPrimAtPath(gripper_prim))
-        if prim.GetName().startswith(_MOUNT_JOINT_NAME)
+        if prim.GetName().startswith(MOUNT_JOINT_NAME)
     ]
     if stale:
         carb.log_info(f"[bridge] removing stale mount joints before re-assembly: {stale}")
@@ -520,9 +581,13 @@ def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
     poses the arm and the gripper happen to hold at that instant; writing the offset
     means the joint says what was asked for regardless.
 
-    The joint is excluded from the articulation, so the arm's DOF are unchanged.
+    The joint is left in the arm's articulation, as ``RobotAssembler`` leaves its own
+    mount joint: PhysX then makes the mounted body a link of the arm, held in
+    reduced coordinates, so it cannot drift from the mount the way a joint excluded
+    from the articulation can within its solver tolerance. A fixed joint adds no
+    DOF, so the arm's DOF are unchanged; its link count grows by one.
     """
-    joint = UsdPhysics.FixedJoint.Define(stage, f"{gripper_mount_path}/{_MOUNT_JOINT_NAME}")
+    joint = UsdPhysics.FixedJoint.Define(stage, f"{gripper_mount_path}/{MOUNT_JOINT_NAME}")
     joint.CreateBody0Rel().SetTargets([Sdf.Path(arm_mount_path)])
     joint.CreateBody1Rel().SetTargets([Sdf.Path(gripper_mount_path)])
 

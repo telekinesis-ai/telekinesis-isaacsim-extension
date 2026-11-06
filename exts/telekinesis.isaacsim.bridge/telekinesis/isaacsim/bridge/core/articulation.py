@@ -9,7 +9,7 @@ to whatever DOF indices are currently the device's "driven subset" and reports
 whether the move reached its target or stalled. All robot/gripper *semantics*
 live in the client:
 
-* A robot drives every DOF: leave the driven subset at its default (all joints)
+* A robot drives every DOF: leave the driven subset at its default (its own joints)
   and send raw joint angles (radians) to :meth:`move_j` (drive to the target over
   time) or :meth:`set_j` (teleport there instantly).
 * A gripper drives one actuated joint: the client first reads the driver joint
@@ -61,12 +61,17 @@ def joint_prims(stage, prim_path):
     """Map joint name -> prim for every UsdPhysics.Joint at or under ``prim_path``.
 
     Keyed by name because that is what a DOF is identified by; the joints
-    themselves sit at whatever depth the asset (or the URDF importer) put them.
+    themselves sit at whatever depth the asset (or the URDF importer) put them,
+    instanced prims included.
     """
     root = stage.GetPrimAtPath(prim_path)
     if root.IsA(UsdPhysics.Joint):  # importer may return the root joint, not the container
         root = root.GetParent()
-    return {p.GetName(): p for p in Usd.PrimRange(root) if p.IsA(UsdPhysics.Joint)}
+    return {
+        p.GetName(): p
+        for p in Usd.PrimRange(root, Usd.TraverseInstanceProxies())
+        if p.IsA(UsdPhysics.Joint)
+    }
 
 
 def is_mimic_joint(prim):
@@ -124,8 +129,9 @@ class SingleArticulation:
         self._articulation = None
         self.num_dof = 0
         self.dof_names = []
-        # The DOFs this device actually drives, as names. None => all of them (the
-        # default; a robot owns every joint). The client narrows this to one joint
+        # The DOFs this device actually drives, as names. None => its own joints, the
+        # ones at or under prim_path (the default; a robot owns every joint of its
+        # own, and none of a gripper merged onto it). The client narrows this to one joint
         # for a gripper via set_driven_joints; the assembly step overwrites it with
         # just the arm's (or gripper's) joints. bind/_resolve_driven_joints turns
         # the names into joint_indices so moves address only those columns.
@@ -210,25 +216,12 @@ class SingleArticulation:
         than pulled back. The velocities are zeroed so nothing carries over from a
         previous run's motion.
 
-        The measured positions are clamped into each joint's limits first. A
-        freshly imported joint starts at zero even when its range excludes zero,
-        and adopting that pose would leave the articulation -- and the reset pose
-        recorded from it -- outside its own limits, which a client reading the
-        state treats as invalid.
-
         This covers every DOF of the underlying handle rather than just this
         device's driven subset: the stale targets are a property of the
         articulation, and the joints this device does not drive would otherwise
         still be pulled.
         """
-        limits = self._articulation._articulation_view.get_dof_limits()
-        if limits.ndim == 3:
-            limits = limits[0]
-        positions = np.clip(
-            self._articulation.get_joint_positions(),
-            np.asarray(limits[:, 0]),
-            np.asarray(limits[:, 1]),
-        )
+        positions = self._articulation.get_joint_positions()
         self._articulation.set_joint_positions(positions)
         self._articulation.set_joint_velocities(np.zeros_like(positions))
         self._articulation.apply_action(ArticulationAction(joint_positions=positions))
@@ -299,13 +292,27 @@ class SingleArticulation:
         """Work out which columns of ``self._articulation`` this device drives.
 
         By joint NAME, so it survives a merged (assembled) rig's DOF ordering.
-        ``joint_names is None`` => drive every DOF. The reported
+        ``joint_names is None`` => drive the device's own DOFs, those whose joints lie
+        at or under ``prim_path``: every DOF of a robot on its own, but none of a
+        gripper merged onto it, whose joints lie under the gripper's prim. The reported
         ``dof_names``/``num_dof`` are the driven subset, so ``info``, ``get_joints_state``,
         and ``get_dof_limits`` all match what ``move_j`` moves.
+
+        Raises:
+            ValueError: If the device would drive no DOF, or ``joint_names`` names a
+                joint the articulation does not have.
         """
         all_names = list(self._articulation.dof_names)
         if self.joint_names is None:
-            self.joint_indices = list(range(len(all_names)))
+            own_joints = joint_prims(self._articulation.prim.GetStage(), self.prim_path)
+            self.joint_indices = [
+                index for index, name in enumerate(all_names) if name in own_joints
+            ]
+            if not self.joint_indices:
+                raise ValueError(
+                    f"none of the joints {all_names} of the articulation at "
+                    f"{self.prim_path} lie at or under it"
+                )
         else:
             if not self.joint_names:
                 # Narrowing to zero joints is never legitimate -- catch it here,
@@ -364,8 +371,9 @@ class SingleArticulation:
 
         After ``assemble_robot`` the arm and gripper are one articulation; both
         devices hold this same handle. Each keeps driving only its own joints
-        (``joint_names``), resolved into the merged DOF order. No rebind needed --
-        the handle is already initialized; a later reconnect re-resolves by name.
+        (``joint_names``, or ``None`` for the joints at or under its prim), resolved
+        into the merged DOF order. No rebind needed -- the handle is already
+        initialized; a later reconnect re-resolves by name.
 
         The drive setup :meth:`bind` performs is redone here, over this device's own
         joints. Assembly edits USD, which means stopping and replaying the timeline,
@@ -373,10 +381,14 @@ class SingleArticulation:
         wrote through the physics view -- velocity limits, drive targets -- is gone by
         the time the merged articulation arrives and is applied again here. Drive
         gains survive on their own, because they are authored in the asset's USD.
+
+        Raises:
+            ValueError: If the device would drive no DOF of ``articulation``, or
+                ``joint_names`` names a joint it does not have.
         """
         self.stop_velocity_drive()
         self._articulation = articulation
-        self.joint_names = list(joint_names)
+        self.joint_names = None if joint_names is None else list(joint_names)
         self._resolve_driven_joints()
         self._correct_imported_prismatic_max_velocities()
         self._align_drive_to_current_pose()

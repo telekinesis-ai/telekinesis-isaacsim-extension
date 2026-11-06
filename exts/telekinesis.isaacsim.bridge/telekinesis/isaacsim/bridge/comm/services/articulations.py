@@ -22,18 +22,31 @@ Wire units mirror the rest of the bridge: radians for joints, meters for lengths
 """
 
 import asyncio
+import pathlib
 
 from fastapi import HTTPException
 
 from ...core.articulation import SingleArticulation, find_driver_joint, joint_prims
-from ...core.asset_loader import import_urdf_at, reference_usd_at
+from ...core.asset_loader import (
+    import_urdf_at,
+    reference_usd_at,
+)
 from ...core.robot_assembler import (
+    MOUNT_JOINT_NAME,
     assemble_tool,
     attach_surface_gripper,
     bind_shared_articulation,
     mount_prim,
     place_tcp,
 )
+from .asset_library import AssetLibraryService
+
+# String attribute on an articulation's prim naming the link tools and prims are mounted
+# onto. Stored in USD so it survives saving the stage and is shared by every client.
+MOUNT_LINK_ATTRIBUTE = "telekinesis:mountLink"
+# Relationship on a robot's assembly Xform targeting the robot prim, so the assembly and
+# everything attached in it count as part of that robot. Authored by Add Robot.
+ASSEMBLY_ROBOT_RELATIONSHIP = "telekinesis:assemblyRobot"
 
 
 class ArticulationService:
@@ -46,10 +59,12 @@ class ArticulationService:
 
     ``assemble_robot`` accepts either kind of gripper, so this service composes the
     surface gripper registry (the way :class:`..services.prims.PrimService` composes
-    the stage service) to resolve a ``gripper_id`` that belongs to it.
+    the stage service) to resolve a ``gripper_id`` that belongs to it. Catalogue assets
+    a create names by ``asset_info`` are downloaded through the asset library service.
     """
 
-    def __init__(self, surface_gripper_service):
+    def __init__(self, surface_gripper_service, asset_library_service: AssetLibraryService):
+        self._asset_library_service = asset_library_service
         self._devices = {}  # articulation_id -> SingleArticulation
         self._id_by_prim = {}  # requested prim_path -> articulation_id (stable on re-create)
         self._count = 0  # for ids like articulation1, articulation2
@@ -73,23 +88,54 @@ class ArticulationService:
         self._assembly_locks = {}
 
     async def create_articulation(
-        self, prim_path, urdf_path, usd_path=None, default_joint_positions=None
+        self,
+        prim_path,
+        urdf_path,
+        usd_path=None,
+        mount_link=None,
+        asset_info=None,
     ):
         """Register (and bind) the articulation at ``prim_path`` and return its info.
 
         One articulation per *requested* prim; PUTting the same prim again returns
         the same id (and rebinds). We key on the requested path, so a client that
-        passes ``urdf_path``/``usd_path`` defensively gets the same id whether the
-        robot had to be loaded or was already in the stage. Ids are 1-based:
+        passes ``urdf_path``/``usd_path``/``asset_info`` defensively gets the same id
+        whether the robot had to be loaded or was already in the stage. Ids are 1-based:
         ``articulation1``,
         ``articulation2``, ... The bind runs every time: a new client session may
         follow a timeline stop/replay, which invalidates the cached articulation
         handle.
 
-        ``default_joint_positions`` (radians) is applied only when this request
-        loaded the prim: the joints are teleported there and it becomes the reset
-        pose. A loaded asset starts every joint at zero, which may lie outside a
-        joint's range; a prim already in the stage keeps the pose it stands in.
+        ``asset_info`` (``{"category", "manufacturer", "model"}``) names a catalogue
+        asset to load when no prim is at ``prim_path``: it is downloaded into the
+        cache once, then imported (a URDF) or referenced (a USD). At most one of
+        ``urdf_path``, ``usd_path`` and ``asset_info`` is given (see
+        :meth:`_resolve_prim`).
+
+        ``mount_link`` names the link that ``assemble_robot`` and ``mount_prim`` attach
+        to when they are given none. It is stored on the prim as
+        :data:`MOUNT_LINK_ATTRIBUTE`, replacing any stored before; without it, a
+        catalogue asset this request loads stores the catalogue's
+        ``simulation_mount_link``, when it has one, and any other prim is left as it is
+        (see :meth:`resolve_arm_mount_link`).
+
+        A gripper merged onto an arm -- by ``assemble_robot`` or the Add Tool window,
+        in this session or one saved before -- has no articulation of its own; the
+        merge is read from the stage. The gripper is bound to the arm's articulation,
+        registering the arm first if needed (see :meth:`find_robot_for_prim`), and the
+        pair is recorded as assembled, so a later ``assemble_robot`` of the two changes
+        nothing. Any prim at or above the gripper's mount link can be given. A device
+        drives its own joints, those at or under its prim, until narrowed: an arm
+        never drives the joints of a gripper merged onto it. A prim holding both the
+        arm and a gripper merged onto it, such as Add Robot's assembly Xform, is
+        refused with 422. A create that fails registers nothing.
+
+        Loading is refused with 422 when ``prim_path`` lies inside an articulation. A
+        robot loaded inside a rigid body is fixed to the nearest such body and moves
+        with it: its root joint welds the base link to the robot's own root prim, which
+        has no rigid body, so PhysX joins it to the nearest rigid-body ancestor instead
+        of the world. The weld sits in the robot's frame, so moving the robot in the
+        editor moves it relative to that body.
         """
         # Normalize a trailing slash so "/World/ur10e" and "/World/ur10e/" register as
         # the same articulation (USD paths are case-sensitive, so case is left alone).
@@ -102,28 +148,49 @@ class ArticulationService:
         # concurrent callers for the same prim_path always land on the same Lock.
         lock = self._create_locks.setdefault(prim_path, asyncio.Lock())
         async with lock:
-            resolved, prim_source = await self._resolve_prim(prim_path, urdf_path, usd_path)
+            resolved, prim_source, catalogue_entry = await self._resolve_prim(
+                prim_path, urdf_path, usd_path, asset_info
+            )
+            if catalogue_entry is not None and mount_link is None:
+                mount_link = catalogue_entry.get("simulation_mount_link")
+
+            merge = await self._find_arm_merged_into(resolved)
 
             articulation_id = self._id_by_prim.get(prim_path)
             if articulation_id is None:
+                # The id is taken before the bind awaits, so a concurrent create of
+                # another prim cannot be handed the same one.
                 self._count += 1
                 articulation_id = f"articulation{self._count}"
-                self._devices[articulation_id] = SingleArticulation(resolved, name=articulation_id)
-                self._id_by_prim[prim_path] = articulation_id
-
-            device = self._devices[articulation_id]
+                device = SingleArticulation(resolved, name=articulation_id)
+            else:
+                device = self._devices[articulation_id]
             try:
-                await device.bind()
-            except RuntimeError as exc:
+                if merge is None:
+                    await device.bind()
+                else:
+                    arm = self.get_device(merge["arm_id"])
+                    await self._bind_assembly(arm, device, arm.joint_names, device.joint_names)
+            except (RuntimeError, ValueError) as exc:
                 # 422: the request was well-formed but the prim couldn't actually
                 # be bound (semantic/runtime failure, not a bad input value).
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
-            if prim_source != "isaac_usd" and default_joint_positions is not None:
-                try:
-                    await device.set_j(default_joint_positions)
-                    device.set_joints_default_state(joint_positions=default_joint_positions)
-                except ValueError as exc:
-                    raise HTTPException(status_code=400, detail=str(exc)) from exc
+            # Registered only once bound, so a failed create leaves nothing behind.
+            self._devices[articulation_id] = device
+            self._id_by_prim[prim_path] = articulation_id
+            if merge is not None:
+                self._assemblies[merge["arm_id"]] = {
+                    "gripper_id": articulation_id,
+                    "gripper_kind": "articulated",
+                    "arm_mount_link": merge["arm_mount_link"],
+                    "gripper_mount_link": merge["gripper_mount_link"],
+                }
+            if mount_link is not None:
+                from pxr import Sdf
+
+                self._stage().GetPrimAtPath(device.prim_path).CreateAttribute(
+                    MOUNT_LINK_ATTRIBUTE, Sdf.ValueTypeNames.String
+                ).Set(mount_link)
             await self.rebind_stale_devices()
             return {
                 "articulation_id": articulation_id,
@@ -168,14 +235,9 @@ class ArticulationService:
                 elif arm_id not in repaired_assemblies:
                     repaired_assemblies.add(arm_id)
                     arm = self._devices[arm_id]
-                    arm_leaf = arm.prim_path.rstrip("/").rsplit("/", 1)[-1]
-                    shared = await bind_shared_articulation(
-                        arm.prim_path, name=f"{arm_leaf}_with_tool"
-                    )
-                    arm.adopt_shared_articulation(shared, list(arm.joint_names))
                     gripper = self._devices[self._assemblies[arm_id]["gripper_id"]]
-                    gripper.adopt_shared_articulation(shared, list(gripper.joint_names))
-            except RuntimeError as exc:
+                    await self._bind_assembly(arm, gripper, arm.joint_names, gripper.joint_names)
+            except (RuntimeError, ValueError) as exc:
                 carb.log_warn(
                     f"[bridge] could not rebind {device_id} after the timeline stop "
                     f"that invalidated it: {exc}"
@@ -554,7 +616,8 @@ class ArticulationService:
         assembles again.
 
         ``mask_collisions`` only applies to a suction gripper (see
-        :class:`..comm.models.AssembleRobotRequest`).
+        :class:`..comm.models.AssembleRobotRequest`). ``arm_mount_link`` ``None`` means
+        the arm's stored mount link (see :meth:`create_articulation`).
         """
         import carb
 
@@ -564,7 +627,7 @@ class ArticulationService:
         # the USD level, only this guard makes repeat calls safe).
         lock = self._assembly_locks.setdefault(arm_id, asyncio.Lock())
         async with lock:
-            self.get_device(arm_id)  # 404 early if the arm itself is unknown
+            arm_mount_link = self.resolve_arm_mount_link(arm_id, arm_mount_link)
             surface_gripper = self._surface_gripper_service.find_device(gripper_id)
             if surface_gripper is None and gripper_id not in self._devices:
                 raise HTTPException(
@@ -611,7 +674,8 @@ class ArticulationService:
 
         Mounting stops the timeline, which invalidates every bound articulation
         handle, so the timeline is played again and those are re-bound -- the arm,
-        and a gripper merged into it, included.
+        and a gripper merged into it, included. ``arm_mount_link`` ``None`` means the
+        arm's stored mount link (see :meth:`create_articulation`).
         """
         import omni.kit.app
         import omni.timeline
@@ -619,6 +683,7 @@ class ArticulationService:
         lock = self._assembly_locks.setdefault(arm_id, asyncio.Lock())
         async with lock:
             arm = self.get_device(arm_id)  # 404 early if the arm itself is unknown
+            arm_mount_link = self.resolve_arm_mount_link(arm_id, arm_mount_link)
             try:
                 fixed_joint = await mount_prim(
                     self._stage(),
@@ -703,9 +768,7 @@ class ArticulationService:
             variant=f"{arm_leaf}_with_tool",
         )
 
-        shared = await bind_shared_articulation(arm.prim_path, name=f"{arm_leaf}_with_tool")
-        arm.adopt_shared_articulation(shared, arm_names)
-        gripper.adopt_shared_articulation(shared, gripper_driven)
+        await self._bind_assembly(arm, gripper, arm_names, gripper_driven)
 
         return {
             "gripper_id": gripper_id,
@@ -729,9 +792,9 @@ class ArticulationService:
         Nothing is merged: a suction gripper has no joints to fold into the arm's
         articulation, so it keeps its own id and its own close/open routes and the
         arm's DOF are unchanged. What assembly does instead is place the gripper at
-        the flange, join the two with a fixed joint excluded from the articulation,
-        and re-park the gripper's attachment points onto the arm's mount link so
-        they can grip (see
+        the flange, join the two with a fixed joint that makes the gripper's body a
+        link of the arm's articulation without adding a DOF, and re-park the
+        gripper's attachment points onto the arm's mount link so they can grip (see
         :func:`..core.robot_assembler.attach_surface_gripper`).
 
         ``gripper_mount_link`` may be None, meaning the registered gripper prim
@@ -846,7 +909,146 @@ class ArticulationService:
             )
         return device
 
+    async def find_robot_for_prim(self, prim_path):
+        """Return the id of the articulation ``prim_path`` is part of, or ``None``.
+
+        The prim and its ancestors are checked nearest first. A registered
+        articulation at one of them is the answer, except a gripper assembled onto an
+        arm, which counts as part of that arm, so the arm's id is returned. A robot's
+        assembly Xform (one carrying :data:`ASSEMBLY_ROBOT_RELATIONSHIP`) stands for
+        the robot it targets, so the assembly and anything else in it count as part of
+        that robot. An unregistered prim carrying :data:`MOUNT_LINK_ATTRIBUTE`, such as
+        an articulation in a reopened stage, is registered first.
+        """
+        from pxr import Sdf
+
+        arm_by_gripper = {
+            record["gripper_id"]: arm_id for arm_id, record in self._assemblies.items()
+        }
+        stage = self._stage()
+        # GetAncestorsRange ends even for a relative path, whose parents never run out.
+        for ancestor_path in Sdf.Path(prim_path).GetAncestorsRange():
+            candidate_path = ancestor_path
+            candidate = stage.GetPrimAtPath(candidate_path)
+            assembly_robot = (
+                candidate.GetRelationship(ASSEMBLY_ROBOT_RELATIONSHIP) if candidate else None
+            )
+            if assembly_robot and assembly_robot.GetTargets():
+                candidate_path = assembly_robot.GetTargets()[0]
+                candidate = stage.GetPrimAtPath(candidate_path)
+            articulation_id = self._id_by_prim.get(candidate_path.pathString)
+            if articulation_id is not None:
+                return arm_by_gripper.get(articulation_id, articulation_id)
+            if candidate and candidate.HasAttribute(MOUNT_LINK_ATTRIBUTE):
+                articulation = await self.create_articulation(candidate_path.pathString, None)
+                return articulation["articulation_id"]
+        return None
+
+    def resolve_arm_mount_link(self, arm_id, arm_mount_link=None):
+        """Return ``arm_mount_link``, or the arm's stored mount link when it is ``None``.
+
+        The stored mount link is the one ``create_articulation`` was given (see
+        :data:`MOUNT_LINK_ATTRIBUTE`); no link is guessed when none was.
+
+        Raises:
+            HTTPException: 404 if ``arm_id`` is unknown; 422 if no ``arm_mount_link`` is
+                given and the arm prim stores none.
+        """
+        arm = self.get_device(arm_id)
+        if arm_mount_link is not None:
+            return arm_mount_link
+        attribute = self._stage().GetPrimAtPath(arm.prim_path).GetAttribute(MOUNT_LINK_ATTRIBUTE)
+        stored_mount_link = attribute.Get() if attribute else None
+        if not stored_mount_link:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"no arm_mount_link given and '{arm.prim_path}' stores none in "
+                    f"'{MOUNT_LINK_ATTRIBUTE}'; pass arm_mount_link, or register the arm "
+                    "with a mount_link"
+                ),
+            )
+        return stored_mount_link
+
     # -- internals ----------------------------------------------------------
+
+    async def _find_arm_merged_into(self, prim_path):
+        """Return the merge of a gripper at ``prim_path`` onto an arm, read from the stage.
+
+        ``RobotAssembler`` merges a gripper by removing its articulation root and
+        fixing its mount link to the arm's with a joint named ``MOUNT_JOINT_NAME``
+        under the gripper. A prim holding such a joint whose arm end lies outside it
+        is part of that gripper. Returns ``{"arm_id", "arm_mount_link", "gripper_mount_link"}``,
+        the arm registered if it was not (see :meth:`find_robot_for_prim`), or
+        ``None`` when the prim is part of no merged gripper.
+
+        Raises:
+            HTTPException: 422 if the prim holds an arm together with a gripper
+                merged onto it, as Add Robot's assembly Xform does; or if the arm is
+                no registered robot and stores no mount link to be registered by.
+        """
+        from pxr import Usd, UsdPhysics
+
+        stage = self._stage()
+        prim = stage.GetPrimAtPath(prim_path)
+        for candidate in Usd.PrimRange(prim):
+            if not candidate.GetName().startswith(MOUNT_JOINT_NAME):
+                continue
+            joint = UsdPhysics.Joint(candidate)
+            arm_link = joint.GetBody0Rel().GetTargets()[0]
+            mounted_link = joint.GetBody1Rel().GetTargets()[0]
+            if not arm_link.HasPrefix(prim.GetPath()):
+                arm_id = await self.find_robot_for_prim(arm_link.pathString)
+                if arm_id is None:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            f"'{prim_path}' is merged onto '{arm_link}', which is part "
+                            "of no registered robot; register the robot first"
+                        ),
+                    )
+                return {
+                    "arm_id": arm_id,
+                    "arm_mount_link": arm_link.name,
+                    "gripper_mount_link": mounted_link.name,
+                }
+            # The prim holds both ends. The mounted asset is the largest prim holding
+            # the mounted link but not the arm's; one with moving joints is a merged
+            # gripper, whose joints would otherwise count as the arm's own. A mesh or
+            # camera mounted with mount_prim moves nothing, and is left alone.
+            mounted_asset = mounted_link
+            while not arm_link.HasPrefix(mounted_asset.GetParentPath()):
+                mounted_asset = mounted_asset.GetParentPath()
+            if any(
+                descendant.IsA(UsdPhysics.Joint) and not descendant.IsA(UsdPhysics.FixedJoint)
+                for descendant in Usd.PrimRange(stage.GetPrimAtPath(mounted_asset))
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"'{prim_path}' holds the robot at '{arm_link}' and the gripper "
+                        f"'{mounted_asset}' merged onto it; register each by its own prim"
+                    ),
+                )
+        return None
+
+    @staticmethod
+    async def _bind_assembly(arm, gripper, arm_joint_names, gripper_joint_names):
+        """Bind the arm's articulation, which a merged gripper is part of, and hand it to both.
+
+        Each device then drives the joints named for it, or its own joints for
+        ``None`` (see ``SingleArticulation.adopt_shared_articulation``). Plays the
+        timeline.
+
+        Raises:
+            RuntimeError: If the merged articulation does not become valid.
+            ValueError: If a device would drive no joint, or is given a joint the
+                articulation does not have.
+        """
+        arm_leaf = arm.prim_path.rstrip("/").rsplit("/", 1)[-1]
+        shared = await bind_shared_articulation(arm.prim_path, name=f"{arm_leaf}_with_tool")
+        arm.adopt_shared_articulation(shared, arm_joint_names)
+        gripper.adopt_shared_articulation(shared, gripper_joint_names)
 
     @staticmethod
     def _stage():
@@ -858,43 +1060,64 @@ class ArticulationService:
             raise HTTPException(status_code=409, detail="no USD stage is open")
         return stage
 
-    async def _resolve_prim(self, requested_prim_path, urdf_path, usd_path):
+    async def _resolve_prim(self, requested_prim_path, urdf_path, usd_path, asset_info):
         """Use the prim if it's already in the stage, else load it there from a file.
 
-        Returns ``(resolved_path, prim_source)``. ``prim_source`` reports which of
-        the three actually happened -- ``"isaac_usd"`` if the prim was already in
-        the stage (any ``urdf_path``/``usd_path`` given had no effect),
-        ``"imported_urdf"`` if it was imported from that URDF file just now, or
-        ``"referenced_usd"`` if that USD asset was referenced onto it just now.
-        Without this, a client that passes a path defensively (load if missing,
+        The file is ``urdf_path``, ``usd_path``, or the main file of the catalogue
+        asset ``asset_info``, which is downloaded only when the prim is missing.
+
+        Returns ``(resolved_path, prim_source, catalogue_entry)``. ``prim_source``
+        reports which of the three actually happened -- ``"isaac_usd"`` if the prim
+        was already in the stage (any ``urdf_path``/``usd_path``/``asset_info`` given
+        had no effect), ``"imported_urdf"`` if it was imported from a URDF file just
+        now, or ``"referenced_usd"`` if a USD asset was referenced onto it just now.
+        Without this, a client that passes a source defensively (load if missing,
         reuse if not) has no way to tell which one actually happened.
+        ``catalogue_entry`` is the entry :meth:`AssetLibraryService.fetch_asset`
+        returned when ``asset_info`` was loaded, else ``None``.
+
+        Raises:
+            HTTPException: 400 if more than one source is given, or none while the
+                prim is missing; 404/502 from the catalogue download; 422 if loading
+                fails.
         """
         import omni.usd
 
-        if urdf_path and usd_path:
+        if sum(1 for source in (urdf_path, usd_path, asset_info) if source) > 1:
             raise HTTPException(
                 status_code=400,
-                detail="give either urdf_path or usd_path, not both",
+                detail="give only one of urdf_path, usd_path or asset_info",
             )
 
         stage = omni.usd.get_context().get_stage()
         existing = stage.GetPrimAtPath(requested_prim_path)
         if existing and existing.IsValid():
-            return requested_prim_path, "isaac_usd"
-        if not (urdf_path or usd_path):
+            return requested_prim_path, "isaac_usd", None
+        if not (urdf_path or usd_path or asset_info):
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"'{requested_prim_path}' is not in the stage and no urdf_path or usd_path "
-                    "was given to load it"
+                    f"'{requested_prim_path}' is not in the stage and no urdf_path, usd_path "
+                    "or asset_info was given to load it"
                 ),
             )
+        catalogue_entry = None
+        if asset_info:
+            catalogue_entry = await self._asset_library_service.fetch_asset(
+                asset_info["category"], asset_info["manufacturer"], asset_info["model"]
+            )
+            if pathlib.Path(catalogue_entry["local_path"]).suffix.lower() == ".urdf":
+                urdf_path = catalogue_entry["local_path"]
+            else:
+                usd_path = catalogue_entry["local_path"]
         try:
             if urdf_path:
                 resolved = await import_urdf_at(stage, urdf_path, requested_prim_path)
-                return resolved, "imported_urdf"
-            resolved = await reference_usd_at(stage, usd_path, requested_prim_path)
-            return resolved, "referenced_usd"
+                prim_source = "imported_urdf"
+            else:
+                resolved = await reference_usd_at(stage, usd_path, requested_prim_path)
+                prim_source = "referenced_usd"
+            return resolved, prim_source, catalogue_entry
         except RuntimeError as exc:
             # 422: well-formed request, but loading the file itself failed.
             raise HTTPException(status_code=422, detail=str(exc)) from exc
