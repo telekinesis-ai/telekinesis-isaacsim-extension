@@ -1,5 +1,5 @@
 # Changelog
-## [0.8.1] - 2026-11-02
+## [0.9.1] - 2026-11-06
 ### Added
 - `PUT /articulations`, `PUT /surface_grippers` and `POST /stage/scene/reference` take an
   optional `asset_info` (`{"category", "manufacturer", "model"}`) in place of a file: the bridge
@@ -94,6 +94,28 @@
   body, so the arm carries the prim's weight. Every mesh beneath the prim without a collider
   gets one, approximated by its convex hull, so the prim collides with the scene and PhysX
   derives its mass from the hulls.
+
+### Fixed
+- `PUT /articulations` failed with "did not become valid (… 'is_homogeneous')" for a gripper merged
+  onto an arm by Add Tool or `assemble_robot`, whenever the bridge did not remember the merge: after
+  a restart or a stage reopen, or for another path into the gripper than the one first registered.
+  The merge is now read from the stage: the gripper binds to the arm's articulation, registering
+  the arm if needed, and the pair counts as assembled, so a later `assemble_robot` of the two
+  changes nothing. A device drives its own joints by default, those under its prim, so an arm no
+  longer drives the joints of a gripper merged onto it. A prim holding both, such as Add Robot's
+  `<model>_assembly` Xform, is refused with 422. A failed `PUT /articulations` no longer leaves a
+  broken device registered that every later request tried to re-bind.
+- A robot, tool or mesh added onto part of a prop that keeps its colliders elsewhere, such as the
+  visible tabletop mesh of a table whose colliders sit in a separate scope, landed inside the prop.
+  It is now lifted onto every collider of the prop (the prim directly under the default prim
+  that holds it), not only the colliders below the prim it was added to.
+
+## [0.8.1] - 2026-11-02
+### Added
+- A "Telekinesis Isaac Sim Bridge" entry in the right-click Create menu of the Stage panel and
+  viewport. It is a placeholder that only prints the right-clicked prims to the terminal.
+
+### Changed
 - `PUT /prims/physics/rigid_body` makes each mesh collide as its convex hull instead of a
   convex decomposition. Decomposing open, multi-shell CAD meshes left thin hulls that gripper
   fingers were pushed through. A hull is solid, but fills holes and concave pockets.
@@ -102,10 +124,6 @@
   small parts slid out of parallel-jaw grippers.
 
 ### Fixed
-- A robot, tool or mesh added onto part of a prop that keeps its colliders elsewhere, such as the
-  visible tabletop mesh of a table whose colliders sit in a separate scope, landed inside the prop.
-  It is now lifted onto every collider of the prop (the prim directly under the default prim
-  that holds it), not only the colliders below the prim it was added to.
 - `POST /articulations/{id}/mount_prim` mounted a prim with no mass and no colliders, such as a
   camera, as a body PhysX weighs at its 1 kg default with an inertia unrelated to the prim, which
   shook the arm. Such a prim now gets the mass and inertia of a solid box filling its bounds at

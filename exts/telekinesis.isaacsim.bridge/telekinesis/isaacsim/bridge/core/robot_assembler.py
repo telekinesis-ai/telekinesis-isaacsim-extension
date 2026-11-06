@@ -36,9 +36,12 @@ from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics
 from scipy.spatial import transform
 
 _BIND_RETRIES = 60
-# Name of the fixed joint the suction path authors, matched on to clear out the ones
-# an earlier assembly of the same gripper left behind.
-_MOUNT_JOINT_NAME = "AssemblerFixedJoint"
+# Name of every fixed joint mounting something on an arm's mount link: the one
+# RobotAssembler authors to merge a gripper (with a numeric suffix when taken), and the
+# one the suction and mount_prim paths author. Its body0 is the arm's mount link, its
+# body1 the mounted body. Matched on to clear out the ones an earlier assembly of the
+# same gripper left behind, and to recognise a merged gripper.
+MOUNT_JOINT_NAME = "AssemblerFixedJoint"
 # PhysX's default density, in kg/m^3, used to weigh a mounted prim that has no mass.
 _MOUNTED_PRIM_DENSITY = 1000.0
 _TCP_XFORM_NAME = "tcp"
@@ -485,7 +488,7 @@ def _remove_previous_mount_joints(stage, gripper_prim):
     stale = [
         prim.GetPath().pathString
         for prim in Usd.PrimRange(stage.GetPrimAtPath(gripper_prim))
-        if prim.GetName().startswith(_MOUNT_JOINT_NAME)
+        if prim.GetName().startswith(MOUNT_JOINT_NAME)
     ]
     if stale:
         carb.log_info(
@@ -590,7 +593,7 @@ def _create_mount_joint(stage, arm_mount_path, gripper_mount_path, offset):
     DOF, so the arm's DOF are unchanged; its link count grows by one.
     """
     joint = UsdPhysics.FixedJoint.Define(
-        stage, f"{gripper_mount_path}/{_MOUNT_JOINT_NAME}"
+        stage, f"{gripper_mount_path}/{MOUNT_JOINT_NAME}"
     )
     joint.CreateBody0Rel().SetTargets([Sdf.Path(arm_mount_path)])
     joint.CreateBody1Rel().SetTargets([Sdf.Path(gripper_mount_path)])
