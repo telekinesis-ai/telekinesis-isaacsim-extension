@@ -22,7 +22,10 @@ writeTarget.kit = true
 "isaacsim.robot.surface_gripper" = {}
 "omni.kit.asset_converter" = {}
 "omni.kit.context_menu" = {}
+"omni.kit.manipulator.transform" = {}
 "omni.kit.notification_manager" = {}
+"omni.kit.viewport.utility" = {}
+"omni.ui.scene" = {}
 "omni.kit.uiapp" = {}
 "omni.usd.schema.physx" = {}
 

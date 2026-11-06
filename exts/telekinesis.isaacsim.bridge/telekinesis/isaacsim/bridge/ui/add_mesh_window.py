@@ -5,7 +5,6 @@ from ..comm.services.articulations import ArticulationService
 from ..comm.services.asset_library import AssetLibraryService
 from ..comm.services.stage import StageService
 from .add_asset_window import AddAssetWindow
-from .transformation_fields import TransformationFields
 
 ATTACHMENT_CATEGORY = "attachments"
 
@@ -39,29 +38,11 @@ class AddMeshWindow(AddAssetWindow):
         stage_service: StageService,
     ):
         self._stage_service = stage_service
-        self._mount_offset_fields: TransformationFields
         super().__init__("Add Mesh", asset_library_service, articulation_service)
 
     def asset_categories(self) -> list[str]:
         """Offer the attachment meshes of the catalogue."""
         return [ATTACHMENT_CATEGORY]
-
-    def build_extra_fields(self):
-        """Add the offset the mesh is mounted at, used only when mounting on a robot."""
-        self._mount_offset_fields = TransformationFields(
-            on_changed_fn=self.update_ghost
-        )
-
-    def reset_extra_fields(self):
-        """Zero the mount offset."""
-        self._mount_offset_fields.reset()
-
-    async def place_ghost(self, attaching_prim_path: str):
-        """Stand the mesh on the robot's mount link at the entered offset, or at the
-        Attaching Prim when it is part of no robot."""
-        await self._place_ghost_on_robot_mount(
-            attaching_prim_path, self._mount_offset_fields.transformation()
-        )
 
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Add the mesh and, when ``attaching_prim_path`` is part of a robot, mount it there."""
@@ -85,6 +66,6 @@ class AddMeshWindow(AddAssetWindow):
         if robot_id is None:
             return f"Added {mesh_path}."
         mount = await self._articulation_service.mount_prim(
-            robot_id, mesh_path, None, self._mount_offset_fields.transformation(), True
+            robot_id, mesh_path, None, self._transformation_fields.transformation(), True
         )
         return f"Added {mesh_path} and mounted it on {robot_id} at {mount['arm_mount_link']}."

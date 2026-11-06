@@ -14,7 +14,6 @@ from ..comm.services.asset_library import AssetLibraryService
 from ..comm.services.surface_grippers import SurfaceGripperService
 from ..core import robot_assembler
 from .add_asset_window import BUTTON_WIDTH, AddAssetWindow
-from .transformation_fields import TransformationFields
 
 PARALLEL_GRIPPER_CATEGORY = "tools/parallel_grippers"
 SUCTION_GRIPPER_CATEGORY = "tools/suction_grippers"
@@ -58,18 +57,11 @@ class AddToolWindow(AddAssetWindow):
         surface_gripper_service: SurfaceGripperService,
     ):
         self._surface_gripper_service = surface_gripper_service
-        self._mount_offset_fields: TransformationFields
         super().__init__("Add Tool", asset_library_service, articulation_service)
 
     def asset_categories(self) -> list[str]:
         """Offer the parallel and suction grippers of the catalogue."""
         return [PARALLEL_GRIPPER_CATEGORY, SUCTION_GRIPPER_CATEGORY]
-
-    def build_extra_fields(self):
-        """Add the offset the gripper is attached at, used only when attaching to a robot."""
-        self._mount_offset_fields = TransformationFields(
-            on_changed_fn=self.update_ghost
-        )
 
     def build_extra_buttons(self):
         """Add Auto-calculate Placement, left of Add."""
@@ -78,10 +70,6 @@ class AddToolWindow(AddAssetWindow):
             width=BUTTON_WIDTH,
             clicked_fn=lambda: asyncio.ensure_future(self._auto_calculate_placement()),
         )
-
-    def reset_extra_fields(self):
-        """Zero the attach offset."""
-        self._mount_offset_fields.reset()
 
     async def _auto_calculate_placement(self):
         """Enter the offset that stands the gripper in front of the robot's flange.
@@ -131,19 +119,12 @@ class AddToolWindow(AddAssetWindow):
         translation, rotation = robot_assembler.matrix_to_translation_rotation(
             placement
         )
-        self._mount_offset_fields.set_transformation(
+        self._transformation_fields.set_transformation(
             models.Transformation(translation=translation, rotation=rotation)
         )
         self._status_label.text = (
             f"Auto-calculate Placement stood the gripper {distance:.3f} m along the Z "
             f"axis of {Sdf.Path(flange_path).name}."
-        )
-
-    async def place_ghost(self, attaching_prim_path: str):
-        """Stand the gripper on the robot's mount link at the entered offset, or at the
-        Attaching Prim when it is part of no robot."""
-        await self._place_ghost_on_robot_mount(
-            attaching_prim_path, self._mount_offset_fields.transformation()
         )
 
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
@@ -179,7 +160,7 @@ class AddToolWindow(AddAssetWindow):
             tool_id,
             None,
             None,
-            self._mount_offset_fields.transformation(),
+            self._transformation_fields.transformation(),
             True,
         )
         return (

@@ -14,7 +14,6 @@ from ..comm.services.articulations import (
 from ..comm.services.asset_library import AssetLibraryService
 from ..core import asset_loader, robot_assembler
 from .add_asset_window import BUTTON_WIDTH, AddAssetWindow
-from .transformation_fields import TransformationFields
 
 ROBOT_CATEGORY = "robots/manipulators"
 
@@ -55,16 +54,11 @@ class AddRobotWindow(AddAssetWindow):
         asset_library_service: AssetLibraryService,
         articulation_service: ArticulationService,
     ):
-        self._placement_fields: TransformationFields
         super().__init__("Add Robot", asset_library_service, articulation_service)
 
     def asset_categories(self) -> list[str]:
         """Offer the robot arms of the catalogue."""
         return [ROBOT_CATEGORY]
-
-    def build_extra_fields(self):
-        """Add the robot's placement relative to the attaching prim."""
-        self._placement_fields = TransformationFields(on_changed_fn=self.update_ghost)
 
     def build_extra_buttons(self):
         """Add Auto-calculate Placement, left of Add."""
@@ -74,15 +68,15 @@ class AddRobotWindow(AddAssetWindow):
             clicked_fn=self._on_auto_placement_clicked,
         )
 
-    def reset_extra_fields(self):
-        """Place the robot at the attaching prim's origin."""
-        self._placement_fields.reset()
+    async def transformation_frame(self, attaching_prim_path: str) -> Gf.Matrix4d:
+        """Read the robot's placement in the attaching prim's frame."""
+        return self._world_transform(attaching_prim_path)
 
-    async def place_ghost(self, attaching_prim_path: str):
-        """Stand the robot at the entered placement in the attaching prim's frame."""
+    def place_ghost(self, attaching_prim_path: str, transformation_frame: Gf.Matrix4d):
+        """Stand the robot's assembly at the entered placement in the attaching prim's frame."""
         self._ghost.place_under(
-            robot_assembler.offset_matrix(self._placement_fields.transformation())
-            * self._world_transform(attaching_prim_path)
+            robot_assembler.offset_matrix(self._transformation_fields.transformation())
+            * transformation_frame
         )
 
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
@@ -91,7 +85,7 @@ class AddRobotWindow(AddAssetWindow):
         assembly_path = self._free_destination_path(
             attaching_prim_path, f"{robot_name}_assembly"
         )
-        placement = self._placement_fields.transformation()
+        placement = self._transformation_fields.transformation()
         stage = omni.usd.get_context().get_stage()
         # Placed before the robot is loaded into it, so the robot binds where the ghost
         # stood; the load parks only what it creates, which is now the robot alone.
@@ -151,8 +145,8 @@ class AddRobotWindow(AddAssetWindow):
         attaching_shift = (
             self._world_transform(attaching_prim_path).GetInverse().TransformDir(shift)
         )
-        placement = self._placement_fields.transformation()
-        self._placement_fields.set_transformation(
+        placement = self._transformation_fields.transformation()
+        self._transformation_fields.set_transformation(
             models.Transformation(
                 translation=[
                     value + delta

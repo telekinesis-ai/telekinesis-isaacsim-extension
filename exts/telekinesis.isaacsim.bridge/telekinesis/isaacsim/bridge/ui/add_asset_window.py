@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from omni import ui
 from omni.kit import notification_manager
 from omni.kit.window.property import templates
-from pxr import Tf
+from pxr import Gf, Tf
 from isaacsim.gui.components import element_wrappers
 
 from ..comm import models
@@ -18,6 +18,8 @@ from ..comm.services.articulations import ArticulationService
 from ..comm.services.asset_library import AssetLibraryService
 from ..core import asset_loader, robot_assembler
 from .asset_ghost import AssetGhost
+from .placement_gizmo import PlacementGizmo
+from .transformation_fields import TransformationFields
 
 # Shown in the Manufacturer dropdown for catalogue entries listed without a manufacturer.
 GENERIC_MANUFACTURER_LABEL = "Generic"
@@ -28,6 +30,11 @@ WINDOW_WIDTH = 640
 WINDOW_HEIGHT = 280
 # Extra gap, in pixels, between the input fields and the button row.
 BUTTON_ROW_GAP = 15
+# omni.ui colours are 0xAABBGGRR. The accent is the preview's #41d1ff; the hint's
+# background is the same colour, mostly transparent.
+ACCENT_COLOR = 0xFFFFD141
+HINT_BACKGROUND_COLOR = 0x33FFD141
+KEY_CAP_TEXT_COLOR = 0xFF1E1E1E
 
 
 class AddAssetWindow(abc.ABC):
@@ -38,7 +45,14 @@ class AddAssetWindow(abc.ABC):
     prim and cannot be edited. While the window is open, a see-through ghost of the
     selected model shows where Add will put it and follows every change of the model
     and the window's other fields; the ghost is never saved, cannot be selected and
-    takes no part in physics. A model
+    takes no part in physics. Position and Rotation place the asset in a frame the
+    window names, its transformation frame; while that frame exists, a move/rotate
+    gizmo stands on the ghost in the viewport, and dragging it enters where it is
+    dragged to in Position and Rotation. The gizmo turns about the world axes, offers
+    rotation while the viewport's Rotate tool (E) is selected and translation
+    otherwise, and edits nothing in the stage. Nothing in the stage can be selected
+    while the window is open: a selection is cleared as soon as it is made, so Kit's
+    own gizmo never shows beside it. A model
     that cannot be previewed leaves the reason in the status line and can still be
     added. The window closes when another stage is opened. Pressing Add checks that a model is
     selected and that the Attaching Prim exists; if not, the window stays open and
@@ -50,8 +64,8 @@ class AddAssetWindow(abc.ABC):
     a warning that stays until dismissed. Add is disabled while an add runs. Every add
     creates a new prim: a name already taken in the stage gets a numeric suffix.
 
-    A subclass names its categories, may add input fields, places the ghost where its
-    add puts the asset, and implements the add itself.
+    A subclass names its categories, may add buttons, names its transformation frame,
+    places the ghost where its add puts the asset, and implements the add itself.
 
     Example:
         window = AddRobotWindow(bridge_server.asset_library_service,
@@ -80,6 +94,12 @@ class AddAssetWindow(abc.ABC):
         # last read the window.
         self._ghost_refresh: asyncio.Future | None = None
         self._ghost_outdated = False
+        self._gizmo = PlacementGizmo(on_dragged_fn=self._on_gizmo_dragged)
+        # The world transformation frame the gizmo was last shown in, which turns a
+        # dragged pose back into Position and Rotation.
+        self._gizmo_frame = Gf.Matrix4d(1.0)
+        # Clears every selection while the window is open; None while it is closed.
+        self._selection_subscription = None
 
         self._window = ui.Window(
             title, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, visible=False
@@ -111,7 +131,32 @@ class AddAssetWindow(abc.ABC):
                     )
                     # Read-only: the right-clicked prim the window was opened on.
                     self._attaching_prim_model = ui.StringField(read_only=True).model
-                self.build_extra_fields()
+                self._transformation_fields = TransformationFields(
+                    on_changed_fn=self.update_ghost
+                )
+                # A callout in the preview's colour, shown only while the gizmo is,
+                # since the keys switch the gizmo.
+                self._gizmo_hint = ui.ZStack(height=0, visible=False)
+                with self._gizmo_hint:
+                    ui.Rectangle(
+                        style={
+                            "background_color": HINT_BACKGROUND_COLOR,
+                            "border_color": ACCENT_COLOR,
+                            "border_width": 1,
+                            "border_radius": 4,
+                        }
+                    )
+                    with ui.VStack(height=0):
+                        ui.Spacer(height=6)
+                        with ui.HStack(height=0, spacing=6):
+                            ui.Spacer()
+                            ui.Label("Hover over the viewport and press", width=0)
+                            self._build_key_cap("W")
+                            ui.Label("for the move or", width=0)
+                            self._build_key_cap("E")
+                            ui.Label("for the rotate tool", width=0)
+                            ui.Spacer()
+                        ui.Spacer(height=6)
                 ui.Spacer(height=BUTTON_ROW_GAP)
                 # The button row is centered by a stretching spacer on either side.
                 with ui.HStack(spacing=5, height=0):
@@ -131,15 +176,6 @@ class AddAssetWindow(abc.ABC):
         categories share the Manufacturer and Model dropdowns.
         """
 
-    def build_extra_fields(self):
-        """Build input fields shown below Attaching Prim. Optional; the default builds none.
-
-        Called once from the constructor, inside the window's vertical layout, so
-        widgets created here land in it. Store anything :meth:`add_selected_asset`
-        reads on ``self``. A field that changes where the asset lands must call
-        :meth:`update_ghost` when its value changes.
-        """
-
     def build_extra_buttons(self):
         """Build buttons shown left of Add, in the same row. Optional; the default
         builds none.
@@ -148,28 +184,48 @@ class AddAssetWindow(abc.ABC):
         each button a width of :data:`BUTTON_WIDTH`.
         """
 
-    def reset_extra_fields(self):
-        """Set the fields built by :meth:`build_extra_fields` back to their defaults. Optional.
+    async def transformation_frame(self, attaching_prim_path: str) -> Gf.Matrix4d | None:
+        """Return the world frame Position and Rotation are read in, or ``None`` when
+        they do not place the asset.
 
-        Called each time the window is opened while no add is running, so every add
-        starts from the defaults instead of the values of the previous one. The default
-        resets nothing.
+        Called on every ghost refresh, with ``attaching_prim_path`` naming a prim in
+        the stage. While it returns a frame, the gizmo is shown on the ghost; ``None``
+        hides it. May raise the services' ``HTTPException`` or the core layer's
+        ``RuntimeError``; the ghost is then removed and the message shown as the reason
+        there is no preview.
+
+        Optional; the default is the stored mount link of the robot the Attaching
+        Prim is part of, and ``None`` when it is part of no robot.
         """
+        robot_id = await self._articulation_service.find_robot_for_prim(
+            attaching_prim_path
+        )
+        if robot_id is None:
+            return None
+        return self._world_transform(self._arm_mount_path(robot_id))
 
-    async def place_ghost(self, attaching_prim_path: str):
+    def place_ghost(
+        self, attaching_prim_path: str, transformation_frame: Gf.Matrix4d | None
+    ):
         """Move the ghost to where :meth:`add_selected_asset` would put the selected asset.
 
-        Called on every ghost refresh, once the ghost shows the selected asset and
-        ``attaching_prim_path`` names a prim in the stage. Must place the ghost through
+        Called on every ghost refresh, once the ghost shows the selected asset, with
+        ``attaching_prim_path`` naming a prim in the stage and the frame
+        :meth:`transformation_frame` returned. Must place the ghost through
         ``self._ghost`` (:meth:`AssetGhost.place_under` or
-        :meth:`AssetGhost.place_on_mount`). May raise the services' ``HTTPException`` or
-        the core layer's ``RuntimeError``; the ghost is then removed and the message
-        shown as the reason there is no preview.
+        :meth:`AssetGhost.place_on_mount`).
 
-        Optional; the default stands the asset at the Attaching Prim's origin, as it
-        is loaded under it.
+        Optional; the default stands the asset's mount body at the entered
+        transformation in ``transformation_frame``, as a tool or mesh attached to a
+        robot, and at the Attaching Prim's origin when the frame is ``None``.
         """
-        self._ghost.place_under(self._world_transform(attaching_prim_path))
+        if transformation_frame is None:
+            self._ghost.place_under(self._world_transform(attaching_prim_path))
+            return
+        self._ghost.place_on_mount(
+            robot_assembler.offset_matrix(self._transformation_fields.transformation())
+            * transformation_frame
+        )
 
     @abc.abstractmethod
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
@@ -191,12 +247,12 @@ class AddAssetWindow(abc.ABC):
 
         The catalogue is loaded on the first open, and retried on later opens until
         it yields any asset. Opening the window while it loads starts no second load.
-        The extra fields are reset to their defaults unless an add is running.
+        Position and Rotation are reset to zero unless an add is running.
         """
         self._attaching_prim_model.set_value(attaching_prim_path)
         # Add is disabled exactly while an add runs, and that add still reads the fields.
         if self._add_button.enabled:
-            self.reset_extra_fields()
+            self._transformation_fields.reset()
         self._window.visible = True
         if not self._assets and (
             self._catalogue_load is None or self._catalogue_load.done()
@@ -220,16 +276,72 @@ class AddAssetWindow(abc.ABC):
         self._window.visible = False
 
     def destroy(self):
-        """Remove the ghost and release the window's widgets."""
+        """Remove the ghost and the gizmo and release the window's widgets."""
         self._ghost.remove()
+        self._gizmo.destroy()
+        self._selection_subscription = None
         self._window.destroy()
 
     def _on_visibility_changed(self, visible: bool):
-        """Remove the ghost as soon as the window closes, before an add starts loading."""
-        if not visible:
-            self._ghost.remove()
-            self._ghost_asset = None
+        """Keep the stage unselected while the window is open, and remove the ghost and
+        the gizmo as soon as it closes, before an add starts loading."""
+        if visible:
+            # A selected prim gets Kit's own gizmo, which would stand beside the
+            # window's; so nothing stays selected while the window is open.
+            self._deselect_all()
+            usd_context = omni.usd.get_context()
+            self._selection_subscription = (
+                usd_context.get_stage_event_stream().create_subscription_to_pop_by_type(
+                    int(omni.usd.StageEventType.SELECTION_CHANGED),
+                    lambda _: self._deselect_all(),
+                    name="telekinesis add window selection lock",
+                )
+            )
+        else:
+            self._selection_subscription = None
+            self._remove_ghost()
         self.update_ghost()
+
+    @staticmethod
+    def _deselect_all():
+        """Clear the stage selection, unless nothing is selected."""
+        selection = omni.usd.get_context().get_selection()
+        if selection.get_selected_prim_paths():
+            selection.clear_selected_prim_paths()
+
+    def _remove_ghost(self):
+        """Remove the ghost and the gizmo standing on it."""
+        self._ghost.remove()
+        self._ghost_asset = None
+        self._hide_gizmo()
+
+    def _hide_gizmo(self):
+        """Remove the gizmo and the hint on how to use it."""
+        self._gizmo.hide()
+        self._gizmo_hint.visible = False
+
+    @staticmethod
+    def _build_key_cap(key: str):
+        """Build a keyboard key labelled ``key``, as the gizmo hint names it."""
+        with ui.ZStack(width=22, height=20):
+            ui.Rectangle(
+                style={"background_color": ACCENT_COLOR, "border_radius": 3}
+            )
+            ui.Label(
+                key,
+                alignment=ui.Alignment.CENTER,
+                style={"color": KEY_CAP_TEXT_COLOR, "font_size": 14},
+            )
+
+    def _on_gizmo_dragged(self, pose: Gf.Matrix4d):
+        """Enter the dragged world ``pose``, read in the transformation frame, in
+        Position and Rotation, which moves the ghost after it."""
+        translation, rotation = robot_assembler.matrix_to_translation_rotation(
+            pose * self._gizmo_frame.GetInverse()
+        )
+        self._transformation_fields.set_transformation(
+            models.Transformation(translation=translation, rotation=rotation)
+        )
 
     def _on_manufacturer_selected(self, _manufacturer: str):
         """Offer the manufacturer's models and show the selected one as the ghost."""
@@ -268,8 +380,7 @@ class AddAssetWindow(abc.ABC):
             or asset is None
             or not stage.GetPrimAtPath(attaching_prim_path)
         ):
-            self._ghost.remove()
-            self._ghost_asset = None
+            self._remove_ghost()
             return
 
         if asset is not self._ghost_asset:
@@ -289,37 +400,22 @@ class AddAssetWindow(abc.ABC):
             self._ghost.show(self._preview_asset_paths[main_file])
             self._ghost_asset = asset
             self._status_label.text = ""
-        await self.place_ghost(attaching_prim_path)
+        transformation_frame = await self.transformation_frame(attaching_prim_path)
+        self.place_ghost(attaching_prim_path, transformation_frame)
+        if transformation_frame is None:
+            self._hide_gizmo()
+            return
+        self._gizmo_frame = transformation_frame
+        self._gizmo.show(
+            robot_assembler.offset_matrix(self._transformation_fields.transformation())
+            * transformation_frame
+        )
+        self._gizmo_hint.visible = True
 
     def _show_no_preview(self, reason):
         """Remove the ghost and say why the selected asset has no preview."""
-        self._ghost.remove()
-        self._ghost_asset = None
+        self._remove_ghost()
         self._status_label.text = f"No preview: {reason}"
-
-    async def _place_ghost_on_robot_mount(
-        self, attaching_prim_path: str, offset: models.Transformation
-    ):
-        """Place the ghost as a tool or mesh attached at ``offset`` to the robot the
-        Attaching Prim is part of, or under the Attaching Prim when it is part of none.
-
-        Mirrors the add: the robot's stored mount link is used, and ``offset`` is read
-        in its frame.
-
-        Raises:
-            HTTPException: 422 if the robot stores no mount link.
-            RuntimeError: If the robot has no prim of its mount link's name.
-        """
-        robot_id = await self._articulation_service.find_robot_for_prim(
-            attaching_prim_path
-        )
-        if robot_id is None:
-            self._ghost.place_under(self._world_transform(attaching_prim_path))
-            return
-        self._ghost.place_on_mount(
-            robot_assembler.offset_matrix(offset)
-            * self._world_transform(self._arm_mount_path(robot_id))
-        )
 
     def _arm_mount_path(self, robot_id: str) -> str:
         """Return the prim path of the robot's stored mount link.
