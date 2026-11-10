@@ -2,12 +2,13 @@
 """The lidar registry: the orchestration layer behind the lidar HTTP routes.
 
 ``LidarService`` is the sensor counterpart to
-:class:`..services.cameras.CameraService`: an in-memory table mapping
-``lidar_id`` -> :class:`..core.lidar.Lidar`, plus the operations on it -- create
-(wrap/create + bind), look up, delete, list, capture sensor outputs, and
-get/set the lidar's pose and scan configuration.
+:class:`..services.cameras.CameraService`: the
+:class:`.device_registry.DeviceRegistry` mapping ``lidar_id`` ->
+:class:`..core.lidar.Lidar`, plus the operations on it -- create (wrap/create +
+bind), look up, delete, list, capture sensor outputs, and get/set the lidar's pose
+and scan configuration.
 
-It owns mutable state (the device table and the id counter), so exactly one
+It owns mutable state (the device table), so exactly one
 instance is shared across all requests -- :class:`BridgeServer` builds it once
 and stashes it on ``app.state`` for the routers to reach via ``Depends`` (see
 :mod:`..comm.dependencies`).
@@ -25,42 +26,40 @@ azimuth/zenith buffers, plain arrays for scan data.
 import asyncio
 
 from fastapi import HTTPException
+from pxr import Sdf
 
-from ...core.lidar import Lidar
+from ...core.lidar import Lidar, read_scan_config
+from .device_registry import DeviceRegistry
 
 
-class LidarService:
+class LidarService(DeviceRegistry):
     """The lidar registry shared by every request.
 
-    Holds the ``lidar_id`` -> device table and an id counter, and exposes
-    create / get / delete / list, capture, and the pose/config getters and
-    setters. One instance per running bridge.
+    Holds the ``lidar_id`` -> device table and exposes create / get / delete / list,
+    capture, and the pose/config getters and setters. Each lidar's prim stores its id
+    and data types next to the scan configuration the prim already holds, so reopening
+    a saved stage restores the lidar under the same id as it was configured. One
+    instance per running bridge.
     """
 
-    def __init__(self):
-        self._devices = {}  # lidar_id -> Lidar
-        self._id_by_prim = {}  # requested prim_path -> lidar_id (stable on re-create)
-        self._count = 0  # for ids like lidar1, lidar2
-        # prim_path -> asyncio.Lock, serializes concurrent creates of the same prim
-        self._create_locks = {}
+    device_kind = "lidar"
 
-    def clear(self):
-        """Drop every bound lidar (called when the bridge stops or the stage changes)."""
-        for device in self._devices.values():
-            self._safe_destroy(device)
-        self._devices = {}
-        self._id_by_prim = {}
-        self._count = 0
-        self._create_locks = {}
-
-    @staticmethod
-    def _safe_destroy(device):
+    def release_device(self, device):
         """Best-effort ``device.destroy()`` -- swallow errors so teardown (which may
         run after the stage is already gone) never raises."""
         try:
             device.destroy()
         except Exception:  # cleanup must not fail the caller (stage may be gone)
             pass
+
+    async def restore_device(self, prim_path):
+        """Create the lidar at ``prim_path`` from the scan configuration and data types
+        its prim stores."""
+        await self.create_lidar(
+            prim_path,
+            **read_scan_config(prim_path),
+            data_types=self.read_stored_value(prim_path, "data_types"),
+        )
 
     async def create_lidar(
         self,
@@ -83,7 +82,9 @@ class LidarService:
         One lidar per *requested* prim; PUTting the same prim again keeps its
         id but **rebuilds the device with the new config** (range / fov /
         resolution / rotation_rate / data_types / ...), so the response always
-        reflects the request. Ids are 1-based: ``lidar1``, ``lidar2``, ...
+        reflects the request. Ids are 1-based: ``lidar1``, ``lidar2``, ... The id and
+        data types are stored on the prim, which holds the scan configuration itself,
+        so they survive saving and reopening the stage.
         """
         prim_path = prim_path.rstrip("/") or "/"
 
@@ -93,16 +94,7 @@ class LidarService:
         # first. setdefault is synchronous, so concurrent callers land on one Lock.
         lock = self._create_locks.setdefault(prim_path, asyncio.Lock())
         async with lock:
-            existing_id = self._id_by_prim.get(prim_path)
-            if existing_id is None:
-                # Reserve a fresh id synchronously -- before the bind() await below,
-                # which yields the loop. The per-prim lock does NOT serialize creates
-                # of *different* prims, so deferring the increment past the await
-                # would let two of them grab the same lidarN.
-                self._count += 1
-                lidar_id = f"lidar{self._count}"
-            else:
-                lidar_id = existing_id
+            lidar_id = self.allocate_device_id(prim_path)
 
             # Build + bind the NEW device before touching any existing one, so a bad
             # re-PUT (bad config, or a prim that won't bind) leaves the
@@ -127,26 +119,25 @@ class LidarService:
             except Exception as exc:
                 # Bad input value: unknown data_type, or a prim that isn't a
                 # Lidar -- all raised at construction. 400, not the 500 a bare
-                # Exception would otherwise become. Construction has no await,
-                # so rolling back a freshly-reserved id here is race-free.
-                if existing_id is None:
-                    self._count -= 1
+                # Exception would otherwise become.
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             try:
                 await device.bind()
             except RuntimeError as exc:
                 # 422: well-formed request, but the lidar couldn't be brought
                 # up. Free its partial resources.
-                self._safe_destroy(device)
+                self.release_device(device)
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
 
             # Success: commit. Free any prior device for this prim so a re-PUT
             # releases the old one instead of leaking it to the GC.
             previous = self._devices.get(lidar_id)
             if previous is not None and previous is not device:
-                self._safe_destroy(previous)
-            self._id_by_prim[prim_path] = lidar_id  # no-op on re-PUT; commits a fresh id
-            self._devices[lidar_id] = device
+                self.release_device(previous)
+            self.register_device(prim_path, lidar_id, device)
+            self.write_stored_value(
+                prim_path, "data_types", Sdf.ValueTypeNames.TokenArray, device.data_types
+            )
             return {
                 "lidar_id": lidar_id,
                 "prim_path": device.prim_path,
@@ -157,23 +148,6 @@ class LidarService:
         """Info for one registered lidar (id, prim, config), or 404."""
         device = self.get_device(lidar_id)
         return {"lidar_id": lidar_id, "prim_path": device.prim_path, **device.info()}
-
-    def delete_lidar(self, lidar_id):
-        """Unregister the lidar (the USD prim is left in the stage). 404 if unknown."""
-        device = self._devices.get(lidar_id)
-        if device is None:
-            raise HTTPException(status_code=404, detail=f"no lidar registered with id '{lidar_id}'")
-        self._safe_destroy(device)
-        del self._devices[lidar_id]
-        for prim, registered_id in list(self._id_by_prim.items()):
-            if registered_id == lidar_id:
-                del self._id_by_prim[prim]
-                self._create_locks.pop(prim, None)
-        return {"deleted": lidar_id}
-
-    def list_lidars(self):
-        """Return a ``{lidar_id: prim_path}`` map of every registered lidar."""
-        return {lidar_id: device.prim_path for lidar_id, device in self._devices.items()}
 
     # -- capture ---------------------------------------------------------------
 
@@ -404,17 +378,3 @@ class LidarService:
     def is_paused(self, lidar_id):
         """Whether sensor computation is currently paused."""
         return {"paused": self.get_device(lidar_id).is_paused()}
-
-    # -- internals -------------------------------------------------------------
-
-    def get_device(self, lidar_id):
-        """Resolve a ``lidar_id`` to its device object, or 404."""
-        device = self._devices.get(lidar_id)
-        if device is None:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    f"no lidar registered with id '{lidar_id}', call PUT /lidars to create one"
-                ),
-            )
-        return device

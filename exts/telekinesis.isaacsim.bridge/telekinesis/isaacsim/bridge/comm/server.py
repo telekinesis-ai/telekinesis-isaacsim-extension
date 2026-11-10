@@ -53,6 +53,8 @@ import uvicorn
 import fastapi
 from fastapi import responses
 import carb
+import omni.timeline
+import omni.usd
 
 from .services.articulations import ArticulationService
 from .services.asset_library import AssetLibraryService
@@ -71,9 +73,9 @@ class BridgeServer:
     """One FastAPI app serving all articulations; owns the uvicorn start()/stop() lifecycle.
 
     The request logic lives in the services (built and shared in ``_build_app``);
-    this class only runs the server and clears the articulation registry on stop.
-    The services the extension's GUI uses are public, so it drives the same
-    instances the routes do.
+    this class runs the server, clears the device registries on a stage change or a
+    stop, and restores them from a stage that is opened. The services the extension's
+    GUI uses are public, so it drives the same instances the routes do.
     """
 
     articulation_service: ArticulationService
@@ -85,9 +87,14 @@ class BridgeServer:
         """Build the FastAPI app (and its services); call `start()` to begin serving."""
         self._host = host
         self._port = port
-        # Every service holding bound devices, so they are cleared together on a
-        # stage change or a stop. Set by _build_app.
+        # Every service holding bound devices, in restore order, so they are cleared
+        # together on a stage change or a stop. Set by _build_app.
         self._device_services = ()
+        # Set while no restore is running. Each restore replaces it with its own event,
+        # so a cancelled restore that finishes late cannot release requests early.
+        self._device_restore_finished = asyncio.Event()
+        self._device_restore_finished.set()
+        self._restore_task = None
         self._app = self._build_app()
         self._server = None
         self._serve_task = None
@@ -111,21 +118,81 @@ class BridgeServer:
     def reset_devices(self):
         """Drop every bound device while leaving the server running.
 
-        Called when a new stage is opened: the device table holds
-        SingleArticulation handles into the previous stage, which are stale the
-        moment that stage is replaced. Clearing the registry (rather than
-        restarting uvicorn) keeps the port bound and the app alive -- clients
-        just re-PUT their articulations against the new stage.
+        Called when a stage is closed, and before a stage that is opened is restored:
+        the device table holds handles into the previous stage, which are stale the
+        moment that stage is replaced. Clearing the registry (rather than restarting
+        uvicorn) keeps the port bound and the app alive. A restore still running is
+        cancelled, so it cannot register devices into the cleared registries.
         """
+        if self._restore_task is not None:
+            self._restore_task.cancel()
+            self._restore_task = None
+            # Released here: a task cancelled before its first step never runs its finally.
+            self._device_restore_finished.set()
         for service in self._device_services:
             service.clear()
         if self._device_services:
-            carb.log_info("[bridge] cleared device registry (stage changed).")
+            carb.log_info("[bridge] cleared device registry.")
+
+    def restore_devices(self):
+        """Rebuild every device registry from the bridge state the open stage stores.
+
+        Called when a stage is opened. The registries are cleared, the ids the stage
+        stores are reserved at once, and the devices are then restored in the
+        background: surface grippers first, then articulations, which record the
+        assemblies between them, then cameras, lidars, lightbeams and conveyors.
+        Restoring binds devices, which plays the timeline; once every device is
+        restored the timeline is stopped again, unless it was already playing.
+
+        Every request waits until the restore finishes, so no client binds a device
+        that stopping the timeline would invalidate, or is handed an id the stage
+        stores for another prim. A stage that stores no device changes nothing.
+        """
+        self.reset_devices()
+        stage = omni.usd.get_context().get_stage()
+        stored_prim_paths = [
+            (service, service.reserve_stored_ids(stage)) for service in self._device_services
+        ]
+        if not any(prim_paths for _, prim_paths in stored_prim_paths):
+            return
+        restore_finished = asyncio.Event()
+        self._device_restore_finished = restore_finished
+        self._restore_task = asyncio.ensure_future(
+            self._restore_stored_devices(stored_prim_paths, restore_finished)
+        )
+
+    async def _restore_stored_devices(self, stored_prim_paths, restore_finished):
+        """Restore each service's devices, then stop the timeline and release requests.
+
+        Args:
+            stored_prim_paths: ``(service, prim_paths)`` pairs in restore order, as
+                :meth:`restore_devices` reserved them.
+            restore_finished: The event this restore sets when it ends, however it ends.
+        """
+        timeline = omni.timeline.get_timeline_interface()
+        was_playing = timeline.is_playing()
+        try:
+            restored = 0
+            for service, prim_paths in stored_prim_paths:
+                restored += await service.restore_devices(prim_paths)
+            stored = sum(len(prim_paths) for _, prim_paths in stored_prim_paths)
+            carb.log_info(f"[bridge] restored {restored} of the {stored} devices the stage stores.")
+        finally:
+            # A cancelled restore leaves the timeline to the stage event that cancelled it.
+            if self._restore_task is asyncio.current_task():
+                self._restore_task = None
+                if not was_playing:
+                    timeline.stop()
+            restore_finished.set()
+
+    async def _wait_for_device_restore(self):
+        """Hold a request until no device restore is running (see :meth:`restore_devices`)."""
+        while not self._device_restore_finished.is_set():
+            await self._device_restore_finished.wait()
 
     def stop(self):
         """Ask uvicorn to exit and drop every bound device."""
-        for service in self._device_services:
-            service.clear()
+        self.reset_devices()
         if self._server is not None:
             self._server.should_exit = True
             self._server = None
@@ -137,7 +204,10 @@ class BridgeServer:
     def _build_app(self):
         """Construct the FastAPI app: build the shared services, stash them on
         ``app.state`` for the dependency providers, and mount every router."""
-        app = fastapi.FastAPI(title="telekinesis isaac-sim bridge")
+        app = fastapi.FastAPI(
+            title="telekinesis isaac-sim bridge",
+            dependencies=[fastapi.Depends(self._wait_for_device_restore)],
+        )
 
         @app.exception_handler(Exception)
         async def _unhandled_exception_handler(request: fastapi.Request, exc: Exception):
@@ -187,8 +257,8 @@ class BridgeServer:
         self.stage_service = stage_service
         self.surface_gripper_service = surface_gripper_service
         self._device_services = (
-            articulation_service,
             surface_gripper_service,
+            articulation_service,
             camera_service,
             lidar_service,
             lightbeam_service,

@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """The articulation registry: the orchestration layer behind the articulation HTTP routes.
 
-``ArticulationService`` is the in-memory table mapping ``articulation_id`` ->
-:class:`..core.articulation.SingleArticulation`, plus the operations on it: create
-(import + bind), look up, delete, list, drive its joints, query its state /
-limits / driver joint, narrow which joints it drives, and ``assemble_robot``
-(assemble a gripper onto an arm so both share one articulation). There is no robot
-vs gripper device type -- one generic device drives whatever joint subset it is
-pointed at; the robot/gripper semantics live in the client.
+``ArticulationService`` is the :class:`.device_registry.DeviceRegistry` mapping
+``articulation_id`` -> :class:`..core.articulation.SingleArticulation`, plus the
+operations on it: create (import + bind), look up, delete, list, drive its joints,
+query its state / limits / driver joint, narrow which joints it drives, and
+``assemble_robot`` (assemble a gripper onto an arm so both share one articulation).
+There is no robot vs gripper device type -- one generic device drives whatever joint
+subset it is pointed at; the robot/gripper semantics live in the client.
 
-It owns mutable state (the device table and the id counter), so exactly one
+It owns mutable state (the device table and the assembly records), so exactly one
 instance is shared across all requests -- :class:`BridgeServer` builds it once and
 stashes it on ``app.state`` for the routers to reach via ``Depends`` (see
 :mod:`..comm.dependencies`).
@@ -40,6 +40,7 @@ from ...core.robot_assembler import (
     place_tcp,
 )
 from .asset_library import AssetLibraryService
+from .device_registry import DeviceRegistry
 
 # String attribute on an articulation's prim naming the link tools and prims are mounted
 # onto. Stored in USD so it survives saving the stage and is shared by every client.
@@ -49,13 +50,18 @@ MOUNT_LINK_ATTRIBUTE = "telekinesis:mountLink"
 ASSEMBLY_ROBOT_RELATIONSHIP = "telekinesis:assemblyRobot"
 
 
-class ArticulationService:
+class ArticulationService(DeviceRegistry):
     """The articulation registry shared by every request.
 
-    Holds the ``articulation_id`` -> device table and an id counter, and exposes
+    Holds the ``articulation_id`` -> device table and the assembly records, and exposes
     create / get / delete / list, the generic joint setter and getters, the
     driven-subset setter, the driver-joint discovery getter, and ``assemble_robot``.
     One instance per running bridge.
+
+    Each articulation's prim stores its id and, once narrowed, its driven joints, so
+    reopening a saved stage restores the articulation under the same id, driving the
+    same joints, and a gripper merged onto an arm or a suction gripper bolted onto one
+    as assembled with it.
 
     ``assemble_robot`` accepts either kind of gripper, so this service composes the
     surface gripper registry (the way :class:`..services.prims.PrimService` composes
@@ -63,29 +69,83 @@ class ArticulationService:
     a create names by ``asset_info`` are downloaded through the asset library service.
     """
 
+    device_kind = "articulation"
+
     def __init__(self, surface_gripper_service, asset_library_service: AssetLibraryService):
+        super().__init__()
         self._asset_library_service = asset_library_service
-        self._devices = {}  # articulation_id -> SingleArticulation
-        self._id_by_prim = {}  # requested prim_path -> articulation_id (stable on re-create)
-        self._count = 0  # for ids like articulation1, articulation2
         # arm_id -> {gripper_id, gripper_kind, arm_mount_link, gripper_mount_link}
         self._assemblies = {}
-        # prim_path -> asyncio.Lock, serializes concurrent creates of the same prim
-        self._create_locks = {}
         # arm_id -> asyncio.Lock, serializes concurrent assembles of the same arm
         self._assembly_locks = {}
         self._surface_gripper_service = surface_gripper_service
 
     def clear(self):
-        """Drop every bound device (called when the bridge stops or the stage changes)."""
-        for device in self._devices.values():
-            device.stop_velocity_drive()
-        self._devices = {}
-        self._id_by_prim = {}
-        self._count = 0
+        """Drop every bound device and assembly record, keeping the state the stage stores.
+
+        Called when the bridge stops and when a stage is opened or closed.
+        """
+        super().clear()
         self._assemblies = {}
-        self._create_locks = {}
         self._assembly_locks = {}
+
+    def release_device(self, device):
+        """Stop the velocity drive ``device`` may still be running."""
+        device.stop_velocity_drive()
+
+    async def restore_device(self, prim_path):
+        """Create the articulation at ``prim_path`` and narrow it to the driven joints it stores.
+
+        A gripper merged onto an arm is bound through the arm's articulation, as
+        :meth:`create_articulation` does, so the arm is restored first (see
+        :meth:`restore_devices`). Stored joints the articulation no longer has raise
+        after it is registered, leaving it driving its own joints.
+        """
+        articulation = await self.create_articulation(prim_path, None)
+        driven_joints = self.read_stored_value(prim_path, "driven_joints")
+        if driven_joints:
+            self.set_driven_joints(articulation["articulation_id"], list(driven_joints))
+
+    async def restore_devices(self, prim_paths):
+        """Restore the articulations of ``prim_paths``, arms before the grippers merged onto them.
+
+        Then records every restored suction gripper that is bolted onto a restored arm as
+        assembled with it, so ``assemble_robot`` of the two changes nothing. Called after
+        the surface gripper registry has restored its grippers.
+
+        Returns:
+            How many articulations were restored.
+        """
+        import carb
+
+        stage = self._stage()
+
+        def is_merged_gripper(prim_path):
+            prim = stage.GetPrimAtPath(prim_path)
+            return bool(prim) and any(
+                not arm_link.HasPrefix(prim.GetPath())
+                for arm_link, _, _ in self._mount_joints(prim)
+            )
+
+        restored = await super().restore_devices(sorted(prim_paths, key=is_merged_gripper))
+
+        for gripper_id, gripper_prim_path in self._surface_gripper_service.list_devices().items():
+            try:
+                merge = await self._find_arm_merged_into(gripper_prim_path)
+            except HTTPException as exc:
+                carb.log_warn(
+                    f"[bridge] could not restore the assembly of {gripper_id}: {exc.detail}"
+                )
+                continue
+            if merge is not None:
+                self._assemblies[merge["arm_id"]] = {
+                    "gripper_id": gripper_id,
+                    "gripper_kind": "surface",
+                    "arm_mount_link": merge["arm_link"].name,
+                    "gripper_mount_link": merge["mounted_link"].pathString,
+                    "fixed_joint": merge["fixed_joint"].pathString,
+                }
+        return restored
 
     async def create_articulation(
         self,
@@ -101,10 +161,10 @@ class ArticulationService:
         the same id (and rebinds). We key on the requested path, so a client that
         passes ``urdf_path``/``usd_path``/``asset_info`` defensively gets the same id
         whether the robot had to be loaded or was already in the stage. Ids are 1-based:
-        ``articulation1``,
-        ``articulation2``, ... The bind runs every time: a new client session may
-        follow a timeline stop/replay, which invalidates the cached articulation
-        handle.
+        ``articulation1``, ``articulation2``, ... The id is stored on the prim, so it
+        survives saving and reopening the stage. The bind runs every time: a new client
+        session may follow a timeline stop/replay, which invalidates the cached
+        articulation handle.
 
         ``asset_info`` (``{"category", "manufacturer", "model"}``) names a catalogue
         asset to load when no prim is at ``prim_path``: it is downloaded into the
@@ -156,15 +216,10 @@ class ArticulationService:
 
             merge = await self._find_arm_merged_into(resolved)
 
-            articulation_id = self._id_by_prim.get(prim_path)
-            if articulation_id is None:
-                # The id is taken before the bind awaits, so a concurrent create of
-                # another prim cannot be handed the same one.
-                self._count += 1
-                articulation_id = f"articulation{self._count}"
+            articulation_id = self.allocate_device_id(prim_path)
+            device = self._devices.get(articulation_id)
+            if device is None:
                 device = SingleArticulation(resolved, name=articulation_id)
-            else:
-                device = self._devices[articulation_id]
             try:
                 if merge is None:
                     await device.bind()
@@ -176,14 +231,13 @@ class ArticulationService:
                 # be bound (semantic/runtime failure, not a bad input value).
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
             # Registered only once bound, so a failed create leaves nothing behind.
-            self._devices[articulation_id] = device
-            self._id_by_prim[prim_path] = articulation_id
+            self.register_device(prim_path, articulation_id, device)
             if merge is not None:
                 self._assemblies[merge["arm_id"]] = {
                     "gripper_id": articulation_id,
                     "gripper_kind": "articulated",
-                    "arm_mount_link": merge["arm_mount_link"],
-                    "gripper_mount_link": merge["gripper_mount_link"],
+                    "arm_mount_link": merge["arm_link"].name,
+                    "gripper_mount_link": merge["mounted_link"].name,
                 }
             if mount_link is not None:
                 from pxr import Sdf
@@ -252,40 +306,26 @@ class ArticulationService:
             **device.info(),
         }
 
-    def delete_articulation(self, articulation_id):
+    def delete_device(self, device_id):
         """Unregister the articulation (counterpart to ``create_articulation``).
 
-        Drops the registry binding so the id is no longer known; the USD prim
-        itself is left in the stage. 404 if the id was never registered.
-        """
-        if articulation_id not in self._devices:
-            raise HTTPException(
-                status_code=404,
-                detail=f"no articulation registered with id '{articulation_id}'",
-            )
-        self._devices[articulation_id].stop_velocity_drive()
-        del self._devices[articulation_id]
-        for prim, registered_id in list(self._id_by_prim.items()):
-            if registered_id == articulation_id:
-                del self._id_by_prim[prim]
-                # Drop the create-lock too, or it lingers forever under a prim_path
-                # that no longer maps to anything -- a slow leak for any client that
-                # registers-and-deletes repeatedly (e.g. re-registering after a
-                # stage reload under a fresh id each time).
-                self._create_locks.pop(prim, None)
-        # Forget any assembly this id took part in (as the arm or the gripper), so a
-        # later re-create + assemble of the same pair is not blocked by a stale record.
-        for arm_id, record in list(self._assemblies.items()):
-            if articulation_id in (arm_id, record["gripper_id"]):
-                del self._assemblies[arm_id]
-        self._assembly_locks.pop(articulation_id, None)
-        return {"deleted": articulation_id}
+        Drops the registry binding so the id is no longer known, and the id and driven
+        joints its prim stores; the USD prim itself is left in the stage. Any assembly
+        the articulation took part in, as the arm or the gripper, is forgotten too.
 
-    def list_articulations(self):
-        """Return a ``{articulation_id: prim_path}`` map of every registered articulation."""
-        return {
-            articulation_id: device.prim_path for articulation_id, device in self._devices.items()
-        }
+        Returns:
+            ``{"deleted": device_id}``.
+
+        Raises:
+            HTTPException: 404 if the id was never registered.
+        """
+        response = super().delete_device(device_id)
+        # So a later re-create + assemble of the same pair is not blocked by a stale record.
+        for arm_id, record in list(self._assemblies.items()):
+            if device_id in (arm_id, record["gripper_id"]):
+                del self._assemblies[arm_id]
+        self._assembly_locks.pop(device_id, None)
+        return response
 
     # -- driving + introspection ------------------------------------------------
 
@@ -369,12 +409,21 @@ class ArticulationService:
         return {"limits": self.get_device(articulation_id).get_dof_limits()}
 
     def set_driven_joints(self, articulation_id, joint_names):
-        """Narrow the device's driven joints to ``joint_names``; return its new info."""
+        """Narrow the device's driven joints to ``joint_names``; return its new info.
+
+        The joints are stored on the prim, so the articulation drives the same joints
+        when a saved stage is reopened.
+        """
+        from pxr import Sdf
+
         device = self.get_device(articulation_id)
         try:
             device.set_driven_joints(joint_names)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        self.write_stored_value(
+            device.prim_path, "driven_joints", Sdf.ValueTypeNames.StringArray, device.joint_names
+        )
         return {
             "articulation_id": articulation_id,
             "prim_path": device.prim_path,
@@ -612,8 +661,8 @@ class ArticulationService:
         re-root an already-merged tree). So each completed assembly is recorded
         (``self._assemblies``); a repeat call for the same arm+gripper is a no-op
         that just returns the existing info with ``already_assembled=True``. The
-        record is cleared with the registry when the stage changes, so a fresh stage
-        assembles again.
+        record is cleared with the registry when the stage changes, and rebuilt from
+        the stage when a saved stage with the assembled pair is reopened.
 
         ``mask_collisions`` only applies to a suction gripper (see
         :class:`..comm.models.AssembleRobotRequest`). ``arm_mount_link`` ``None`` means
@@ -734,13 +783,16 @@ class ArticulationService:
 
         The gripper's driven joints are whatever the client already narrowed them to
         (its driver joint); if the client never narrowed them, the driver is
-        discovered here so a single actuated joint is folded in, not every mimic.
+        discovered here so a single actuated joint is folded in, not every mimic. They
+        are stored on the gripper's prim, so a reopened stage restores the narrowing.
 
         ``gripper_mount_link`` may be None: the gripper must be joined at its *base*
         link (the articulation's root), so it is auto-discovered via
         ``get_articulation_base_link_name`` rather than trusting a guessed name -- a
         non-root mount silently corrupts the merge (gripper joints never fold in).
         """
+        from pxr import Sdf
+
         arm = self.get_device(arm_id)
         gripper = self.get_device(gripper_id)
         stage = self._stage()
@@ -769,6 +821,9 @@ class ArticulationService:
         )
 
         await self._bind_assembly(arm, gripper, arm_names, gripper_driven)
+        self.write_stored_value(
+            gripper.prim_path, "driven_joints", Sdf.ValueTypeNames.StringArray, gripper_driven
+        )
 
         return {
             "gripper_id": gripper_id,
@@ -888,26 +943,13 @@ class ArticulationService:
         """Drop any assembly record naming ``gripper_id``, so the pair can be re-assembled.
 
         Called by the surface gripper registry when one of its grippers is deleted;
-        the articulated case is handled inline by ``delete_articulation``. Without
+        the articulated case is handled inline by :meth:`delete_device`. Without
         it, re-creating and re-assembling the same gripper would be refused as
         already assembled and would silently skip the actual assembly.
         """
         for arm_id, record in list(self._assemblies.items()):
             if record["gripper_id"] == gripper_id:
                 del self._assemblies[arm_id]
-
-    def get_device(self, articulation_id):
-        """Resolve an ``articulation_id`` to its device object, or 404."""
-        device = self._devices.get(articulation_id)
-        if device is None:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    f"no articulation registered with id '{articulation_id}', "
-                    "call PUT /articulations to create one"
-                ),
-            )
-        return device
 
     async def find_robot_for_prim(self, prim_path):
         """Return the id of the articulation ``prim_path`` is part of, or ``None``.
@@ -918,7 +960,8 @@ class ArticulationService:
         assembly Xform (one carrying :data:`ASSEMBLY_ROBOT_RELATIONSHIP`) stands for
         the robot it targets, so the assembly and anything else in it count as part of
         that robot. An unregistered prim carrying :data:`MOUNT_LINK_ATTRIBUTE`, such as
-        an articulation in a reopened stage, is registered first.
+        an articulation of a stage saved before the bridge stored device ids, is
+        registered first.
         """
         from pxr import Sdf
 
@@ -977,10 +1020,12 @@ class ArticulationService:
 
         ``RobotAssembler`` merges a gripper by removing its articulation root and
         fixing its mount link to the arm's with a joint named ``MOUNT_JOINT_NAME``
-        under the gripper. A prim holding such a joint whose arm end lies outside it
-        is part of that gripper. Returns ``{"arm_id", "arm_mount_link", "gripper_mount_link"}``,
-        the arm registered if it was not (see :meth:`find_robot_for_prim`), or
-        ``None`` when the prim is part of no merged gripper.
+        under the gripper; a suction gripper is bolted on with the same joint. A prim
+        holding such a joint whose arm end lies outside it is part of that gripper.
+        Returns ``{"arm_id", "arm_link", "mounted_link", "fixed_joint"}``, the last
+        three as ``Sdf.Path``, the arm registered if it was not (see
+        :meth:`find_robot_for_prim`), or ``None`` when the prim is part of no gripper
+        mounted onto an arm.
 
         Raises:
             HTTPException: 422 if the prim holds an arm together with a gripper
@@ -991,12 +1036,7 @@ class ArticulationService:
 
         stage = self._stage()
         prim = stage.GetPrimAtPath(prim_path)
-        for candidate in Usd.PrimRange(prim):
-            if not candidate.GetName().startswith(MOUNT_JOINT_NAME):
-                continue
-            joint = UsdPhysics.Joint(candidate)
-            arm_link = joint.GetBody0Rel().GetTargets()[0]
-            mounted_link = joint.GetBody1Rel().GetTargets()[0]
+        for arm_link, mounted_link, fixed_joint in self._mount_joints(prim):
             if not arm_link.HasPrefix(prim.GetPath()):
                 arm_id = await self.find_robot_for_prim(arm_link.pathString)
                 if arm_id is None:
@@ -1009,8 +1049,9 @@ class ArticulationService:
                     )
                 return {
                     "arm_id": arm_id,
-                    "arm_mount_link": arm_link.name,
-                    "gripper_mount_link": mounted_link.name,
+                    "arm_link": arm_link,
+                    "mounted_link": mounted_link,
+                    "fixed_joint": fixed_joint,
                 }
             # The prim holds both ends. The mounted asset is the largest prim holding
             # the mounted link but not the arm's; one with moving joints is a merged
@@ -1031,6 +1072,25 @@ class ArticulationService:
                     ),
                 )
         return None
+
+    @staticmethod
+    def _mount_joints(prim):
+        """Yield ``(arm_link, mounted_link, fixed_joint)`` per mount joint at or under ``prim``.
+
+        A mount joint is a fixed joint named ``MOUNT_JOINT_NAME`` that assembly or
+        ``mount_prim`` authors under the mounted prim: its ``body0`` is the arm's mount
+        link and its ``body1`` the mounted body. All three are ``Sdf.Path``.
+        """
+        from pxr import Usd, UsdPhysics
+
+        for candidate in Usd.PrimRange(prim):
+            if candidate.GetName().startswith(MOUNT_JOINT_NAME):
+                joint = UsdPhysics.Joint(candidate)
+                yield (
+                    joint.GetBody0Rel().GetTargets()[0],
+                    joint.GetBody1Rel().GetTargets()[0],
+                    candidate.GetPath(),
+                )
 
     @staticmethod
     async def _bind_assembly(arm, gripper, arm_joint_names, gripper_joint_names):

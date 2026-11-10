@@ -1,1815 +1,987 @@
 {
   "urdf/robots/manipulators": [
     {
-      "manufacturer": "abb",
-      "model": "crb15000_5_95",
-      "bundle": "urdf/robots/manipulators/abb/crb15000_5_95.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "CRB 15000-5/0.95",
+      "bundle": "urdf/robots/manipulators/abb/crb15000595.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb1200_5_90",
-      "bundle": "urdf/robots/manipulators/abb/irb1200_5_90.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 1200-5/0.9",
+      "bundle": "urdf/robots/manipulators/abb/irb1200590.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb1200_7_70",
-      "bundle": "urdf/robots/manipulators/abb/irb1200_7_70.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 1200-7/0.7",
+      "bundle": "urdf/robots/manipulators/abb/irb1200770.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb120_3_58",
-      "bundle": "urdf/robots/manipulators/abb/irb120_3_58.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 120-3/0.58",
+      "bundle": "urdf/robots/manipulators/abb/irb120358.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb120t_3_58",
-      "bundle": "urdf/robots/manipulators/abb/irb120t_3_58.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 120T-3/0.58",
+      "bundle": "urdf/robots/manipulators/abb/irb120t358.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb1600_6_12",
-      "bundle": "urdf/robots/manipulators/abb/irb1600_6_12.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 1600-6/1.2",
+      "bundle": "urdf/robots/manipulators/abb/irb1600612.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb1600_8_145",
-      "bundle": "urdf/robots/manipulators/abb/irb1600_8_145.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 1600-8/1.45",
+      "bundle": "urdf/robots/manipulators/abb/irb16008145.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb2400",
+      "manufacturer": "ABB",
+      "model": "IRB 2400",
       "bundle": "urdf/robots/manipulators/abb/irb2400.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb2600_12_165",
-      "bundle": "urdf/robots/manipulators/abb/irb2600_12_165.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 2600-12/1.65",
+      "bundle": "urdf/robots/manipulators/abb/irb260012165.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb4400l_30_243",
-      "bundle": "urdf/robots/manipulators/abb/irb4400l_30_243.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 4400L-30/2.43",
+      "bundle": "urdf/robots/manipulators/abb/irb4400l30243.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb4600_20_250",
-      "bundle": "urdf/robots/manipulators/abb/irb4600_20_250.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 4600-20/2.50",
+      "bundle": "urdf/robots/manipulators/abb/irb460020250.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb4600_40_255",
-      "bundle": "urdf/robots/manipulators/abb/irb4600_40_255.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 4600-40/2.55",
+      "bundle": "urdf/robots/manipulators/abb/irb460040255.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb4600_60_205",
-      "bundle": "urdf/robots/manipulators/abb/irb4600_60_205.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 4600-60/2.05",
+      "bundle": "urdf/robots/manipulators/abb/irb460060205.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb52_7_120",
-      "bundle": "urdf/robots/manipulators/abb/irb52_7_120.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 52-7/1.20",
+      "bundle": "urdf/robots/manipulators/abb/irb527120.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb52_7_145",
-      "bundle": "urdf/robots/manipulators/abb/irb52_7_145.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 52-7/1.45",
+      "bundle": "urdf/robots/manipulators/abb/irb527145.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb5400",
+      "manufacturer": "ABB",
+      "model": "IRB 5400",
       "bundle": "urdf/robots/manipulators/abb/irb5400.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb6600",
+      "manufacturer": "ABB",
+      "model": "IRB 6600",
       "bundle": "urdf/robots/manipulators/abb/irb6600.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb6640_185_280",
-      "bundle": "urdf/robots/manipulators/abb/irb6640_185_280.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "abb",
-      "model": "irb6650s_125_350",
-      "bundle": "urdf/robots/manipulators/abb/irb6650s_125_350.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 6640-185/2.8",
+      "bundle": "urdf/robots/manipulators/abb/irb6640185280.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb6650s_90_390",
-      "bundle": "urdf/robots/manipulators/abb/irb6650s_90_390.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 6650S-125/3.5",
+      "bundle": "urdf/robots/manipulators/abb/irb6650s125350.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb6700_200_260",
-      "bundle": "urdf/robots/manipulators/abb/irb6700_200_260.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 6650S-90/3.9",
+      "bundle": "urdf/robots/manipulators/abb/irb6650s90390.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb6700_235_265",
-      "bundle": "urdf/robots/manipulators/abb/irb6700_235_265.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 6700-200/2.60",
+      "bundle": "urdf/robots/manipulators/abb/irb6700200260.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "abb",
-      "model": "irb7600_150_350",
-      "bundle": "urdf/robots/manipulators/abb/irb7600_150_350.zip",
-      "default_joint_configuration": null,
+      "manufacturer": "ABB",
+      "model": "IRB 6700-235/2.65",
+      "bundle": "urdf/robots/manipulators/abb/irb6700235265.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "agibot",
-      "model": "x1",
-      "bundle": "urdf/robots/manipulators/agibot/x1.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "ABB",
+      "model": "IRB 7600-150/3.5",
+      "bundle": "urdf/robots/manipulators/abb/irb7600150350.zip",
+      "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "agility_robotics",
-      "model": "digit_model",
-      "bundle": "urdf/robots/manipulators/agility_robotics/digit_model.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR10",
+      "bundle": "urdf/robots/manipulators/dobot/cr10.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "allegro_hand_description",
-      "model": "allegro_left_hand",
-      "bundle": "urdf/robots/manipulators/allegro_hand_description/allegro_left_hand.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR10AF",
+      "bundle": "urdf/robots/manipulators/dobot/cr10af.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "allegro_hand_description",
-      "model": "allegro_right_hand",
-      "bundle": "urdf/robots/manipulators/allegro_hand_description/allegro_right_hand.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR12",
+      "bundle": "urdf/robots/manipulators/dobot/cr12.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "anymal_b_simple_description",
-      "model": "anymal",
-      "bundle": "urdf/robots/manipulators/anymal_b_simple_description/anymal.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR16",
+      "bundle": "urdf/robots/manipulators/dobot/cr16.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "anymal_b_simple_description",
-      "model": "anymal-kinova",
-      "bundle": "urdf/robots/manipulators/anymal_b_simple_description/anymal-kinova.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR20",
+      "bundle": "urdf/robots/manipulators/dobot/cr20.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "anymal_c_simple_description",
-      "model": "anymal",
-      "bundle": "urdf/robots/manipulators/anymal_c_simple_description/anymal.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR20AF",
+      "bundle": "urdf/robots/manipulators/dobot/cr20af.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "bitcraze",
-      "model": "architrave",
-      "bundle": "urdf/robots/manipulators/bitcraze/architrave.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR3",
+      "bundle": "urdf/robots/manipulators/dobot/cr3.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "bitcraze",
-      "model": "box",
-      "bundle": "urdf/robots/manipulators/bitcraze/box.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR30H",
+      "bundle": "urdf/robots/manipulators/dobot/cr30h.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "bitcraze",
-      "model": "cf2p",
-      "bundle": "urdf/robots/manipulators/bitcraze/cf2p.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR3AF",
+      "bundle": "urdf/robots/manipulators/dobot/cr3af.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "bitcraze",
-      "model": "cf2x",
-      "bundle": "urdf/robots/manipulators/bitcraze/cf2x.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR5",
+      "bundle": "urdf/robots/manipulators/dobot/cr5.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "bitcraze",
-      "model": "racer",
-      "bundle": "urdf/robots/manipulators/bitcraze/racer.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR5AF",
+      "bundle": "urdf/robots/manipulators/dobot/cr5af.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "boston_dynamics",
-      "model": "spot",
-      "bundle": "urdf/robots/manipulators/boston_dynamics/spot.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR6AL",
+      "bundle": "urdf/robots/manipulators/dobot/cr6al.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "boston_dynamics",
-      "model": "spot_with_arm",
-      "bundle": "urdf/robots/manipulators/boston_dynamics/spot_with_arm.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "CR7",
+      "bundle": "urdf/robots/manipulators/dobot/cr7.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "custom_mobile_robots",
-      "model": "custom_mobile_robot",
-      "bundle": "urdf/robots/manipulators/custom_mobile_robots/custom_mobile_robot.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "manufacturer": "Dobot",
+      "model": "ME6",
+      "bundle": "urdf/robots/manipulators/dobot/me6.zip",
+      "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "epson",
-      "model": "cx4a601s",
+      "manufacturer": "Dobot",
+      "model": "Nova 2",
+      "bundle": "urdf/robots/manipulators/dobot/nova2.zip",
+      "simulation_mount_link": "Link6"
+    },
+    {
+      "manufacturer": "Dobot",
+      "model": "Nova 2S",
+      "bundle": "urdf/robots/manipulators/dobot/nova2s.zip",
+      "simulation_mount_link": "Link6"
+    },
+    {
+      "manufacturer": "Dobot",
+      "model": "Nova 5",
+      "bundle": "urdf/robots/manipulators/dobot/nova5.zip",
+      "simulation_mount_link": "Link6"
+    },
+    {
+      "manufacturer": "Epson",
+      "model": "CX4A-601S",
       "bundle": "urdf/robots/manipulators/epson/cx4a601s.zip",
-      "default_joint_configuration": [
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0
-      ],
       "simulation_mount_link": "j6_link"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "cr35ia",
+      "manufacturer": "Fanuc",
+      "model": "CR-35iA",
       "bundle": "urdf/robots/manipulators/fanuc/cr35ia.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "cr7ia",
+      "manufacturer": "Fanuc",
+      "model": "CR-7iA",
       "bundle": "urdf/robots/manipulators/fanuc/cr7ia.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "cr7ial",
+      "manufacturer": "Fanuc",
+      "model": "CR-7iA/L",
       "bundle": "urdf/robots/manipulators/fanuc/cr7ial.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "crx10ial",
+      "manufacturer": "Fanuc",
+      "model": "CRX-10iA/L",
       "bundle": "urdf/robots/manipulators/fanuc/crx10ial.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200i",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200i",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200i.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200ib",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iB",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200ib.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200ib3l",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iB/3L",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200ib3l.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200ic",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iC",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200ic.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200ic5f",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iC/5F",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200ic5f.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200ic5h",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iC/5H",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200ic5h.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200ic5hs",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iC/5HS",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200ic5hs.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200ic5l",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iC/5L",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200ic5l.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200id",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iD",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200id.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200id4s",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iD/4S",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200id4s.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200id4sc",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iD/4SC",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200id4sc.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200id4sh",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iD/4SH",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200id4sh.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200id7h",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iD/7H",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200id7h.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200id7l",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iD/7L",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200id7l.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "lrmate200id7lc",
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iD/7LC",
       "bundle": "urdf/robots/manipulators/fanuc/lrmate200id7lc.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m10ia",
+      "manufacturer": "Fanuc",
+      "model": "M-10iA",
       "bundle": "urdf/robots/manipulators/fanuc/m10ia.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m10ia7l",
+      "manufacturer": "Fanuc",
+      "model": "M-10iA/7L",
       "bundle": "urdf/robots/manipulators/fanuc/m10ia7l.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m16ib20",
+      "manufacturer": "Fanuc",
+      "model": "M-16iB/20",
       "bundle": "urdf/robots/manipulators/fanuc/m16ib20.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m20ia",
+      "manufacturer": "Fanuc",
+      "model": "M-20iA",
       "bundle": "urdf/robots/manipulators/fanuc/m20ia.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m20ia10l",
+      "manufacturer": "Fanuc",
+      "model": "M-20iA/10L",
       "bundle": "urdf/robots/manipulators/fanuc/m20ia10l.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m20ib25",
+      "manufacturer": "Fanuc",
+      "model": "M-20iB/25",
       "bundle": "urdf/robots/manipulators/fanuc/m20ib25.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m430ia2f",
+      "manufacturer": "Fanuc",
+      "model": "M-430iA/2F",
       "bundle": "urdf/robots/manipulators/fanuc/m430ia2f.zip",
-      "default_joint_configuration": [
-        0.0,
-        0.0,
-        90.0,
-        0.0,
-        0.0
-      ],
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m430ia2p",
+      "manufacturer": "Fanuc",
+      "model": "M-430iA/2P",
       "bundle": "urdf/robots/manipulators/fanuc/m430ia2p.zip",
-      "default_joint_configuration": [
-        0.0,
-        0.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m6ib",
+      "manufacturer": "Fanuc",
+      "model": "M-6iB",
       "bundle": "urdf/robots/manipulators/fanuc/m6ib.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m6ib6s",
+      "manufacturer": "Fanuc",
+      "model": "M-6iB/6S",
       "bundle": "urdf/robots/manipulators/fanuc/m6ib6s.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m710ic45m",
+      "manufacturer": "Fanuc",
+      "model": "M-710iC/45M",
       "bundle": "urdf/robots/manipulators/fanuc/m710ic45m.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m710ic50",
+      "manufacturer": "Fanuc",
+      "model": "M-710iC/50",
       "bundle": "urdf/robots/manipulators/fanuc/m710ic50.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m900ia260l",
+      "manufacturer": "Fanuc",
+      "model": "M-900iA/260L",
       "bundle": "urdf/robots/manipulators/fanuc/m900ia260l.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "m900ib700",
+      "manufacturer": "Fanuc",
+      "model": "M-900iB/700",
       "bundle": "urdf/robots/manipulators/fanuc/m900ib700.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "r1000ia80f",
+      "manufacturer": "Fanuc",
+      "model": "R-1000iA/80F",
       "bundle": "urdf/robots/manipulators/fanuc/r1000ia80f.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "r2000ib210f",
+      "manufacturer": "Fanuc",
+      "model": "R-2000iB/210F",
       "bundle": "urdf/robots/manipulators/fanuc/r2000ib210f.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "r2000ic125l",
+      "manufacturer": "Fanuc",
+      "model": "R-2000iC/125L",
       "bundle": "urdf/robots/manipulators/fanuc/r2000ic125l.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "r2000ic165f",
+      "manufacturer": "Fanuc",
+      "model": "R-2000iC/165F",
       "bundle": "urdf/robots/manipulators/fanuc/r2000ic165f.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "r2000ic210f",
+      "manufacturer": "Fanuc",
+      "model": "R-2000iC/210F",
       "bundle": "urdf/robots/manipulators/fanuc/r2000ic210f.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "r2000ic210l",
+      "manufacturer": "Fanuc",
+      "model": "R-2000iC/210L",
       "bundle": "urdf/robots/manipulators/fanuc/r2000ic210l.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "fanuc",
-      "model": "r2000ic270f",
+      "manufacturer": "Fanuc",
+      "model": "R-2000iC/270F",
       "bundle": "urdf/robots/manipulators/fanuc/r2000ic270f.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "franka_robotics",
-      "model": "panda",
+      "manufacturer": "Franka Robotics",
+      "model": "Panda",
       "bundle": "urdf/robots/manipulators/franka_robotics/panda.zip",
-      "default_joint_configuration": [
-        0.0,
-        -45.0,
-        0.0,
-        -135.0,
-        0.0,
-        180.0,
-        45.0,
-        1.145916,
-        1.145916
-      ],
       "simulation_mount_link": null
     },
     {
-      "manufacturer": "google",
-      "model": "barkour_v0",
-      "bundle": "urdf/robots/manipulators/google/barkour_v0.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "google",
-      "model": "barkour_vb_rev_1_0_head_straight",
-      "bundle": "urdf/robots/manipulators/google/barkour_vb_rev_1_0_head_straight.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "hector_description",
-      "model": "quadrotor_base",
-      "bundle": "urdf/robots/manipulators/hector_description/quadrotor_base.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "husky_description",
-      "model": "clearpathHusky",
-      "bundle": "urdf/robots/manipulators/husky_description/clearpathHusky.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "idealworks",
-      "model": "iw_hub",
-      "bundle": "urdf/robots/manipulators/idealworks/iw_hub.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "kuka",
-      "model": "kr10r1100sixx",
+      "manufacturer": "KUKA",
+      "model": "KR 10 R1100 sixx",
       "bundle": "urdf/robots/manipulators/kuka/kr10r1100sixx.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "kr10r1420",
+      "manufacturer": "KUKA",
+      "model": "KR 10 R1420",
       "bundle": "urdf/robots/manipulators/kuka/kr10r1420.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "kr10r900_2",
-      "bundle": "urdf/robots/manipulators/kuka/kr10r900_2.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
+      "manufacturer": "KUKA",
+      "model": "KR 10 R900-2",
+      "bundle": "urdf/robots/manipulators/kuka/kr10r9002.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "kr120r2500pro",
+      "manufacturer": "KUKA",
+      "model": "KR 120 R2500 PRO",
       "bundle": "urdf/robots/manipulators/kuka/kr120r2500pro.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "kr150_2",
-      "bundle": "urdf/robots/manipulators/kuka/kr150_2.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
+      "manufacturer": "KUKA",
+      "model": "KR 150-2",
+      "bundle": "urdf/robots/manipulators/kuka/kr1502.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "kr150r3100_2",
-      "bundle": "urdf/robots/manipulators/kuka/kr150r3100_2.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
+      "manufacturer": "KUKA",
+      "model": "KR 150 R3100-2",
+      "bundle": "urdf/robots/manipulators/kuka/kr150r31002.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "kr16_2",
-      "bundle": "urdf/robots/manipulators/kuka/kr16_2.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
+      "manufacturer": "KUKA",
+      "model": "KR 16-2",
+      "bundle": "urdf/robots/manipulators/kuka/kr162.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "kr210l150",
+      "manufacturer": "KUKA",
+      "model": "KR 210 L150",
       "bundle": "urdf/robots/manipulators/kuka/kr210l150.zip",
-      "default_joint_configuration": null,
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "kr3r540",
+      "manufacturer": "KUKA",
+      "model": "KR 3 R540",
       "bundle": "urdf/robots/manipulators/kuka/kr3r540.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "kr5_arc",
-      "bundle": "urdf/robots/manipulators/kuka/kr5_arc.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
+      "manufacturer": "KUKA",
+      "model": "KR 5 arc",
+      "bundle": "urdf/robots/manipulators/kuka/kr5arc.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "kr6r700sixx",
+      "manufacturer": "KUKA",
+      "model": "KR 6 R700 sixx",
       "bundle": "urdf/robots/manipulators/kuka/kr6r700sixx.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "kr6r900_2",
-      "bundle": "urdf/robots/manipulators/kuka/kr6r900_2.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
+      "manufacturer": "KUKA",
+      "model": "KR 6 R900-2",
+      "bundle": "urdf/robots/manipulators/kuka/kr6r9002.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "kr6r900sixx",
+      "manufacturer": "KUKA",
+      "model": "KR 6 R900 sixx",
       "bundle": "urdf/robots/manipulators/kuka/kr6r900sixx.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "kuka",
-      "model": "lbr_iiwa_14_r820",
-      "bundle": "urdf/robots/manipulators/kuka/lbr_iiwa_14_r820.zip",
-      "default_joint_configuration": [
-        0.0,
-        0.0,
-        0.0,
-        -45.0,
-        0.0,
-        45.0,
-        0.0
-      ],
+      "manufacturer": "KUKA",
+      "model": "LBR iiwa 14 R820",
+      "bundle": "urdf/robots/manipulators/kuka/lbriiwa14r820.zip",
       "simulation_mount_link": "link_6"
     },
     {
-      "manufacturer": "motoman",
-      "model": "bmda3",
-      "bundle": "urdf/robots/manipulators/motoman/bmda3.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "motoman",
-      "model": "bmda3_w_effs",
-      "bundle": "urdf/robots/manipulators/motoman/bmda3_w_effs.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "motoman",
-      "model": "mh5",
+      "manufacturer": "Yaskawa",
+      "model": "MH5",
       "bundle": "urdf/robots/manipulators/motoman/mh5.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "simulation_mount_link": "link_t"
     },
     {
-      "manufacturer": "motoman",
-      "model": "sia10d",
+      "manufacturer": "Yaskawa",
+      "model": "SIA10D",
       "bundle": "urdf/robots/manipulators/motoman/sia10d.zip",
-      "default_joint_configuration": [
-        0.0,
-        0.0,
-        0.0,
-        -45.0,
-        0.0,
-        -45.0,
-        0.0
-      ],
-      "simulation_mount_link": null
+      "simulation_mount_link": "link_t"
     },
     {
-      "manufacturer": "motoman",
-      "model": "sia10f",
+      "manufacturer": "Yaskawa",
+      "model": "SIA10F",
       "bundle": "urdf/robots/manipulators/motoman/sia10f.zip",
-      "default_joint_configuration": [
-        0.0,
-        0.0,
-        0.0,
-        -45.0,
-        0.0,
-        -45.0,
-        0.0
-      ],
-      "simulation_mount_link": null
+      "simulation_mount_link": "link_t"
     },
     {
-      "manufacturer": "motoman",
-      "model": "sia20d",
+      "manufacturer": "Yaskawa",
+      "model": "SIA20D",
       "bundle": "urdf/robots/manipulators/motoman/sia20d.zip",
-      "default_joint_configuration": [
-        0.0,
-        0.0,
-        0.0,
-        -45.0,
-        0.0,
-        -45.0,
-        0.0
-      ],
-      "simulation_mount_link": null
+      "simulation_mount_link": "link_t"
     },
     {
-      "manufacturer": "motoman",
-      "model": "sia5d",
+      "manufacturer": "Yaskawa",
+      "model": "SIA5D",
       "bundle": "urdf/robots/manipulators/motoman/sia5d.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
+      "simulation_mount_link": "link_t"
     },
     {
-      "manufacturer": "nasa",
-      "model": "forearm_left",
-      "bundle": "urdf/robots/manipulators/nasa/forearm_left.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "forearm_right",
-      "bundle": "urdf/robots/manipulators/nasa/forearm_right.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "imu_test",
-      "bundle": "urdf/robots/manipulators/nasa/imu_test.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2_left_forearm",
-      "bundle": "urdf/robots/manipulators/nasa/r2_left_forearm.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2_left_gripper",
-      "bundle": "urdf/robots/manipulators/nasa/r2_left_gripper.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2b",
-      "bundle": "urdf/robots/manipulators/nasa/r2b.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2b_control",
-      "bundle": "urdf/robots/manipulators/nasa/r2b_control.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2b_dynamics",
-      "bundle": "urdf/robots/manipulators/nasa/r2b_dynamics.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2b_sim_upperbody_control.urdf",
-      "bundle": "urdf/robots/manipulators/nasa/r2b_sim_upperbody_control.urdf.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2b_sim_upperbody_dynamics.urdf",
-      "bundle": "urdf/robots/manipulators/nasa/r2b_sim_upperbody_dynamics.urdf.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c1",
-      "bundle": "urdf/robots/manipulators/nasa/r2c1.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c1_control",
-      "bundle": "urdf/robots/manipulators/nasa/r2c1_control.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c1_dynamics",
-      "bundle": "urdf/robots/manipulators/nasa/r2c1_dynamics.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c5",
-      "bundle": "urdf/robots/manipulators/nasa/r2c5.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c5_control",
-      "bundle": "urdf/robots/manipulators/nasa/r2c5_control.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c5_dynamics",
-      "bundle": "urdf/robots/manipulators/nasa/r2c5_dynamics.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c6",
-      "bundle": "urdf/robots/manipulators/nasa/r2c6.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c6_control",
-      "bundle": "urdf/robots/manipulators/nasa/r2c6_control.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c6_dynamics",
-      "bundle": "urdf/robots/manipulators/nasa/r2c6_dynamics.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c6_valve",
-      "bundle": "urdf/robots/manipulators/nasa/r2c6_valve.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c_sim_full_control.urdf",
-      "bundle": "urdf/robots/manipulators/nasa/r2c_sim_full_control.urdf.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c_sim_full_dynamics.urdf",
-      "bundle": "urdf/robots/manipulators/nasa/r2c_sim_full_dynamics.urdf.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c_sim_legs_control.urdf",
-      "bundle": "urdf/robots/manipulators/nasa/r2c_sim_legs_control.urdf.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c_sim_legs_dynamics.urdf",
-      "bundle": "urdf/robots/manipulators/nasa/r2c_sim_legs_dynamics.urdf.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c_sim_upperbody_control.urdf",
-      "bundle": "urdf/robots/manipulators/nasa/r2c_sim_upperbody_control.urdf.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "r2c_sim_upperbody_dynamics.urdf",
-      "bundle": "urdf/robots/manipulators/nasa/r2c_sim_upperbody_dynamics.urdf.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "test_bench",
-      "bundle": "urdf/robots/manipulators/nasa/test_bench.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "valkyrie_A",
-      "bundle": "urdf/robots/manipulators/nasa/valkyrie_A.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "valkyrie_A_arm_mass_sims",
-      "bundle": "urdf/robots/manipulators/nasa/valkyrie_A_arm_mass_sims.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "valkyrie_B",
-      "bundle": "urdf/robots/manipulators/nasa/valkyrie_B.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "valkyrie_B_arm_mass_sims",
-      "bundle": "urdf/robots/manipulators/nasa/valkyrie_B_arm_mass_sims.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "valkyrie_C",
-      "bundle": "urdf/robots/manipulators/nasa/valkyrie_C.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "valkyrie_C_arm_mass_sims",
-      "bundle": "urdf/robots/manipulators/nasa/valkyrie_C_arm_mass_sims.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "valkyrie_D",
-      "bundle": "urdf/robots/manipulators/nasa/valkyrie_D.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "valkyrie_D_arm_mass_sims",
-      "bundle": "urdf/robots/manipulators/nasa/valkyrie_D_arm_mass_sims.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "valkyrie_sim",
-      "bundle": "urdf/robots/manipulators/nasa/valkyrie_sim.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "valkyrie_sim_angled_legj1s",
-      "bundle": "urdf/robots/manipulators/nasa/valkyrie_sim_angled_legj1s.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "valkyrie_sim_arm_mass_sims",
-      "bundle": "urdf/robots/manipulators/nasa/valkyrie_sim_arm_mass_sims.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "nasa",
-      "model": "valkyrie_sim_gazebo_sync",
-      "bundle": "urdf/robots/manipulators/nasa/valkyrie_sim_gazebo_sync.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "neura_robotics",
-      "model": "lara3",
+      "manufacturer": "NEURA Robotics",
+      "model": "LARA 3",
       "bundle": "urdf/robots/manipulators/neura_robotics/lara3.zip",
-      "default_joint_configuration": [
-        0.0,
-        0.0,
-        0.0,
-        90.0,
-        0.0,
-        0.0
-      ],
       "simulation_mount_link": "lara3_link6"
     },
     {
-      "manufacturer": "neura_robotics",
-      "model": "lara8",
+      "manufacturer": "NEURA Robotics",
+      "model": "LARA 8",
       "bundle": "urdf/robots/manipulators/neura_robotics/lara8.zip",
-      "default_joint_configuration": [
-        0.0,
-        0.0,
-        0.0,
-        90.0,
-        0.0,
-        0.0
-      ],
       "simulation_mount_link": "lara8_link6"
     },
     {
-      "manufacturer": "neura_robotics",
-      "model": "maira7M",
-      "bundle": "urdf/robots/manipulators/neura_robotics/maira7M.zip",
-      "default_joint_configuration": [
-        0.0,
-        0.0,
-        0.0,
-        90.0,
-        0.0,
-        0.0,
-        0.0
-      ],
+      "manufacturer": "NEURA Robotics",
+      "model": "MAiRA M",
+      "bundle": "urdf/robots/manipulators/neura_robotics/maira7m.zip",
       "simulation_mount_link": "maira7M_link7"
     },
     {
-      "manufacturer": "pal_robotics",
-      "model": "solo",
-      "bundle": "urdf/robots/manipulators/pal_robotics/solo.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "pal_robotics",
-      "model": "solo12",
-      "bundle": "urdf/robots/manipulators/pal_robotics/solo12.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "pal_robotics",
-      "model": "talos_full_v2",
-      "bundle": "urdf/robots/manipulators/pal_robotics/talos_full_v2.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "pal_robotics",
-      "model": "talos_full_v2_box",
-      "bundle": "urdf/robots/manipulators/pal_robotics/talos_full_v2_box.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "pal_robotics",
-      "model": "talos_left_arm",
-      "bundle": "urdf/robots/manipulators/pal_robotics/talos_left_arm.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "pal_robotics",
-      "model": "talos_reduced",
-      "bundle": "urdf/robots/manipulators/pal_robotics/talos_reduced.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "pal_robotics",
-      "model": "talos_reduced_box",
-      "bundle": "urdf/robots/manipulators/pal_robotics/talos_reduced_box.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "pal_robotics",
-      "model": "talos_reduced_corrected",
-      "bundle": "urdf/robots/manipulators/pal_robotics/talos_reduced_corrected.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "pal_robotics",
-      "model": "tiago",
-      "bundle": "urdf/robots/manipulators/pal_robotics/tiago.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "pal_robotics",
-      "model": "tiago_dual",
-      "bundle": "urdf/robots/manipulators/pal_robotics/tiago_dual.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "pal_robotics",
-      "model": "tiago_no_hand",
-      "bundle": "urdf/robots/manipulators/pal_robotics/tiago_no_hand.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "simple_humanoid_description",
-      "model": "simple_humanoid",
-      "bundle": "urdf/robots/manipulators/simple_humanoid_description/simple_humanoid.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "simple_humanoid_description",
-      "model": "simple_humanoid_classical",
-      "bundle": "urdf/robots/manipulators/simple_humanoid_description/simple_humanoid_classical.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "a1",
-      "bundle": "urdf/robots/manipulators/unitree/a1.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "aliengo",
-      "bundle": "urdf/robots/manipulators/unitree/aliengo.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "b1",
-      "bundle": "urdf/robots/manipulators/unitree/b1.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "b1-z1",
-      "bundle": "urdf/robots/manipulators/unitree/b1-z1.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "b2_description",
-      "bundle": "urdf/robots/manipulators/unitree/b2_description.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "b2w_description",
-      "bundle": "urdf/robots/manipulators/unitree/b2w_description.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "dex3_1_l",
-      "bundle": "urdf/robots/manipulators/unitree/dex3_1_l.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "dex3_1_r",
-      "bundle": "urdf/robots/manipulators/unitree/dex3_1_r.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "g1_23dof",
-      "bundle": "urdf/robots/manipulators/unitree/g1_23dof.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "g1_23dof_rev_1_0",
-      "bundle": "urdf/robots/manipulators/unitree/g1_23dof_rev_1_0.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "g1_29dof",
-      "bundle": "urdf/robots/manipulators/unitree/g1_29dof.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "g1_29dof_lock_waist",
-      "bundle": "urdf/robots/manipulators/unitree/g1_29dof_lock_waist.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "g1_29dof_lock_waist_rev_1_0",
-      "bundle": "urdf/robots/manipulators/unitree/g1_29dof_lock_waist_rev_1_0.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "g1_29dof_rev_1_0",
-      "bundle": "urdf/robots/manipulators/unitree/g1_29dof_rev_1_0.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "g1_29dof_with_hand",
-      "bundle": "urdf/robots/manipulators/unitree/g1_29dof_with_hand.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "g1_29dof_with_hand_rev_1_0",
-      "bundle": "urdf/robots/manipulators/unitree/g1_29dof_with_hand_rev_1_0.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "g1_dual_arm",
-      "bundle": "urdf/robots/manipulators/unitree/g1_dual_arm.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "go1",
-      "bundle": "urdf/robots/manipulators/unitree/go1.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "go2",
-      "bundle": "urdf/robots/manipulators/unitree/go2.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "go2_description",
-      "bundle": "urdf/robots/manipulators/unitree/go2_description.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "go2w_description",
-      "bundle": "urdf/robots/manipulators/unitree/go2w_description.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "h1",
-      "bundle": "urdf/robots/manipulators/unitree/h1.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "h1_2",
-      "bundle": "urdf/robots/manipulators/unitree/h1_2.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "h1_2_handless",
-      "bundle": "urdf/robots/manipulators/unitree/h1_2_handless.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "h1_with_hand",
-      "bundle": "urdf/robots/manipulators/unitree/h1_with_hand.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "unitree",
-      "model": "z1",
-      "bundle": "urdf/robots/manipulators/unitree/z1.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "universal_robots",
-      "model": "ur10",
+      "manufacturer": "Universal Robots",
+      "model": "UR10",
       "bundle": "urdf/robots/manipulators/universal_robots/ur10.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        -90.0,
-        0.0,
-        90.0,
-        0.0
-      ],
       "simulation_mount_link": "wrist_3_link"
     },
     {
-      "manufacturer": "universal_robots",
-      "model": "ur10e",
-      "bundle": "usd/robots/manipulators/universal_robots/ur10e.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        -90.0,
-        0.0,
-        90.0,
-        0.0
-      ],
+      "manufacturer": "Universal Robots",
+      "model": "UR10e",
+      "bundle": "urdf/robots/manipulators/universal_robots/ur10e.zip",
       "simulation_mount_link": "wrist_3_link"
     },
     {
-      "manufacturer": "universal_robots",
-      "model": "ur10e_factory_calibration",
-      "bundle": "urdf/robots/manipulators/universal_robots/ur10e_factory_calibration.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "universal_robots",
-      "model": "ur10e_new_factory_calibration",
-      "bundle": "urdf/robots/manipulators/universal_robots/ur10e_new_factory_calibration.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "universal_robots",
-      "model": "ur12e",
+      "manufacturer": "Universal Robots",
+      "model": "UR12e",
       "bundle": "urdf/robots/manipulators/universal_robots/ur12e.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        -90.0,
-        0.0,
-        90.0,
-        0.0
-      ],
       "simulation_mount_link": "wrist_3_link"
     },
     {
-      "manufacturer": "universal_robots",
-      "model": "ur15",
+      "manufacturer": "Universal Robots",
+      "model": "UR15",
       "bundle": "urdf/robots/manipulators/universal_robots/ur15.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        -90.0,
-        0.0,
-        90.0,
-        0.0
-      ],
       "simulation_mount_link": "wrist_3_link"
     },
     {
-      "manufacturer": "universal_robots",
-      "model": "ur16e",
+      "manufacturer": "Universal Robots",
+      "model": "UR16e",
       "bundle": "urdf/robots/manipulators/universal_robots/ur16e.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        -90.0,
-        0.0,
-        90.0,
-        0.0
-      ],
       "simulation_mount_link": "wrist_3_link"
     },
     {
-      "manufacturer": "universal_robots",
-      "model": "ur20",
+      "manufacturer": "Universal Robots",
+      "model": "UR20",
       "bundle": "urdf/robots/manipulators/universal_robots/ur20.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        -90.0,
-        0.0,
-        90.0,
-        0.0
-      ],
       "simulation_mount_link": "wrist_3_link"
     },
     {
-      "manufacturer": "universal_robots",
-      "model": "ur3",
+      "manufacturer": "Universal Robots",
+      "model": "UR3",
       "bundle": "urdf/robots/manipulators/universal_robots/ur3.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        -90.0,
-        0.0,
-        90.0,
-        0.0
-      ],
       "simulation_mount_link": "wrist_3_link"
     },
     {
-      "manufacturer": "universal_robots",
-      "model": "ur30",
+      "manufacturer": "Universal Robots",
+      "model": "UR30",
       "bundle": "urdf/robots/manipulators/universal_robots/ur30.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        -90.0,
-        0.0,
-        90.0,
-        0.0
-      ],
       "simulation_mount_link": "wrist_3_link"
     },
     {
-      "manufacturer": "universal_robots",
-      "model": "ur3e",
+      "manufacturer": "Universal Robots",
+      "model": "UR3e",
       "bundle": "urdf/robots/manipulators/universal_robots/ur3e.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        -90.0,
-        0.0,
-        90.0,
-        0.0
-      ],
       "simulation_mount_link": "wrist_3_link"
     },
     {
-      "manufacturer": "universal_robots",
-      "model": "ur5",
+      "manufacturer": "Universal Robots",
+      "model": "UR5",
       "bundle": "urdf/robots/manipulators/universal_robots/ur5.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        -90.0,
-        0.0,
-        90.0,
-        0.0
-      ],
       "simulation_mount_link": "wrist_3_link"
     },
     {
-      "manufacturer": "universal_robots",
-      "model": "ur5_robotiq_2f_85",
-      "bundle": "urdf/robots/manipulators/universal_robots/ur5_robotiq_2f_85.zip",
-      "default_joint_configuration": null,
-      "simulation_mount_link": null
-    },
-    {
-      "manufacturer": "universal_robots",
-      "model": "ur5e",
+      "manufacturer": "Universal Robots",
+      "model": "UR5e",
       "bundle": "urdf/robots/manipulators/universal_robots/ur5e.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        -90.0,
-        0.0,
-        90.0,
-        0.0
-      ],
       "simulation_mount_link": "wrist_3_link"
     },
     {
-      "manufacturer": "universal_robots",
-      "model": "ur7e",
+      "manufacturer": "Universal Robots",
+      "model": "UR7e",
       "bundle": "urdf/robots/manipulators/universal_robots/ur7e.zip",
-      "default_joint_configuration": [
-        0.0,
-        -90.0,
-        -90.0,
-        0.0,
-        90.0,
-        0.0
-      ],
       "simulation_mount_link": "wrist_3_link"
     }
   ],
   "urdf/tools/parallel_grippers": [
     {
-      "manufacturer": "onrobot",
-      "model": "onrobotrg2",
+      "manufacturer": "OnRobot",
+      "model": "RG2",
       "bundle": "urdf/tools/parallel_grippers/onrobot/onrobotrg2.zip"
     },
     {
-      "manufacturer": "onrobot",
-      "model": "onrobotrg6",
+      "manufacturer": "OnRobot",
+      "model": "RG6",
       "bundle": "urdf/tools/parallel_grippers/onrobot/onrobotrg6.zip"
     },
     {
-      "manufacturer": "robotiq",
-      "model": "robotiq2f140",
+      "manufacturer": "Robotiq",
+      "model": "2F-140",
       "bundle": "urdf/tools/parallel_grippers/robotiq/robotiq2f140.zip"
     },
     {
-      "manufacturer": "robotiq",
-      "model": "robotiq2f85",
+      "manufacturer": "Robotiq",
+      "model": "2F-85",
       "bundle": "urdf/tools/parallel_grippers/robotiq/robotiq2f85.zip"
     },
     {
-      "manufacturer": "robotiq",
-      "model": "robotiqhande",
-      "bundle": "usd/tools/parallel_grippers/robotiq/Robotiq_Hand_E.zip"
+      "manufacturer": "Robotiq",
+      "model": "Hand-E",
+      "bundle": "urdf/tools/parallel_grippers/robotiq/robotiqhande.zip"
     },
     {
-      "manufacturer": "schunk",
-      "model": "schunkegp",
+      "manufacturer": "SCHUNK",
+      "model": "EGP",
       "bundle": "urdf/tools/parallel_grippers/schunk/schunkegp.zip"
     },
     {
-      "manufacturer": "schunk",
-      "model": "schunkegu50",
+      "manufacturer": "SCHUNK",
+      "model": "EGU 50",
       "bundle": "urdf/tools/parallel_grippers/schunk/schunkegu50.zip"
     },
     {
-      "manufacturer": "schunk",
-      "model": "schunkpznplus",
+      "manufacturer": "SCHUNK",
+      "model": "PZN-plus",
       "bundle": "urdf/tools/parallel_grippers/schunk/schunkpznplus.zip"
     },
     {
-      "manufacturer": "schunk",
-      "model": "schunkpzv64",
+      "manufacturer": "SCHUNK",
+      "model": "PZV 64",
       "bundle": "urdf/tools/parallel_grippers/schunk/schunkpzv64.zip"
+    }
+  ],
+  "urdf/tools/suction_grippers": [
+    {
+      "manufacturer": "Piab",
+      "model": "piCOBOT Electric",
+      "bundle": "urdf/tools/suction_grippers/piab/piabpicobotelectric.zip"
     }
   ],
   "usd/attachments": [
     {
       "manufacturer": null,
-      "model": "realsense_regular_mount",
+      "model": "realsense regular mount",
       "bundle": "usd/attachments/realsense_regular_mount.zip"
     }
   ],
-  "usd/cameras": [
+  "usd/cameras/RealSense": [
     {
       "manufacturer": null,
-      "model": "D405_IsaacSim",
-      "bundle": "usd/cameras/D405_IsaacSim.zip"
+      "model": "D405",
+      "bundle": "usd/cameras/RealSense/D405.zip"
     }
   ],
   "usd/conveyors": [
     {
       "manufacturer": null,
-      "model": "simple_conveyor",
+      "model": "simple conveyor",
       "bundle": "usd/conveyors/simple_conveyor.zip"
     }
   ],
   "usd/environments/assembly": [
     {
       "manufacturer": null,
-      "model": "automotive_assembly",
+      "model": "automotive assembly",
       "bundle": "usd/environments/assembly/automotive_assembly.zip"
     }
   ],
   "usd/environments/bin_picking": [
     {
       "manufacturer": null,
-      "model": "bin_picking_scene",
+      "model": "bin picking scene",
       "bundle": "usd/environments/bin_picking/bin_picking_scene.zip"
     }
   ],
   "usd/environments/machine_tending": [
     {
       "manufacturer": null,
-      "model": "cnc_machine_tending",
+      "model": "cnc machine tending",
       "bundle": "usd/environments/machine_tending/cnc_machine_tending.zip"
     }
   ],
   "usd/environments/palletizing": [
     {
       "manufacturer": null,
-      "model": "palletizing_rough_scene",
+      "model": "palletizing rough scene",
       "bundle": "usd/environments/palletizing/palletizing_rough_scene.zip"
     }
   ],
   "usd/environments/welding": [
     {
       "manufacturer": null,
-      "model": "spot_welding_automotive",
+      "model": "spot welding automotive",
       "bundle": "usd/environments/welding/spot_welding_automotive.zip"
     },
     {
       "manufacturer": null,
-      "model": "stationary_spot_welding_scene",
+      "model": "stationary spot welding scene",
       "bundle": "usd/environments/welding/stationary_spot_welding_scene.zip"
     }
   ],
   "usd/machines": [
     {
       "manufacturer": null,
-      "model": "cnc_machine",
+      "model": "cnc machine",
       "bundle": "usd/machines/cnc_machine.zip"
+    }
+  ],
+  "usd/robots/manipulators": [
+    {
+      "manufacturer": "Fanuc",
+      "model": "CRX-10iA/L",
+      "bundle": "usd/robots/manipulators/fanuc/crx10ial.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iD",
+      "bundle": "usd/robots/manipulators/fanuc/lrmate200id.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iD/4S",
+      "bundle": "usd/robots/manipulators/fanuc/lrmate200id4s.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iD/7L",
+      "bundle": "usd/robots/manipulators/fanuc/lrmate200id7l.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "LR Mate 200iD/7LC",
+      "bundle": "usd/robots/manipulators/fanuc/lrmate200id7lc.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "M-710iC/45M",
+      "bundle": "usd/robots/manipulators/fanuc/m710ic45m.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "M-710iC/50",
+      "bundle": "usd/robots/manipulators/fanuc/m710ic50.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "M-900iB/700E",
+      "bundle": "usd/robots/manipulators/fanuc/m900ib700e.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "R-1000iA/80F",
+      "bundle": "usd/robots/manipulators/fanuc/r1000ia80f.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "R-2000iC/125L",
+      "bundle": "usd/robots/manipulators/fanuc/r2000ic125l.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "R-2000iC/165F",
+      "bundle": "usd/robots/manipulators/fanuc/r2000ic165f.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "R-2000iC/210F",
+      "bundle": "usd/robots/manipulators/fanuc/r2000ic210f.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "R-2000iC/210L",
+      "bundle": "usd/robots/manipulators/fanuc/r2000ic210l.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Fanuc",
+      "model": "R-2000iC/270F",
+      "bundle": "usd/robots/manipulators/fanuc/r2000ic270f.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "KUKA",
+      "model": "KR 210 L150",
+      "bundle": "usd/robots/manipulators/kuka/kr210l150.zip",
+      "simulation_mount_link": "link_6"
+    },
+    {
+      "manufacturer": "Universal Robots",
+      "model": "UR10",
+      "bundle": "usd/robots/manipulators/universal_robots/ur10.zip",
+      "simulation_mount_link": "wrist_3_link"
+    },
+    {
+      "manufacturer": "Universal Robots",
+      "model": "UR10e",
+      "bundle": "usd/robots/manipulators/universal_robots/ur10e.zip",
+      "simulation_mount_link": "wrist_3_link"
+    },
+    {
+      "manufacturer": "Universal Robots",
+      "model": "UR16e",
+      "bundle": "usd/robots/manipulators/universal_robots/ur16e.zip",
+      "simulation_mount_link": "wrist_3_link"
+    },
+    {
+      "manufacturer": "Universal Robots",
+      "model": "UR20",
+      "bundle": "usd/robots/manipulators/universal_robots/ur20.zip",
+      "simulation_mount_link": "wrist_3_link"
+    },
+    {
+      "manufacturer": "Universal Robots",
+      "model": "UR5",
+      "bundle": "usd/robots/manipulators/universal_robots/ur5.zip",
+      "simulation_mount_link": "wrist_3_link"
+    },
+    {
+      "manufacturer": "Universal Robots",
+      "model": "UR5e",
+      "bundle": "usd/robots/manipulators/universal_robots/ur5e.zip",
+      "simulation_mount_link": "wrist_3_link"
     }
   ],
   "usd/sensors": [
     {
       "manufacturer": null,
-      "model": "simple_light_beam_sensor",
+      "model": "simple light beam sensor",
       "bundle": "usd/sensors/simple_light_beam_sensor.zip"
+    }
+  ],
+  "usd/tools/parallel_grippers": [
+    {
+      "manufacturer": "Robotiq",
+      "model": "HandE",
+      "bundle": "usd/tools/parallel_grippers/robotiq/HandE.zip"
     }
   ],
   "usd/tools/suction_grippers": [
     {
       "manufacturer": null,
-      "model": "defitech_surface_gripper",
-      "bundle": "usd/tools/suction_grippers/defitech_surface_gripper.zip"
+      "model": "suction gripper large",
+      "bundle": "usd/tools/suction_grippers/suction_gripper_large.zip"
     },
     {
-      "manufacturer": null,
-      "model": "suction_gripper_large",
-      "bundle": "usd/tools/suction_grippers/suction_gripper_large.zip"
+      "manufacturer": "Defitech",
+      "model": "defitech surface gripper",
+      "bundle": "usd/tools/suction_grippers/Defitech/defitech_surface_gripper.zip"
     }
   ],
   "usd/tools/welding_guns": [
     {
       "manufacturer": null,
-      "model": "compact_spot_gun",
+      "model": "compact spot gun",
       "bundle": "usd/tools/welding_guns/compact_spot_gun.zip"
     },
     {
       "manufacturer": null,
-      "model": "spot_welding_gun",
+      "model": "spot welding gun",
       "bundle": "usd/tools/welding_guns/spot_welding_gun.zip"
     }
   ]
