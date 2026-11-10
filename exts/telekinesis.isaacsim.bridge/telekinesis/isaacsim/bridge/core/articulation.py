@@ -35,7 +35,7 @@ from isaacsim.core.utils.types import ArticulationAction
 import carb
 from pxr import PhysxSchema, Usd, UsdPhysics
 
-from .robot_assembler import get_articulation_base_link_name
+from .robot_assembler import get_articulation_base_link_name, play_timeline_with_valid_physics_view
 
 # A PhysX position drive settles with a small steady-state offset (gravity, drive
 # stiffness, the URDF importer's default gains), so an over-tight position
@@ -149,7 +149,9 @@ class SingleArticulation:
         """(Re)initialize the articulation against the current physics view.
 
         Starts the timeline if it is not already running, since an articulation has
-        no physics handle to bind to while it is stopped.
+        no physics handle to bind to while it is stopped, and restarts it when a prim
+        removed while it ran killed the physics view (see
+        :func:`.robot_assembler.play_timeline_with_valid_physics_view`).
 
         Safe to call repeatedly: reuses the handle and just re-initializes, which
         is needed when the timeline was stopped/replayed between client sessions
@@ -157,10 +159,8 @@ class SingleArticulation:
         once joint state actually reads back non-None.
         """
         self.stop_velocity_drive()
-        omni.timeline.get_timeline_interface().play()
+        await play_timeline_with_valid_physics_view()
         app = omni.kit.app.get_app()
-        await app.next_update_async()
-        await app.next_update_async()
 
         last_exc = None
         for _ in range(_BIND_RETRIES):

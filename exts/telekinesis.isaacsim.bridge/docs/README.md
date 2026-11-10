@@ -232,6 +232,17 @@ lidar takes the request's configuration and a lightbeam is enabled again. A copy
 gets an id of its own when it is registered, and `DELETE` removes what the prim stores. A stage
 saved before this release stores nothing and opens with no device registered.
 
+Removing a device's prim from the stage — in the Stage window, from a script, or with
+`DELETE /prims` — unregisters the device, and so does renaming or moving the prim. An assembly the
+device took part in is forgotten with it, so a gripper that is added again is assembled again. A
+prim brought back by undo still stores its id, and a `PUT` of it returns that id.
+
+Removing a link or collider of a bound articulation while the timeline plays, which removing an
+assembled gripper does, breaks the physics view every articulation reads through. The next
+`PUT /articulations` repairs it by stopping and playing the timeline, which puts the scene back as
+it was before the timeline was played, and rebinds every articulation.
+`DELETE /prims` stops the timeline around the removal, so it leaves nothing to repair.
+
 ### WebSocket routes
 
 WebSocket routes cannot be described in OpenAPI, so Swagger UI does not list them. There are two,

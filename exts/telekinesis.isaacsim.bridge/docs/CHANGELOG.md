@@ -1,4 +1,40 @@
 # Changelog
+## [0.10.0] - 2026-11-10
+### Added
+- Registered devices are saved with the stage and restored when it is opened. Each device prim
+  stores its id as `telekinesis:<kind>:id` (`articulation`, `surface_gripper`, `camera`, `lidar`,
+  `lightbeam`, `conveyor`), plus what the bridge otherwise kept only in memory: an articulation's
+  `driven_joints`, a camera's `resolution` and requested `frequency`, a lidar's `data_types`, and a
+  conveyor's `cargo_root` and captured travel direction and speed. Opening a stage registers every
+  stored device under its stored id before any request is served: surface grippers, articulations
+  (an arm before a gripper merged onto it, and a suction gripper bolted onto an arm counted as
+  assembled with it), cameras, lidars, lightbeams and conveyors. A lightbeam saved paused stays
+  paused; a camera comes back running. A device that cannot be restored is logged and keeps its id
+  for a later `PUT`. A copy of a device prim gets its own id when registered. `DELETE` of a device
+  removes what its prim stores. Stages saved before store nothing and open as before.
+### Changed
+- Opening a stage that stores devices plays the timeline while they are restored and stops it
+  again afterwards, unless it was already playing. Requests wait until the restore is done.
+- An id handed out to a `PUT` that is refused with 400 is no longer handed to the next device, so
+  ids can skip a number.
+### Fixed
+- After a stage was reopened, a gripper merged onto an arm drove all of its joints, mimic joints
+  included, until a client narrowed it again. It now drives the joints it was narrowed to, or the
+  driver joint `assemble_robot` picked for it.
+- `assemble_robot` of a suction gripper already bolted onto the arm in a reopened stage ran the
+  whole attach again; it now returns `already_assembled`.
+- A conveyor saved while running in reverse came back with its travel direction flipped after the
+  stage was reopened.
+- A device whose prim was removed from the stage other than by its own `DELETE` route — in the
+  Stage window, from a script, by renaming it, or with `DELETE /prims` — stayed registered, along
+  with any assembly it took part in. A gripper deleted and added again at the same path got its
+  old id back and was answered `already_assembled` by `assemble_robot`, which then assembled
+  nothing. Such a device is now unregistered and its assembly forgotten.
+- After a link or collider of a bound articulation was removed while the timeline played, as
+  deleting an assembled gripper in the Stage window does, every `PUT /articulations` failed with
+  422 ("Failed to get DOF positions from backend") until the timeline was stopped by hand. The
+  bind now restarts the timeline itself and rebinds every articulation.
+
 ## [0.9.1] - 2026-11-06
 ### Added
 - `PUT /articulations`, `PUT /surface_grippers` and `POST /stage/scene/reference` take an
@@ -88,23 +124,8 @@
   stage's default prim, or under the stage root when the stage has none.
 - `PUT /articulations` takes an optional `mount_link`, stored on the articulation prim as the
   `telekinesis:mountLink` attribute. Without it, nothing is stored and no link is guessed.
-- Registered devices are saved with the stage and restored when it is opened. Each device prim
-  stores its id as `telekinesis:<kind>:id` (`articulation`, `surface_gripper`, `camera`, `lidar`,
-  `lightbeam`, `conveyor`), plus what the bridge otherwise kept only in memory: an articulation's
-  `driven_joints`, a camera's `resolution` and requested `frequency`, a lidar's `data_types`, and a
-  conveyor's `cargo_root` and captured travel direction and speed. Opening a stage registers every
-  stored device under its stored id before any request is served: surface grippers, articulations
-  (an arm before a gripper merged onto it, and a suction gripper bolted onto an arm counted as
-  assembled with it), cameras, lidars, lightbeams and conveyors. A lightbeam saved paused stays
-  paused; a camera comes back running. A device that cannot be restored is logged and keeps its id
-  for a later `PUT`. A copy of a device prim gets its own id when registered. `DELETE` of a device
-  removes what its prim stores. Stages saved before store nothing and open as before.
 
 ### Changed
-- Opening a stage that stores devices plays the timeline while they are restored and stops it
-  again afterwards, unless it was already playing. Requests wait until the restore is done.
-- An id handed out to a `PUT` that is refused with 400 is no longer handed to the next device, so
-  ids can skip a number.
 - `arm_mount_link` is optional on `POST /articulations/{id}/assemble_robot` and
   `POST /articulations/{id}/mount_prim`; omitted, the robot's stored mount link is used, and a
   robot that stores none is refused with 422.
@@ -136,13 +157,6 @@
   longer drives the joints of a gripper merged onto it. A prim holding both, such as Add Robot's
   `<model>_assembly` Xform, is refused with 422. A failed `PUT /articulations` no longer leaves a
   broken device registered that every later request tried to re-bind.
-- After a stage was reopened, a gripper merged onto an arm drove all of its joints, mimic joints
-  included, until a client narrowed it again. It now drives the joints it was narrowed to, or the
-  driver joint `assemble_robot` picked for it.
-- `assemble_robot` of a suction gripper already bolted onto the arm in a reopened stage ran the
-  whole attach again; it now returns `already_assembled`.
-- A conveyor saved while running in reverse came back with its travel direction flipped after the
-  stage was reopened.
 - A robot, tool or mesh added onto part of a prop that keeps its colliders elsewhere, such as the
   visible tabletop mesh of a table whose colliders sit in a separate scope, landed inside the prop.
   It is now lifted onto every collider of the prop (the prim directly under the default prim

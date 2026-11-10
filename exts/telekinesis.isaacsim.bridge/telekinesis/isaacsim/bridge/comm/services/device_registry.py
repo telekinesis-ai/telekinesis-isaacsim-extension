@@ -36,7 +36,8 @@ class DeviceRegistry(abc.ABC):
 
     When a stage is opened, :meth:`reserve_stored_ids` reserves the ids its prims store,
     before any create can allocate one, and :meth:`restore_devices` then registers the
-    device of each such prim.
+    device of each such prim. A device whose prim is removed from the stage is
+    unregistered by :meth:`unregister_removed_devices`.
 
     Example:
         class LightBeamService(DeviceRegistry):
@@ -143,6 +144,25 @@ class DeviceRegistry(abc.ABC):
                 self._create_locks.pop(prim_path, None)
                 self._remove_stored_state(prim_path)
         return {"deleted": device_id}
+
+    def unregister_removed_devices(self):
+        """Unregister every device whose prim is no longer on the open stage.
+
+        Called after prims are removed from the stage by any means -- the Stage window,
+        a script, ``DELETE /prims`` -- or renamed or moved, which removes them from their
+        old path. Each such device is unregistered as :meth:`delete_device` does, so an
+        assembly it took part in is forgotten too. A prim brought back later, say by
+        undo, still stores its id, so a create of it gets that id again. A prim that is
+        itself deactivated is still on the stage and stays registered.
+        """
+        import omni.usd
+
+        stage = omni.usd.get_context().get_stage()
+        if stage is None:
+            return
+        for device_id, device in list(self._devices.items()):
+            if not stage.GetPrimAtPath(device.prim_path):
+                self.delete_device(device_id)
 
     def allocate_device_id(self, prim_path):
         """Return the id a create of ``prim_path`` registers its device under.

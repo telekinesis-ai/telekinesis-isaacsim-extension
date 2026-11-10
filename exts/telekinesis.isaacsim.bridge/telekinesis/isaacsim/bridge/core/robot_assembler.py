@@ -645,17 +645,41 @@ def _park_attachment_points(stage, isaac_assembler, attachment_point_paths, arm_
         )
 
 
+async def play_timeline_with_valid_physics_view():
+    """Play the timeline so an articulation can be bound, restarting it if its physics view is dead.
+
+    Removing a prim the physics view reads -- a link or collider of a bound
+    articulation -- while the timeline plays invalidates the view every articulation
+    reads through, and Isaac Sim builds a new one only when the timeline starts. Such
+    a timeline is stopped before it is played again, which, as any stop does, puts the
+    scene back as it was before the timeline was played. Pumps a couple of frames after
+    each, so the change has landed when this returns.
+    """
+    from isaacsim.core.simulation_manager import SimulationManager
+
+    timeline = omni.timeline.get_timeline_interface()
+    app = omni.kit.app.get_app()
+    # The view SingleArticulation reads through; None while the timeline is stopped.
+    physics_view = SimulationManager.get_physics_sim_view()
+    if physics_view is not None and not physics_view.is_valid:
+        timeline.stop()
+        await app.next_update_async()
+        await app.next_update_async()
+    timeline.play()
+    await app.next_update_async()
+    await app.next_update_async()
+
+
 async def bind_shared_articulation(prim_path, name):
     """Play the timeline and return the single, initialized articulation at ``prim_path``.
 
     Same retry shape as ``core.articulation.SingleArticulation.bind``: physics may need a few frames
     to stabilize the merged topology after assembly. This one handle is shared by
-    both the arm and the gripper devices.
+    both the arm and the gripper devices. A timeline whose physics view is dead is
+    restarted first (see :func:`play_timeline_with_valid_physics_view`).
     """
-    omni.timeline.get_timeline_interface().play()
+    await play_timeline_with_valid_physics_view()
     app = omni.kit.app.get_app()
-    await app.next_update_async()
-    await app.next_update_async()
 
     for _ in range(_BIND_RETRIES):
         try:

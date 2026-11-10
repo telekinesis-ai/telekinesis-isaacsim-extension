@@ -55,6 +55,7 @@ from fastapi import responses
 import carb
 import omni.timeline
 import omni.usd
+from pxr import Tf, Usd
 
 from .services.articulations import ArticulationService
 from .services.asset_library import AssetLibraryService
@@ -74,8 +75,9 @@ class BridgeServer:
 
     The request logic lives in the services (built and shared in ``_build_app``);
     this class runs the server, clears the device registries on a stage change or a
-    stop, and restores them from a stage that is opened. The services the extension's
-    GUI uses are public, so it drives the same instances the routes do.
+    stop, restores them from a stage that is opened, and unregisters the devices whose
+    prims are removed from the stage. The services the extension's GUI uses are
+    public, so it drives the same instances the routes do.
     """
 
     articulation_service: ArticulationService
@@ -95,9 +97,13 @@ class BridgeServer:
         self._device_restore_finished = asyncio.Event()
         self._device_restore_finished.set()
         self._restore_task = None
+        # Isaac Sim's loop, which every service runs on. A stage notice arrives on the
+        # thread that made the change, which need not be this one.
+        self._event_loop = asyncio.get_event_loop()
         self._app = self._build_app()
         self._server = None
         self._serve_task = None
+        self._objects_changed_listener = None
 
     def start(self):
         """Schedule uvicorn's serve loop on Isaac Sim's asyncio loop (main thread)."""
@@ -113,6 +119,9 @@ class BridgeServer:
         # handling, and don't let uvicorn hijack Ctrl+C.
         self._server.install_signal_handlers = lambda: None
         self._serve_task = asyncio.ensure_future(self._server.serve())
+        stage = omni.usd.get_context().get_stage()
+        if stage is not None:
+            self._listen_for_removed_prims(stage)
         carb.log_info(f"[bridge] server listening on {self._host}:{self._port}")
 
     def reset_devices(self):
@@ -122,8 +131,12 @@ class BridgeServer:
         the device table holds handles into the previous stage, which are stale the
         moment that stage is replaced. Clearing the registry (rather than restarting
         uvicorn) keeps the port bound and the app alive. A restore still running is
-        cancelled, so it cannot register devices into the cleared registries.
+        cancelled, so it cannot register devices into the cleared registries, and the
+        previous stage is no longer listened to for removed prims.
         """
+        if self._objects_changed_listener is not None:
+            self._objects_changed_listener.Revoke()
+            self._objects_changed_listener = None
         if self._restore_task is not None:
             self._restore_task.cancel()
             self._restore_task = None
@@ -150,6 +163,7 @@ class BridgeServer:
         """
         self.reset_devices()
         stage = omni.usd.get_context().get_stage()
+        self._listen_for_removed_prims(stage)
         stored_prim_paths = [
             (service, service.reserve_stored_ids(stage)) for service in self._device_services
         ]
@@ -189,6 +203,29 @@ class BridgeServer:
         """Hold a request until no device restore is running (see :meth:`restore_devices`)."""
         while not self._device_restore_finished.is_set():
             await self._device_restore_finished.wait()
+
+    def _listen_for_removed_prims(self, stage):
+        """Unregister the devices whose prims are removed from ``stage``, until the next reset.
+
+        Only the open stage is listened to: Isaac Sim tools such as the Robot Inspector
+        build stages of their own on worker threads, and a change to one of those never
+        removes a device's prim.
+        """
+        self._objects_changed_listener = Tf.Notice.Register(
+            Usd.Notice.ObjectsChanged, self._on_stage_objects_changed, stage
+        )
+
+    def _on_stage_objects_changed(self, notice, sender):
+        """Unregister the devices whose prims a change to the open stage removed.
+
+        Only a change that adds, removes or renames prims can remove a device's prim.
+        The stage is then checked on Isaac Sim's event loop rather than here: USD calls
+        this while it is still processing the change, on whichever thread made it, and
+        releasing a device can edit the stage.
+        """
+        if notice.GetResyncedPaths():
+            for service in self._device_services:
+                self._event_loop.call_soon_threadsafe(service.unregister_removed_devices)
 
     def stop(self):
         """Ask uvicorn to exit and drop every bound device."""

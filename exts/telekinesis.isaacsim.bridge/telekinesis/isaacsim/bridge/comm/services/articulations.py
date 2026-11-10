@@ -422,7 +422,7 @@ class ArticulationService(DeviceRegistry):
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         self.write_stored_value(
-            device.prim_path, "driven_joints", Sdf.ValueTypeNames.StringArray, device.joint_names
+            device.prim_path, "driven_joints", Sdf.ValueTypeNames.TokenArray, device.joint_names
         )
         return {
             "articulation_id": articulation_id,
@@ -822,7 +822,7 @@ class ArticulationService(DeviceRegistry):
 
         await self._bind_assembly(arm, gripper, arm_names, gripper_driven)
         self.write_stored_value(
-            gripper.prim_path, "driven_joints", Sdf.ValueTypeNames.StringArray, gripper_driven
+            gripper.prim_path, "driven_joints", Sdf.ValueTypeNames.TokenArray, gripper_driven
         )
 
         return {
