@@ -38,7 +38,9 @@ class AssetGhost:
             .get_extension_manager()
             .get_extension_path_by_module("telekinesis.isaacsim.bridge")
         )
-        self._material_url = Path(extension_path, "data", "ghost.mdl").as_posix()
+        self._material_url = Path(
+            extension_path, "telekinesis", "isaacsim", "bridge", "assets", "ghost.mdl"
+        ).as_posix()
 
     def show(self, usd_path: Path):
         """Show the USD asset at ``usd_path`` as the ghost, replacing the one shown.

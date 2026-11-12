@@ -20,7 +20,7 @@ from ...global_variables import ASSET_LIBRARY_URL
 
 # While ASSET_LIBRARY_URL is None, the catalogue is read from this file in the extension
 # folder, and bundles are downloaded from the host that serves them today.
-LOCAL_ASSET_INDEX_FILE = "data/assets_index.json"
+LOCAL_ASSET_INDEX_FILE = "telekinesis/isaacsim/bridge/assets/assets_index.json"
 LEGACY_BUNDLE_URL = "https://assets.telekinesis.ai"
 
 # The bucket keeps one tree per description format, each holding the same categories.
