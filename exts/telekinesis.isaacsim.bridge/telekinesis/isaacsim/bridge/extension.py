@@ -23,20 +23,19 @@ extension by interacting solely with UIBuilder (see .ui_builder.py).
 import asyncio
 import gc
 
+import carb
 import omni
 import omni.kit.commands
 import omni.kit.context_menu
 import omni.physx as _physx
 import omni.timeline
 import omni.usd
+from isaacsim.gui.components.element_wrappers import ScrollingWindow
+from isaacsim.gui.components.menu import MenuItemDescription
 from omni import ui
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 from omni.usd import StageEventType
 from pxr import Usd
-from isaacsim.gui.components.element_wrappers import ScrollingWindow
-from isaacsim.gui.components.menu import MenuItemDescription
-
-import carb
 
 from .comm.server import BridgeServer
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_TITLE
@@ -222,9 +221,8 @@ class Extension(omni.ext.IExt):
 
     def _build_ui(self):
         """Rebuild the extension panel in the ScrollingWindow and dock it left of the Viewport."""
-        with self._window.frame:
-            with ui.VStack(spacing=5, height=0):
-                self._build_extension_ui()
+        with self._window.frame, ui.VStack(spacing=5, height=0):
+            self._build_extension_ui()
 
         async def dock_window():
             await omni.kit.app.get_app().next_update_async()

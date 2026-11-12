@@ -32,12 +32,12 @@ sensor in ``isaacsim.sensors.experimental.physics``, but it still ships and it i
 drives the ``IsaacLightBeamSensor`` prims existing scenes are authored with.
 """
 
+import carb
 import numpy as np
 import omni.kit.app
 import omni.timeline
 import omni.usd
 from isaacsim.sensors.physx import _range_sensor
-import carb
 from pxr import Gf
 
 # Type name of the prim this wraps, as created by IsaacSensorCreateLightBeamSensor.

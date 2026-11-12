@@ -157,7 +157,7 @@ class StageService:
         """
         import omni.kit.app
         import omni.timeline
-        from pxr import PhysxSchema, UsdPhysics, Sdf
+        from pxr import PhysxSchema, Sdf, UsdPhysics
 
         stage = self.stage()
         # PhysX reads this immutable scene flag when simulation is initialized.

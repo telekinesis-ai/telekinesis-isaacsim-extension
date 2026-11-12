@@ -49,12 +49,12 @@ otherwise re-pay that warmup on every iteration.
 import math
 import time
 
+import carb
 import numpy as np
 import omni.kit.app
 import omni.timeline
 import omni.usd
 from isaacsim.sensors import camera as camera_sensor
-import carb
 from pxr import Usd, UsdGeom
 
 # -- static tables ----------------------------------------------------------

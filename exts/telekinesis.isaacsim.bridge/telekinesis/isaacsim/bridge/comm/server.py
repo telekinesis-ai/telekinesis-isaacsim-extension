@@ -49,25 +49,25 @@ is closed-ness: 0.0 = fully open, 1.0 = fully closed.
 
 import asyncio
 
-import uvicorn
-import fastapi
-from fastapi import responses
 import carb
+import fastapi
 import omni.timeline
 import omni.usd
+import uvicorn
+from fastapi import responses
 from pxr import Tf, Usd
 
+from .routers import ALL_ROUTERS
 from .services.articulations import ArticulationService
 from .services.asset_library import AssetLibraryService
 from .services.cameras import CameraService
 from .services.conveyors import ConveyorService
+from .services.general import GeneralService
 from .services.lidars import LidarService
 from .services.lightbeams import LightBeamService
-from .services.general import GeneralService
 from .services.prims import PrimService
 from .services.stage import StageService
 from .services.surface_grippers import SurfaceGripperService
-from .routers import ALL_ROUTERS
 
 
 class BridgeServer:

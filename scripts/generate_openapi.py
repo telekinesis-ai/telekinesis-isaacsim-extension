@@ -26,7 +26,6 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
-
 repo_root = Path(__file__).resolve().parent.parent
 ext_root = repo_root / "exts" / "telekinesis.isaacsim.bridge"
 package_root = ext_root / "telekinesis" / "isaacsim" / "bridge"
@@ -38,7 +37,7 @@ bridge_package = types.ModuleType("telekinesis.isaacsim.bridge")
 bridge_package.__path__ = [str(package_root)]
 sys.modules["telekinesis.isaacsim.bridge"] = bridge_package
 
-from telekinesis.isaacsim.bridge.comm import routers  # noqa: E402
+from telekinesis.isaacsim.bridge.comm import routers
 
 # Generate OpenAPI schema from FastAPI routers and write to public/openapi.json
 app = FastAPI(title="Telekinesis Isaac Sim Bridge")

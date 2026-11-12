@@ -26,12 +26,12 @@ omni/isaac imports live at module top (only imported inside Isaac Sim), matching
 enabled + imported lazily inside the two assembly functions.
 """
 
+import carb
 import omni.kit.app
 import omni.kit.commands
 import omni.timeline
 import omni.usd
 from isaacsim.core.prims import SingleArticulation
-import carb
 from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics
 from scipy.spatial import transform
 

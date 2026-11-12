@@ -13,6 +13,7 @@ Requires the ``requests`` package (``pip install requests``).
 """
 
 import argparse
+
 import requests
 
 HOST = "127.0.0.1"

@@ -19,8 +19,8 @@ Requires the ``requests`` package (``pip install requests``).
 """
 
 import argparse
-import numpy as np
 
+import numpy as np
 import requests
 
 try:

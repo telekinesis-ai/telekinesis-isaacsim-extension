@@ -10,6 +10,7 @@ Run:  python get_articulations_list.py
 """
 
 import argparse
+
 import requests
 
 HOST = "127.0.0.1"

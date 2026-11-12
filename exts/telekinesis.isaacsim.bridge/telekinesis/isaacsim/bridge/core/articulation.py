@@ -26,13 +26,13 @@ style) -- no background worker, no command queue.
 import asyncio
 import time
 
+import carb
 import numpy as np
 import omni.kit.app
 import omni.physx
 import omni.timeline
 from isaacsim.core import prims
 from isaacsim.core.utils.types import ArticulationAction
-import carb
 from pxr import PhysxSchema, Usd, UsdPhysics
 
 from .robot_assembler import get_articulation_base_link_name, play_timeline_with_valid_physics_view

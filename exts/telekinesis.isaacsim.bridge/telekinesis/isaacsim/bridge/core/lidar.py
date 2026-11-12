@@ -48,6 +48,7 @@ a client can tell a partial sweep from a full one.
 
 import time
 
+import carb
 import numpy as np
 import omni.kit.app
 import omni.kit.commands
@@ -55,7 +56,6 @@ import omni.timeline
 import omni.usd
 from isaacsim.core import prims
 from isaacsim.sensors.physx import _range_sensor
-import carb
 
 # -- static tables ----------------------------------------------------------
 
