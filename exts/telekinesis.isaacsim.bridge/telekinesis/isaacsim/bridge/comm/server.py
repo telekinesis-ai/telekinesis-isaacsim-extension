@@ -75,9 +75,10 @@ class BridgeServer:
 
     The request logic lives in the services (built and shared in ``_build_app``);
     this class runs the server, clears the device registries on a stage change or a
-    stop, restores them from a stage that is opened, and unregisters the devices whose
-    prims are removed from the stage. The services the extension's GUI uses are
-    public, so it drives the same instances the routes do.
+    stop, restores them from a stage that is opened, unregisters the devices whose
+    prims are removed from the stage, and rebinds the articulations such a removal
+    broke. The services the extension's GUI uses are public, so it drives the same
+    instances the routes do.
     """
 
     articulation_service: ArticulationService
@@ -221,11 +222,17 @@ class BridgeServer:
         Only a change that adds, removes or renames prims can remove a device's prim.
         The stage is then checked on Isaac Sim's event loop rather than here: USD calls
         this while it is still processing the change, on whichever thread made it, and
-        releasing a device can edit the stage.
+        releasing a device can edit the stage. Once those devices are unregistered, the
+        articulations the removal broke are rebound (see
+        ``ArticulationService.rebind_devices_after_prims_removed``).
         """
         if notice.GetResyncedPaths():
             for service in self._device_services:
                 self._event_loop.call_soon_threadsafe(service.unregister_removed_devices)
+            self._event_loop.call_soon_threadsafe(
+                asyncio.ensure_future,
+                self.articulation_service.rebind_devices_after_prims_removed(),
+            )
 
     def stop(self):
         """Ask uvicorn to exit and drop every bound device."""

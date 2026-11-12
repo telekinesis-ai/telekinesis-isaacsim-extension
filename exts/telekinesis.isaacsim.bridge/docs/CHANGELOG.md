@@ -30,10 +30,17 @@
   with any assembly it took part in. A gripper deleted and added again at the same path got its
   old id back and was answered `already_assembled` by `assemble_robot`, which then assembled
   nothing. Such a device is now unregistered and its assembly forgotten.
-- After a link or collider of a bound articulation was removed while the timeline played, as
-  deleting an assembled gripper in the Stage window does, every `PUT /articulations` failed with
-  422 ("Failed to get DOF positions from backend") until the timeline was stopped by hand. The
-  bind now restarts the timeline itself and rebinds every articulation.
+- Removing a physics prim while the timeline played, as deleting an assembled gripper in the
+  Stage window does, broke every articulation until the timeline was stopped by hand:
+  `PUT /articulations` failed with 422 ("Failed to get DOF positions from backend"), and open
+  `stream_joint_positions` and `stream_articulation_state` connections closed with an error. The
+  bridge now restarts the timeline as soon as the prim is removed and rebinds every articulation;
+  streams skip the frames in between.
+- An arm whose merged gripper was removed, by any means including `DELETE /prims`, still listed
+  the gripper's joints: `PUT /articulations` failed with 422 (`IndexError`) and moves failed. Its
+  handle is now rebuilt.
+- `GET /articulations/{articulation_id}/handles_initialized` reported true for an articulation
+  whose physics view a prim removed during play had invalidated.
 
 ## [0.9.1] - 2026-11-06
 ### Added

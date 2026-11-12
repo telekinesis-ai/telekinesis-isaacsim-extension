@@ -78,6 +78,8 @@ class ArticulationService(DeviceRegistry):
         self._assemblies = {}
         # arm_id -> asyncio.Lock, serializes concurrent assembles of the same arm
         self._assembly_locks = {}
+        # Serializes rebind_stale_devices, which a request and a prim removal can both start.
+        self._rebind_lock = asyncio.Lock()
         self._surface_gripper_service = surface_gripper_service
 
     def clear(self):
@@ -266,36 +268,66 @@ class ArticulationService(DeviceRegistry):
 
         Devices merged by an assembly share one handle, so each such pair is
         rebound through its shared articulation, the same way assembly established
-        it. A device that cannot be rebound (say its prim is gone from the stage)
-        is logged and skipped rather than failing the request that merely revealed
-        it.
+        it. A device whose handle was released (see
+        ``SingleArticulation.release_physics_handle``) is rebound too. A device that
+        cannot be rebound (say its prim is gone from the stage) is logged and skipped
+        rather than failing the request that merely revealed it. Concurrent calls run
+        one after another, so no device is bound twice at once.
         """
         import carb
 
-        merged = {}  # device_id -> arm_id, for pairs sharing one merged handle
-        for arm_id, record in self._assemblies.items():
-            if record["gripper_id"] in self._devices:
-                merged[arm_id] = arm_id
-                merged[record["gripper_id"]] = arm_id
+        async with self._rebind_lock:
+            merged = {}  # device_id -> arm_id, for pairs sharing one merged handle
+            for arm_id, record in self._assemblies.items():
+                if record["gripper_id"] in self._devices:
+                    merged[arm_id] = arm_id
+                    merged[record["gripper_id"]] = arm_id
 
-        repaired_assemblies = set()
-        for device_id, device in list(self._devices.items()):
-            if device.handles_initialized():
-                continue
-            arm_id = merged.get(device_id)
-            try:
-                if arm_id is None:
-                    await device.bind()
-                elif arm_id not in repaired_assemblies:
-                    repaired_assemblies.add(arm_id)
-                    arm = self._devices[arm_id]
-                    gripper = self._devices[self._assemblies[arm_id]["gripper_id"]]
-                    await self._bind_assembly(arm, gripper, arm.joint_names, gripper.joint_names)
-            except (RuntimeError, ValueError) as exc:
-                carb.log_warn(
-                    f"[bridge] could not rebind {device_id} after the timeline stop "
-                    f"that invalidated it: {exc}"
-                )
+            repaired_assemblies = set()
+            for device_id, device in list(self._devices.items()):
+                if device.handles_initialized():
+                    continue
+                arm_id = merged.get(device_id)
+                try:
+                    if arm_id is None:
+                        await device.bind()
+                    elif arm_id not in repaired_assemblies:
+                        repaired_assemblies.add(arm_id)
+                        arm = self._devices[arm_id]
+                        gripper = self._devices[self._assemblies[arm_id]["gripper_id"]]
+                        await self._bind_assembly(
+                            arm, gripper, arm.joint_names, gripper.joint_names
+                        )
+                except (RuntimeError, ValueError) as exc:
+                    carb.log_warn(
+                        f"[bridge] could not rebind {device_id} after the timeline stop "
+                        f"that invalidated it: {exc}"
+                    )
+
+    async def rebind_devices_after_prims_removed(self):
+        """Rebind the articulations a removal of prims from the stage left without a handle.
+
+        Called after every change that removes prims, once the devices on them are
+        unregistered. Isaac Sim does not support removing a physics prim -- a link or
+        collider, as an assembled gripper has -- while the timeline plays: PhysX then
+        invalidates the one physics view every articulation reads through, and Isaac Sim
+        builds a new one only when the timeline starts. Every handle is then released,
+        since the removal may have taken joints from any of them, and rebound; the bind
+        restarts the timeline, which, as any stop does, puts the scene back as it was
+        before the timeline was played. An arm whose merged gripper was removed was
+        already released (see :meth:`delete_device`) and is rebound in the same pass.
+        While the timeline is stopped nothing is rebound: the next bind of a released
+        articulation, by its ``PUT /articulations``, builds it afresh.
+        """
+        from isaacsim.core.simulation_manager import SimulationManager
+
+        physics_view = SimulationManager.get_physics_sim_view()
+        if physics_view is None:
+            return
+        if not physics_view.is_valid:
+            for device in self._devices.values():
+                device.release_physics_handle()
+        await self.rebind_stale_devices()
 
     def get_articulation(self, articulation_id):
         """Info for one registered articulation (id, prim, dof, state), or 404."""
@@ -311,7 +343,9 @@ class ArticulationService(DeviceRegistry):
 
         Drops the registry binding so the id is no longer known, and the id and driven
         joints its prim stores; the USD prim itself is left in the stage. Any assembly
-        the articulation took part in, as the arm or the gripper, is forgotten too.
+        the articulation took part in, as the arm or the gripper, is forgotten too. A
+        gripper whose prim is gone from the stage took its joints from the arm it was
+        merged onto, so that arm's handle is released, to be rebuilt by its next bind.
 
         Returns:
             ``{"deleted": device_id}``.
@@ -319,11 +353,16 @@ class ArticulationService(DeviceRegistry):
         Raises:
             HTTPException: 404 if the id was never registered.
         """
+        device = self._devices.get(device_id)
         response = super().delete_device(device_id)
+        gripper_prim_removed = not self._stage().GetPrimAtPath(device.prim_path)
         # So a later re-create + assemble of the same pair is not blocked by a stale record.
         for arm_id, record in list(self._assemblies.items()):
             if device_id in (arm_id, record["gripper_id"]):
                 del self._assemblies[arm_id]
+                if device_id == record["gripper_id"] and gripper_prim_removed:
+                    # The handle the arm shared with the gripper still lists its joints.
+                    self._devices[arm_id].release_physics_handle()
         self._assembly_locks.pop(device_id, None)
         return response
 

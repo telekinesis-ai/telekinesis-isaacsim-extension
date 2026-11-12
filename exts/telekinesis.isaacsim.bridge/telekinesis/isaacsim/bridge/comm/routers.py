@@ -229,6 +229,10 @@ async def stream_joint_positions(websocket: WebSocket, articulation_id: str):
     working through a backlog of stale positions -- so a drop in frame rate makes the
     motion coarser, never late. Send a dense path if the intermediate positions
     matter, and pace it at the simulator's update rate.
+
+    Frames that arrive while the articulation cannot be driven -- the timeline is
+    stopped, or the bridge is restarting it after a prim was removed -- are dropped;
+    the connection stays open.
     """
     # Imported here rather than at module scope: scripts/generate_openapi.py imports
     # this module with no Isaac Sim in the interpreter.
@@ -468,7 +472,11 @@ async def set_tcp(
 async def get_handles_initialized(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    """Whether the device's handle is currently valid, without a re-bind."""
+    """Whether the articulation can be read and driven now, without a re-bind.
+
+    False while the timeline is stopped, and while its physics view is invalidated by a
+    prim removed during play, until the bridge has rebound it.
+    """
     return articulation_service.get_handles_initialized(articulation_id)
 
 
@@ -1150,8 +1158,6 @@ async def clear_motion_groups():
 #
 # A camera is a registered device with an id, exactly like an articulation:
 # PUT /cameras hands back a camera_id, then every other route addresses that id.
-# (This replaces the old Wandelbots-mirrored /periphery stubs, which modelled a
-# single "active camera" with no ids and did not fit the registry design.)
 
 cameras = APIRouter(tags=["cameras"])
 

@@ -237,11 +237,15 @@ Removing a device's prim from the stage — in the Stage window, from a script, 
 device took part in is forgotten with it, so a gripper that is added again is assembled again. A
 prim brought back by undo still stores its id, and a `PUT` of it returns that id.
 
-Removing a link or collider of a bound articulation while the timeline plays, which removing an
-assembled gripper does, breaks the physics view every articulation reads through. The next
-`PUT /articulations` repairs it by stopping and playing the timeline, which puts the scene back as
-it was before the timeline was played, and rebinds every articulation.
-`DELETE /prims` stops the timeline around the removal, so it leaves nothing to repair.
+Isaac Sim does not support removing a physics prim — a link or collider of a bound articulation,
+as an assembled gripper has — while the timeline plays: it breaks the physics view every
+articulation reads through. When that happens, the bridge repairs it as soon as the prim is
+removed. It stops and plays the timeline, which puts the scene back as it was before the timeline
+was played, and rebinds every articulation. Open streams skip the frames in between; a request
+in flight at that moment fails. An arm whose merged gripper was removed drives its own joints
+afterwards; if the gripper was removed while the timeline was stopped, the arm's next
+`PUT /articulations` rebinds it. `DELETE /prims` stops the timeline around the removal, as Isaac
+Sim recommends, so the physics view never breaks.
 
 ### WebSocket routes
 
