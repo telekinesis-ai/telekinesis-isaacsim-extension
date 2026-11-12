@@ -23,20 +23,19 @@ extension by interacting solely with UIBuilder (see .ui_builder.py).
 import asyncio
 import gc
 
+import carb
 import omni
 import omni.kit.commands
 import omni.kit.context_menu
 import omni.physx as _physx
 import omni.timeline
 import omni.usd
+from isaacsim.gui.components.element_wrappers import ScrollingWindow
+from isaacsim.gui.components.menu import MenuItemDescription
 from omni import ui
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 from omni.usd import StageEventType
 from pxr import Usd
-from isaacsim.gui.components.element_wrappers import ScrollingWindow
-from isaacsim.gui.components.menu import MenuItemDescription
-
-import carb
 
 from .comm.server import BridgeServer
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_TITLE
@@ -111,10 +110,11 @@ class Extension(omni.ext.IExt):
         except Exception as exc:
             carb.log_error(f"[bridge] bridge server on port {BRIDGE_PORT} failed to start: {exc}")
 
-        # Clear the bridge's device registry whenever the stage is replaced. This
-        # subscription is tied to the server (always active while the extension is
-        # loaded), not to the UI panel -- the _on_window stage subscription only
-        # exists while the window is visible, but the bridge runs regardless.
+        # Clear the bridge's device registry whenever the stage is replaced, and restore
+        # the devices a stage that is opened stores. This subscription is tied to the
+        # server (always active while the extension is loaded), not to the UI panel --
+        # the _on_window stage subscription only exists while the window is visible, but
+        # the bridge runs regardless.
         self._bridge_stage_event_sub = (
             self._usd_context.get_stage_event_stream().create_subscription_to_pop(
                 self._on_bridge_stage_event,
@@ -221,9 +221,8 @@ class Extension(omni.ext.IExt):
 
     def _build_ui(self):
         """Rebuild the extension panel in the ScrollingWindow and dock it left of the Viewport."""
-        with self._window.frame:
-            with ui.VStack(spacing=5, height=0):
-                self._build_extension_ui()
+        with self._window.frame, ui.VStack(spacing=5, height=0):
+            self._build_extension_ui()
 
         async def dock_window():
             await omni.kit.app.get_app().next_update_async()
@@ -266,18 +265,22 @@ class Extension(omni.ext.IExt):
         self.ui_builder.on_physics_step(step)
 
     def _on_bridge_stage_event(self, event):
-        """Clear the bridge's device registry and close the Add windows when the stage
+        """Rebuild the bridge's device registry and close the Add windows when the stage
         is opened or closed.
 
-        The articulation handles held by the bridge belong to the stage that was
-        active when they were created; replacing the stage strands them. We clear
-        rather than restart the server so the port stays bound and clients can
-        simply re-PUT their articulations against the new stage. The Add windows'
-        Attaching Prim names a prim of the old stage too.
+        The device handles held by the bridge belong to the stage that was active
+        when they were created; replacing the stage strands them. The registry is
+        cleared rather than the server restarted, so the port stays bound, and a
+        stage that is opened gets back the devices it stores (see
+        ``BridgeServer.restore_devices``). The Add windows' Attaching Prim names a
+        prim of the old stage too.
         """
         if event.type == int(StageEventType.OPENED) or event.type == int(StageEventType.CLOSED):
             if getattr(self, "_bridge_server", None) is not None:
-                self._bridge_server.reset_devices()
+                if event.type == int(StageEventType.OPENED):
+                    self._bridge_server.restore_devices()
+                else:
+                    self._bridge_server.reset_devices()
             for window in (
                 self._add_robot_window,
                 self._add_tool_window,

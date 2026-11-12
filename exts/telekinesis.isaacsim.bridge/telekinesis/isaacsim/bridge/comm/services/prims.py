@@ -322,7 +322,9 @@ class PrimService:
         and removing it while physics runs invalidates the physics view every device
         reads through. So the timeline is stopped for the removal. A timeline that was
         playing is played again and the device handles the stop killed are rebound in
-        this same request; otherwise it is left stopped.
+        this same request; otherwise it is left stopped. Devices registered at or under
+        the prim are unregistered, as for any prim removed from the stage (see
+        ``DeviceRegistry.unregister_removed_devices``).
         """
         import omni.kit.app
         import omni.timeline

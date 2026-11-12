@@ -670,7 +670,7 @@
           "articulations"
         ],
         "summary": "Get Handles Initialized",
-        "description": "Whether the device's handle is currently valid, without a re-bind.",
+        "description": "Whether the articulation can be read and driven now, without a re-bind.\n\nFalse while the timeline is stopped, and while its physics view is invalidated by a\nprim removed during play, until the bridge has rebound it.",
         "operationId": "get_handles_initialized_articulations__articulation_id__handles_initialized_get",
         "parameters": [
           {
@@ -8057,7 +8057,7 @@
           "prims"
         ],
         "summary": "Delete Prim",
-        "description": "Remove a prim and everything beneath it. A path with no prim succeeds unchanged.\n\nThe timeline is stopped for the removal and, if it was playing, played again.",
+        "description": "Remove a prim and everything beneath it. A path with no prim succeeds unchanged.\n\nThe timeline is stopped for the removal and, if it was playing, played again.\nDevices registered at or under the prim are unregistered.",
         "operationId": "delete_prim_prims_delete",
         "parameters": [
           {

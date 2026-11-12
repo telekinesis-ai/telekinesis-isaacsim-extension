@@ -1,8 +1,6 @@
 """Runnable example client for the *implemented* bridge extension routes.
 
-The bridge mirrors the Wandelbots Isaac Sim extension API (General / Stage /
-Prims, alongside its own device routes), but most of those routes still answer
-``501 Not Implemented``. This file is the small, runnable companion: it only
+This file is the small, runnable companion: it only
 calls the endpoints the extension actually implements today -- the General
 (``/status``, ``/version``), Stage (bar configuration import/export) and Prims
 routes -- so you can run it end to end against the live bridge and see real

@@ -25,10 +25,10 @@ Run:  python robot_set_joint_position.py
 Requires the ``requests`` package (``pip install requests``).
 """
 
-import time
 import argparse
-import numpy as np
+import time
 
+import numpy as np
 import requests
 
 HOST = "127.0.0.1"

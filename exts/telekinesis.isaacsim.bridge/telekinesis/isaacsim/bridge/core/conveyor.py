@@ -31,11 +31,11 @@ Native Isaac units: meters per second for a straight belt, radians per second fo
 curved one (which PhysX drives with an angular surface velocity instead).
 """
 
+import carb
 import omni.kit.app
 import omni.physx
 import omni.timeline
 import omni.usd
-import carb
 from pxr import Gf, PhysicsSchemaTools, PhysxSchema, Usd, UsdPhysics
 
 # node:type of the OmniGraph node the Conveyor Belt Utility builds for a belt.

@@ -16,9 +16,9 @@
 Extension (see .extension.py) as the panel is shown/hidden."""
 
 import omni.timeline
-from omni import ui
 from isaacsim.gui.components.element_wrappers import CollapsableFrame
 from isaacsim.gui.components.ui_utils import get_style
+from omni import ui
 
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT
 
@@ -60,7 +60,6 @@ class UIBuilder:
     def build_ui(self):
         """Build the bridge status panel. Called whenever the UI window is reopened."""
         status_frame = CollapsableFrame("Bridge Status", collapsed=False)
-        with status_frame:
-            with ui.VStack(style=get_style(), spacing=5, height=0):
-                ui.Label("Telekinesis Isaac Sim Bridge")
-                ui.Label(f"Bridge server: {BRIDGE_HOST}:{BRIDGE_PORT}")
+        with status_frame, ui.VStack(style=get_style(), spacing=5, height=0):
+            ui.Label("Telekinesis Isaac Sim Bridge")
+            ui.Label(f"Bridge server: {BRIDGE_HOST}:{BRIDGE_PORT}")

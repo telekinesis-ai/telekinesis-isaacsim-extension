@@ -26,16 +26,16 @@ style) -- no background worker, no command queue.
 import asyncio
 import time
 
+import carb
 import numpy as np
 import omni.kit.app
 import omni.physx
 import omni.timeline
 from isaacsim.core import prims
 from isaacsim.core.utils.types import ArticulationAction
-import carb
 from pxr import PhysxSchema, Usd, UsdPhysics
 
-from .robot_assembler import get_articulation_base_link_name
+from .robot_assembler import get_articulation_base_link_name, play_timeline_with_valid_physics_view
 
 # A PhysX position drive settles with a small steady-state offset (gravity, drive
 # stiffness, the URDF importer's default gains), so an over-tight position
@@ -149,31 +149,28 @@ class SingleArticulation:
         """(Re)initialize the articulation against the current physics view.
 
         Starts the timeline if it is not already running, since an articulation has
-        no physics handle to bind to while it is stopped.
+        no physics handle to bind to while it is stopped, and restarts it when a prim
+        removed while it ran killed the physics view (see
+        :func:`.robot_assembler.play_timeline_with_valid_physics_view`).
 
-        Safe to call repeatedly: reuses the handle and just re-initializes, which
-        is needed when the timeline was stopped/replayed between client sessions
-        (a stale handle returns None from get_joint_positions). Only reports bound
-        once joint state actually reads back non-None.
+        Safe to call repeatedly, which is needed when the timeline was stopped/replayed
+        between client sessions (a stale handle returns None from get_joint_positions).
+        Each bind builds a fresh handle, because a handle keeps the joints it was first
+        initialized with: one held while a gripper was merged onto the arm still lists
+        the gripper's joints after the gripper is removed. Only reports bound once joint
+        state actually reads back non-None; until then the previous handle is kept.
         """
         self.stop_velocity_drive()
-        omni.timeline.get_timeline_interface().play()
+        await play_timeline_with_valid_physics_view()
         app = omni.kit.app.get_app()
-        await app.next_update_async()
-        await app.next_update_async()
 
         last_exc = None
         for _ in range(_BIND_RETRIES):
             try:
-                if self._articulation is None:
-                    self._articulation = prims.SingleArticulation(
-                        prim_path=self.prim_path, name=self._name
-                    )
-                self._articulation.initialize()
-                if (
-                    self._articulation.num_dof
-                    and self._articulation.get_joint_positions() is not None
-                ):
+                articulation = prims.SingleArticulation(prim_path=self.prim_path, name=self._name)
+                articulation.initialize()
+                if articulation.num_dof and articulation.get_joint_positions() is not None:
+                    self._articulation = articulation
                     # Order matters, and all of these run within this one frame:
                     # the drive needs a speed it can reach a pose at before it is
                     # asked to hold one, and the pose it is aligned to is the one
@@ -780,13 +777,17 @@ class SingleArticulation:
         property of their drive gains, which :meth:`set_dof_gains` retunes.
 
         Because the drive target is the command, stopping the stream holds the last
-        streamed pose.
+        streamed pose. A frame that arrives while the articulation cannot be driven --
+        the timeline is stopped, or is being restarted after a prim was removed -- is
+        dropped.
 
         ``indices`` defaults to this device's driven subset (``joint_indices``),
         matching :meth:`set_j`. This is synchronous and lock-free: it performs no
         ``await``, so it runs atomically with respect to other coroutines on the
         loop; the ``_move_lock`` only needs to guard the awaiting :meth:`move_j`.
         """
+        if not self.handles_initialized():
+            return
         target = np.asarray(positions, dtype=float)
         idx = list(self.joint_indices) if indices is None else list(indices)
         if target.shape != (len(idx),):
@@ -926,8 +927,30 @@ class SingleArticulation:
     # secondary to ordinary joint-space control.
 
     def handles_initialized(self):
-        """Whether the underlying handle is currently valid, without a re-bind."""
-        return bool(self._articulation is not None and self._articulation.handles_initialized)
+        """Whether the articulation can be read and driven now, without a re-bind.
+
+        False while the timeline is stopped, after a prim removed while the timeline
+        played invalidated the physics view, and after :meth:`release_physics_handle`.
+        """
+        from isaacsim.core.simulation_manager import SimulationManager
+
+        return bool(
+            self._articulation is not None
+            and self._articulation.handles_initialized
+            # Isaac Sim's own check misses a view that a removed prim invalidated.
+            and SimulationManager.get_physics_sim_view().is_valid
+        )
+
+    def release_physics_handle(self):
+        """Drop the physics handle, so the next :meth:`bind` builds a fresh one.
+
+        Called when the articulation's joints may have changed under the handle, such
+        as when a gripper merged onto the arm is removed: a handle keeps the joints it
+        was first initialized with, and Isaac Sim revives it as is whenever the timeline
+        plays. Until the next bind, :meth:`handles_initialized` is False. Returns None.
+        """
+        self.stop_velocity_drive()
+        self._articulation = None
 
     def num_bodies(self):
         """Number of rigid-body links in the underlying articulation (the whole

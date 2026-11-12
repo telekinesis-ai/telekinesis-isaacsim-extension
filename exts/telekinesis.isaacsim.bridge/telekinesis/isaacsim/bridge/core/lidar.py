@@ -48,6 +48,7 @@ a client can tell a partial sweep from a full one.
 
 import time
 
+import carb
 import numpy as np
 import omni.kit.app
 import omni.kit.commands
@@ -55,7 +56,6 @@ import omni.timeline
 import omni.usd
 from isaacsim.core import prims
 from isaacsim.sensors.physx import _range_sensor
-import carb
 
 # -- static tables ----------------------------------------------------------
 
@@ -154,6 +154,27 @@ def _finalize(raw):
     if raw is None or (hasattr(raw, "size") and raw.size == 0):
         return None
     return _to_json(raw)
+
+
+def read_scan_config(prim_path):
+    """Return the scan configuration the Lidar prim at ``prim_path`` stores.
+
+    The result holds :class:`Lidar`'s configuration keyword arguments, from ``min_range``
+    to ``yaw_offset``, so constructing a lidar with it leaves the prim as it is.
+    ``enable_semantics`` is left out: it follows from the ``data_types`` a lidar is
+    constructed with.
+
+    Raises:
+        ValueError: If no prim is at ``prim_path`` or it is not a Lidar.
+    """
+    prim = omni.usd.get_context().get_stage().GetPrimAtPath(prim_path)
+    if not prim.IsValid() or not prim.HasAttribute(_CONFIG_ATTRS["min_range"]):
+        raise ValueError(f"prim at {prim_path} is not a Lidar (missing range-sensor attributes)")
+    return {
+        field: prim.GetAttribute(attr_name).Get()
+        for field, attr_name in _CONFIG_ATTRS.items()
+        if field != "enable_semantics"
+    }
 
 
 class Lidar:

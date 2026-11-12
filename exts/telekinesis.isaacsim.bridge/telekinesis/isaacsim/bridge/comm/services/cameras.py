@@ -2,12 +2,13 @@
 """The camera registry: the orchestration layer behind the camera HTTP routes.
 
 ``CameraService`` is the sensor counterpart to
-:class:`..services.articulations.ArticulationService`: an in-memory table mapping
-``camera_id`` -> :class:`..core.camera.Camera`, plus the operations on it -- create
-(wrap + bind), look up, delete, list, capture render outputs, and get/set the
-camera's pose and optical parameters.
+:class:`..services.articulations.ArticulationService`: the
+:class:`.device_registry.DeviceRegistry` mapping ``camera_id`` ->
+:class:`..core.camera.Camera`, plus the operations on it -- create (wrap + bind),
+look up, delete, list, capture render outputs, and get/set the camera's pose and
+optical parameters.
 
-It owns mutable state (the device table and the id counter), so exactly one
+It owns mutable state (the device table), so exactly one
 instance is shared across all requests -- :class:`BridgeServer` builds it once and
 stashes it on ``app.state`` for the routers to reach via ``Depends`` (see
 :mod:`..comm.dependencies`).
@@ -26,47 +27,43 @@ every other value here is JSON.
 import asyncio
 
 from fastapi import HTTPException
+from pxr import Gf, Sdf
 
 from ...core.camera import Camera, capture_cameras, discover_camera_prims
+from .device_registry import DeviceRegistry
 
 
-class CameraService:
+class CameraService(DeviceRegistry):
     """The camera registry shared by every request.
 
-    Holds the ``camera_id`` -> device table and an id counter, and exposes
-    create / get / delete / list, capture, and the pose/optics getters and setters.
-    One instance per running bridge.
+    Holds the ``camera_id`` -> device table and exposes create / get / delete / list,
+    capture, and the pose/optics getters and setters. Each camera's prim stores its id,
+    resolution and requested frequency, so reopening a saved stage restores the camera
+    under the same id with the same settings; it comes back running, even if it was
+    paused. One instance per running bridge.
     """
 
-    def __init__(self):
-        self._devices = {}  # camera_id -> Camera
-        self._id_by_prim = {}  # requested prim_path -> camera_id (stable on re-create)
-        self._count = 0  # for ids like camera1, camera2
-        # prim_path -> asyncio.Lock, serializes concurrent creates of the same prim
-        self._create_locks = {}
+    device_kind = "camera"
 
-    def clear(self):
-        """Drop every bound camera (called when the bridge stops or the stage changes).
+    def release_device(self, device):
+        """Best-effort ``device.destroy()``, freeing the camera's render product.
 
         Unlike an articulation, a camera owns a render product, annotators, and event
-        subscriptions, so each device is explicitly destroyed rather than left to the
-        GC finalizer.
+        subscriptions, so it is explicitly destroyed rather than left to the GC
+        finalizer. Errors are swallowed, since teardown may run after the stage is gone.
         """
-        for device in self._devices.values():
-            self._safe_destroy(device)
-        self._devices = {}
-        self._id_by_prim = {}
-        self._count = 0
-        self._create_locks = {}
-
-    @staticmethod
-    def _safe_destroy(device):
-        """Best-effort ``device.destroy()`` -- swallow errors so teardown (which may
-        run after the stage is already gone) never raises."""
         try:
             device.destroy()
         except Exception:  # cleanup must not fail the caller (stage may be gone)
             pass
+
+    async def restore_device(self, prim_path):
+        """Create the camera at ``prim_path`` with the resolution and frequency it stores."""
+        await self.create_camera(
+            prim_path,
+            self.read_stored_value(prim_path, "resolution"),
+            self.read_stored_value(prim_path, "frequency"),
+        )
 
     async def create_camera(self, prim_path, resolution, frequency):
         """Register (and bind) the camera at ``prim_path`` and return its info.
@@ -74,7 +71,8 @@ class CameraService:
         One camera per *requested* prim; PUTting the same prim again keeps its id **and
         the camera already bound to that prim**, applying the requested resolution /
         frequency to it, so the response always reflects the request. Ids are 1-based:
-        ``camera1``, ``camera2``, ...
+        ``camera1``, ``camera2``, ... The id, the resolution and a requested frequency
+        are stored on the prim, so they survive saving and reopening the stage.
 
         The device is reused rather than rebuilt because Isaac Sim hands a second camera
         over the same prim the *same* render product (replicator returns an existing one
@@ -102,14 +100,7 @@ class CameraService:
                 # requested configuration is applied to it in place.
                 self._configure(device, resolution, frequency)
             else:
-                reserved_id = camera_id is None
-                if reserved_id:
-                    # Reserve a fresh id synchronously -- before the bind() await below,
-                    # which yields the loop. The per-prim lock does NOT serialize creates
-                    # of *different* prims, so deferring the increment past the await
-                    # would let two of them grab the same cameraN.
-                    self._count += 1
-                    camera_id = f"camera{self._count}"
+                camera_id = self.allocate_device_id(prim_path)
                 try:
                     replacement = Camera(
                         prim_path,
@@ -120,18 +111,19 @@ class CameraService:
                 except Exception as exc:
                     # Bad input value: a non-divisor frequency, or a prim that isn't a
                     # Camera -- all raised at construction. 400, not the 500 a bare
-                    # Exception would otherwise become. Construction has no await, so
-                    # rolling back a freshly reserved id here is race-free.
-                    if reserved_id:
-                        self._count -= 1
+                    # Exception would otherwise become.
                     raise HTTPException(status_code=400, detail=str(exc)) from exc
                 if device is not None:
                     # An unbound device holds no render product, so freeing it here
                     # cannot strand the replacement's annotators.
-                    self._safe_destroy(device)
+                    self.release_device(device)
                 device = replacement
-                self._devices[camera_id] = device
-                self._id_by_prim[prim_path] = camera_id
+                self.register_device(prim_path, camera_id, device)
+            self.write_stored_value(
+                prim_path, "resolution", Sdf.ValueTypeNames.Int2, Gf.Vec2i(*device.resolution)
+            )
+            if frequency is not None:
+                self.write_stored_value(prim_path, "frequency", Sdf.ValueTypeNames.Float, frequency)
 
             try:
                 await device.bind()
@@ -166,26 +158,6 @@ class CameraService:
         """Info for one registered camera (id, prim, resolution, optics), or 404."""
         device = self.get_device(camera_id)
         return {"camera_id": camera_id, "prim_path": device.prim_path, **device.info()}
-
-    def delete_camera(self, camera_id):
-        """Unregister the camera (the USD prim is left in the stage). 404 if unknown."""
-        device = self._devices.get(camera_id)
-        if device is None:
-            raise HTTPException(
-                status_code=404, detail=f"no camera registered with id '{camera_id}'"
-            )
-        # Free the render product / annotators / event subs this device owns.
-        self._safe_destroy(device)
-        del self._devices[camera_id]
-        for prim, registered_id in list(self._id_by_prim.items()):
-            if registered_id == camera_id:
-                del self._id_by_prim[prim]
-                self._create_locks.pop(prim, None)
-        return {"deleted": camera_id}
-
-    def list_cameras(self):
-        """Return a ``{camera_id: prim_path}`` map of every registered camera."""
-        return {camera_id: device.prim_path for camera_id, device in self._devices.items()}
 
     @staticmethod
     def discover_cameras(prim_path):
@@ -295,12 +267,16 @@ class CameraService:
         return {"resolution": self.get_device(camera_id).get_resolution()}
 
     def set_resolution(self, camera_id, width, height):
-        """Set [width, height] in pixels; returns the resulting resolution."""
+        """Set [width, height] in pixels, also stored on the prim; returns the resulting
+        resolution."""
         device = self.get_device(camera_id)
         try:
             device.set_resolution((width, height))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        self.write_stored_value(
+            device.prim_path, "resolution", Sdf.ValueTypeNames.Int2, Gf.Vec2i(*device.resolution)
+        )
         return {"resolution": device.get_resolution()}
 
     def get_focal_length(self, camera_id):
@@ -368,12 +344,13 @@ class CameraService:
         return {"frequency": self.get_device(camera_id).get_frequency()}
 
     def set_frequency(self, camera_id, value):
-        """Set the acquisition frequency (Hz)."""
+        """Set the acquisition frequency (Hz), also stored on the prim."""
         device = self.get_device(camera_id)
         try:
             device.set_frequency(value)
         except Exception as exc:  # isaacsim raises a bare Exception for a bad divisor
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        self.write_stored_value(device.prim_path, "frequency", Sdf.ValueTypeNames.Float, value)
         return {"frequency": device.get_frequency()}
 
     def get_projection_mode(self, camera_id):
@@ -446,17 +423,3 @@ class CameraService:
     def is_paused(self, camera_id):
         """Whether data collection is currently paused."""
         return {"paused": self.get_device(camera_id).is_paused()}
-
-    # -- internals -------------------------------------------------------------
-
-    def get_device(self, camera_id):
-        """Resolve a ``camera_id`` to its device object, or 404."""
-        device = self._devices.get(camera_id)
-        if device is None:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    f"no camera registered with id '{camera_id}', call PUT /cameras to create one"
-                ),
-            )
-        return device

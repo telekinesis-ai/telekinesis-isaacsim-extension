@@ -9,6 +9,7 @@ Run:  python get_articulation.py --id articulation1
 """
 
 import argparse
+
 import requests
 
 HOST = "127.0.0.1"

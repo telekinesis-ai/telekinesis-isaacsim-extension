@@ -8,11 +8,11 @@ from pathlib import Path
 
 import omni.usd
 from fastapi import HTTPException
+from isaacsim.gui.components import element_wrappers
 from omni import ui
 from omni.kit import notification_manager
 from omni.kit.window.property import templates
 from pxr import Gf, Tf
-from isaacsim.gui.components import element_wrappers
 
 from ..comm import models
 from ..comm.services.articulations import ArticulationService
@@ -114,51 +114,50 @@ class AddAssetWindow(abc.ABC):
 
         self._window = ui.Window(title, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, visible=False)
         self._window.set_visibility_changed_fn(self._on_visibility_changed)
-        with self._window.frame:
-            with ui.VStack(spacing=5, height=0):
-                # Every row is a label of the property panel's label width and a field
-                # filling the rest, so the fields line up on both edges.
-                self._manufacturer_dropdown = element_wrappers.DropDown(
-                    "Manufacturer",
-                    on_selection_fn=self._on_manufacturer_selected,
-                    add_flourish=False,
+        with self._window.frame, ui.VStack(spacing=5, height=0):
+            # Every row is a label of the property panel's label width and a field
+            # filling the rest, so the fields line up on both edges.
+            self._manufacturer_dropdown = element_wrappers.DropDown(
+                "Manufacturer",
+                on_selection_fn=self._on_manufacturer_selected,
+                add_flourish=False,
+            )
+            self._model_dropdown = element_wrappers.DropDown(
+                "Model",
+                populate_fn=self._models_of_selected_manufacturer,
+                on_selection_fn=lambda _: self.update_ghost(),
+                add_flourish=False,
+            )
+            # Built directly because Isaac's StringField always ends its row with a
+            # decoration the other rows do not have.
+            with ui.HStack(height=0):
+                ui.Label(
+                    "Attaching Prim",
+                    width=templates.LABEL_WIDTH,
+                    alignment=ui.Alignment.LEFT_CENTER,
+                    tooltip="Prim the asset is added at",
                 )
-                self._model_dropdown = element_wrappers.DropDown(
-                    "Model",
-                    populate_fn=self._models_of_selected_manufacturer,
-                    on_selection_fn=lambda _: self.update_ghost(),
-                    add_flourish=False,
+                # Read-only: the right-clicked prim the window was opened on.
+                self._attaching_prim_model = ui.StringField(read_only=True).model
+            self._transformation_fields = TransformationFields(on_changed_fn=self.update_ghost)
+            # Always shown, so the buttons below it never move.
+            with self._hint_callout():
+                ui.Label("Hover over the viewport and press", width=0)
+                self._build_key_cap("W")
+                ui.Label("for the move or", width=0)
+                self._build_key_cap("E")
+                ui.Label("for the rotate tool", width=0)
+            self.build_extra_hints()
+            ui.Spacer(height=BUTTON_ROW_GAP)
+            # The button row is centered by a stretching spacer on either side.
+            with ui.HStack(spacing=5, height=0):
+                ui.Spacer()
+                self.build_extra_buttons()
+                self._add_button = ui.Button(
+                    "Add", width=BUTTON_WIDTH, clicked_fn=self._on_add_clicked
                 )
-                # Built directly because Isaac's StringField always ends its row with a
-                # decoration the other rows do not have.
-                with ui.HStack(height=0):
-                    ui.Label(
-                        "Attaching Prim",
-                        width=templates.LABEL_WIDTH,
-                        alignment=ui.Alignment.LEFT_CENTER,
-                        tooltip="Prim the asset is added at",
-                    )
-                    # Read-only: the right-clicked prim the window was opened on.
-                    self._attaching_prim_model = ui.StringField(read_only=True).model
-                self._transformation_fields = TransformationFields(on_changed_fn=self.update_ghost)
-                # Always shown, so the buttons below it never move.
-                with self._hint_callout():
-                    ui.Label("Hover over the viewport and press", width=0)
-                    self._build_key_cap("W")
-                    ui.Label("for the move or", width=0)
-                    self._build_key_cap("E")
-                    ui.Label("for the rotate tool", width=0)
-                self.build_extra_hints()
-                ui.Spacer(height=BUTTON_ROW_GAP)
-                # The button row is centered by a stretching spacer on either side.
-                with ui.HStack(spacing=5, height=0):
-                    ui.Spacer()
-                    self.build_extra_buttons()
-                    self._add_button = ui.Button(
-                        "Add", width=BUTTON_WIDTH, clicked_fn=self._on_add_clicked
-                    )
-                    ui.Spacer()
-                self._status_label = ui.Label("", word_wrap=True)
+                ui.Spacer()
+            self._status_label = ui.Label("", word_wrap=True)
 
     @abc.abstractmethod
     def asset_categories(self) -> list[str]:

@@ -208,6 +208,45 @@ unbroken. Only prims with a collider break the beam; purely visual geometry is i
 `linear_depth` is a raycast distance rather than something a physical light barrier measures. It is
 useful as simulation ground truth, and wrong to build a controller on that has to run on hardware.
 
+### Saved stages
+
+Registered devices are saved with the stage. Each device prim stores its id, such as
+`telekinesis:articulation:id`, next to what the bridge would otherwise keep only in memory:
+
+| Device | Stored on its prim |
+|---|---|
+| Articulation | `driven_joints`, once narrowed or picked by `assemble_robot` |
+| Camera | `resolution`, and `frequency` once one is requested |
+| Lidar | `data_types`; the scan configuration is the prim's own |
+| Conveyor | `cargo_root`, and the travel direction and speed captured on its first registration |
+
+When a stage is opened, the bridge registers every device it stores under its stored id, as it
+was saved: a gripper merged onto an arm or a suction gripper bolted onto one counts as assembled
+with it, a paused lightbeam stays paused, and a conveyor saved running in reverse keeps its
+direction. A camera comes back running even if it was paused. Restoring binds the devices, so the
+timeline plays while it runs and is stopped again afterwards. Requests wait until the restore is
+done. A device that cannot be restored is logged and skipped, and keeps its id for a later `PUT`.
+
+A `PUT` of a restored device returns its stored id and otherwise behaves as any repeated `PUT`: a
+lidar takes the request's configuration and a lightbeam is enabled again. A copy of a device prim
+gets an id of its own when it is registered, and `DELETE` removes what the prim stores. A stage
+saved before this release stores nothing and opens with no device registered.
+
+Removing a device's prim from the stage — in the Stage window, from a script, or with
+`DELETE /prims` — unregisters the device, and so does renaming or moving the prim. An assembly the
+device took part in is forgotten with it, so a gripper that is added again is assembled again. A
+prim brought back by undo still stores its id, and a `PUT` of it returns that id.
+
+Isaac Sim does not support removing a physics prim — a link or collider of a bound articulation,
+as an assembled gripper has — while the timeline plays: it breaks the physics view every
+articulation reads through. When that happens, the bridge repairs it as soon as the prim is
+removed. It stops and plays the timeline, which puts the scene back as it was before the timeline
+was played, and rebinds every articulation. Open streams skip the frames in between; a request
+in flight at that moment fails. An arm whose merged gripper was removed drives its own joints
+afterwards; if the gripper was removed while the timeline was stopped, the arm's next
+`PUT /articulations` rebinds it. `DELETE /prims` stops the timeline around the removal, as Isaac
+Sim recommends, so the physics view never breaks.
+
 ### WebSocket routes
 
 WebSocket routes cannot be described in OpenAPI, so Swagger UI does not list them. There are two,

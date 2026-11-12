@@ -207,7 +207,7 @@ class AssetLibraryService:
             result, entries = await asyncio.wait_for(
                 omni.client.list_async(url), timeout=LISTING_TIMEOUT_SECONDS
             )
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise HTTPException(status_code=502, detail=f"listing {url} timed out") from exc
         if result == omni.client.Result.ERROR_NOT_FOUND:
             return []

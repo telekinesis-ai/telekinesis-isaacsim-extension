@@ -49,8 +49,6 @@ from .models import (
     AddToSceneRequest,
     ApplyRelativePoseRequest,
     AssembleRobotRequest,
-    MountPrimRequest,
-    SetTcpRequest,
     AttachmentPointPropertiesRequest,
     CameraApertureRequest,
     CameraClippingRangeRequest,
@@ -80,6 +78,7 @@ from .models import (
     LidarLocalPoseRequest,
     LidarWorldPoseRequest,
     LightBeamConfigurationRequest,
+    MountPrimRequest,
     MultiCaptureRequest,
     OpenSceneRequest,
     PrimPathRequest,
@@ -90,6 +89,7 @@ from .models import (
     SetPrimMetadataRequest,
     SetRigidBodyRequest,
     SetScaleRequest,
+    SetTcpRequest,
     SetVelocityRequest,
     SetVisibilityRequest,
     SetWorldVelocityRequest,
@@ -163,7 +163,7 @@ async def create_articulation(
 @articulations.get("/articulations", summary="List Articulations")
 async def list_articulations(articulation_service=Depends(get_articulation_service)):
     """Every registered articulation id mapped to its prim path."""
-    return articulation_service.list_articulations()
+    return articulation_service.list_devices()
 
 
 @articulations.get("/articulations/{articulation_id}", summary="Get Articulation")
@@ -179,7 +179,7 @@ async def delete_articulation(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
     """Unregister the articulation (the USD prim is left in the stage)."""
-    return articulation_service.delete_articulation(articulation_id)
+    return articulation_service.delete_device(articulation_id)
 
 
 @articulations.post("/articulations/{articulation_id}/move_j", summary="Move Joint Positions")
@@ -229,6 +229,10 @@ async def stream_joint_positions(websocket: WebSocket, articulation_id: str):
     working through a backlog of stale positions -- so a drop in frame rate makes the
     motion coarser, never late. Send a dense path if the intermediate positions
     matter, and pace it at the simulator's update rate.
+
+    Frames that arrive while the articulation cannot be driven -- the timeline is
+    stopped, or the bridge is restarting it after a prim was removed -- are dropped;
+    the connection stays open.
     """
     # Imported here rather than at module scope: scripts/generate_openapi.py imports
     # this module with no Isaac Sim in the interpreter.
@@ -468,7 +472,11 @@ async def set_tcp(
 async def get_handles_initialized(
     articulation_id: str, articulation_service=Depends(get_articulation_service)
 ):
-    """Whether the device's handle is currently valid, without a re-bind."""
+    """Whether the articulation can be read and driven now, without a re-bind.
+
+    False while the timeline is stopped, and while its physics view is invalidated by a
+    prim removed during play, until the bridge has rebound it.
+    """
     return articulation_service.get_handles_initialized(articulation_id)
 
 
@@ -1013,6 +1021,7 @@ async def delete_prim(prim_path: str, prim_service=Depends(get_prim_service)):
     """Remove a prim and everything beneath it. A path with no prim succeeds unchanged.
 
     The timeline is stopped for the removal and, if it was playing, played again.
+    Devices registered at or under the prim are unregistered.
     """
     await prim_service.delete_prim(prim_path)
 
@@ -1149,8 +1158,6 @@ async def clear_motion_groups():
 #
 # A camera is a registered device with an id, exactly like an articulation:
 # PUT /cameras hands back a camera_id, then every other route addresses that id.
-# (This replaces the old Wandelbots-mirrored /periphery stubs, which modelled a
-# single "active camera" with no ids and did not fit the registry design.)
 
 cameras = APIRouter(tags=["cameras"])
 
@@ -1165,7 +1172,7 @@ async def create_camera(req: CreateCameraRequest, camera_service=Depends(get_cam
 @cameras.get("/cameras", summary="List Cameras")
 async def list_cameras(camera_service=Depends(get_camera_service)):
     """Every registered camera id mapped to its prim path."""
-    return camera_service.list_cameras()
+    return camera_service.list_devices()
 
 
 # Registered before /cameras/{camera_id}, which would otherwise match "discover" as
@@ -1202,7 +1209,7 @@ async def get_camera(camera_id: str, camera_service=Depends(get_camera_service))
 @cameras.delete("/cameras/{camera_id}", summary="Delete Camera")
 async def delete_camera(camera_id: str, camera_service=Depends(get_camera_service)):
     """Unregister the camera (the USD prim is left in the stage)."""
-    return camera_service.delete_camera(camera_id)
+    return camera_service.delete_device(camera_id)
 
 
 @cameras.post(
@@ -1568,7 +1575,7 @@ async def create_lidar(req: CreateLidarRequest, lidar_service=Depends(get_lidar_
 @lidars.get("/lidars", summary="List Lidars")
 async def list_lidars(lidar_service=Depends(get_lidar_service)):
     """Every registered lidar id mapped to its prim path."""
-    return lidar_service.list_lidars()
+    return lidar_service.list_devices()
 
 
 @lidars.get("/lidars/{lidar_id}", summary="Get Lidar")
@@ -1580,7 +1587,7 @@ async def get_lidar(lidar_id: str, lidar_service=Depends(get_lidar_service)):
 @lidars.delete("/lidars/{lidar_id}", summary="Delete Lidar")
 async def delete_lidar(lidar_id: str, lidar_service=Depends(get_lidar_service)):
     """Unregister the lidar (the USD prim is left in the stage)."""
-    return lidar_service.delete_lidar(lidar_id)
+    return lidar_service.delete_device(lidar_id)
 
 
 @lidars.post("/lidars/{lidar_id}/capture", summary="Capture Scan")
@@ -1964,7 +1971,7 @@ async def create_conveyor(
 @conveyors.get("/conveyors", summary="List Conveyors")
 async def list_conveyors(conveyor_service=Depends(get_conveyor_service)):
     """Every registered conveyor id mapped to its prim path."""
-    return conveyor_service.list_conveyors()
+    return conveyor_service.list_devices()
 
 
 @conveyors.get("/conveyors/{conveyor_id}", summary="Get Conveyor")
@@ -1978,7 +1985,7 @@ async def get_conveyor(conveyor_id: str, conveyor_service=Depends(get_conveyor_s
 async def delete_conveyor(conveyor_id: str, conveyor_service=Depends(get_conveyor_service)):
     """Unregister the conveyor (the USD prim is left in the stage, and a running belt
     keeps running -- stop it first)."""
-    return conveyor_service.delete_conveyor(conveyor_id)
+    return conveyor_service.delete_device(conveyor_id)
 
 
 @conveyors.post("/conveyors/{conveyor_id}/start", summary="Start Conveyor")
@@ -2024,7 +2031,7 @@ async def create_lightbeam(
 @lightbeams.get("/lightbeams", summary="List Lightbeams")
 async def list_lightbeams(lightbeam_service=Depends(get_lightbeam_service)):
     """Every registered lightbeam id mapped to its prim path."""
-    return lightbeam_service.list_lightbeams()
+    return lightbeam_service.list_devices()
 
 
 @lightbeams.get("/lightbeams/{lightbeam_id}", summary="Get Lightbeam")
@@ -2036,7 +2043,7 @@ async def get_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbe
 @lightbeams.delete("/lightbeams/{lightbeam_id}", summary="Delete Lightbeam")
 async def delete_lightbeam(lightbeam_id: str, lightbeam_service=Depends(get_lightbeam_service)):
     """Unregister the sensor (the USD prim is left in the stage)."""
-    return lightbeam_service.delete_lightbeam(lightbeam_id)
+    return lightbeam_service.delete_device(lightbeam_id)
 
 
 @lightbeams.get("/lightbeams/{lightbeam_id}/reading", summary="Read Lightbeam")
@@ -2126,7 +2133,7 @@ async def list_surface_grippers(
     surface_gripper_service=Depends(get_surface_gripper_service),
 ):
     """Every registered surface gripper id mapped to its prim path."""
-    return surface_gripper_service.list_surface_grippers()
+    return surface_gripper_service.list_devices()
 
 
 @surface_grippers.get("/surface_grippers/{surface_gripper_id}", summary="Get Surface Gripper")
@@ -2144,7 +2151,7 @@ async def delete_surface_gripper(
     surface_gripper_service=Depends(get_surface_gripper_service),
 ):
     """Unregister the surface gripper (the USD prim is left in the stage)."""
-    return surface_gripper_service.delete_surface_gripper(surface_gripper_id)
+    return surface_gripper_service.delete_device(surface_gripper_id)
 
 
 @surface_grippers.post("/surface_grippers/{surface_gripper_id}/close", summary="Close Gripper")

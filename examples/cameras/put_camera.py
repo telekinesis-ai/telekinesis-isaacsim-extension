@@ -15,6 +15,7 @@ Run:  python put_camera.py
 """
 
 import argparse
+
 import requests
 
 HOST = "127.0.0.1"

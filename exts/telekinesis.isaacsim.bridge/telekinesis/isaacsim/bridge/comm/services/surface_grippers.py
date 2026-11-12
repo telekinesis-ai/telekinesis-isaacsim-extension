@@ -2,17 +2,18 @@
 """The surface gripper registry: the orchestration layer behind the surface gripper routes.
 
 ``SurfaceGripperService`` is the suction counterpart to
-:class:`..services.articulations.ArticulationService`: an in-memory table mapping
-``surface_gripper_id`` -> :class:`..core.surface_gripper.SurfaceGripper`, plus the
-operations on it -- create (wrap + bind), look up, delete, list, close/open the
-gripper, read its status, and get/set its properties and attachment points.
+:class:`..services.articulations.ArticulationService`: the
+:class:`.device_registry.DeviceRegistry` mapping ``surface_gripper_id`` ->
+:class:`..core.surface_gripper.SurfaceGripper`, plus the operations on it -- create
+(wrap + bind), look up, delete, list, close/open the gripper, read its status, and
+get/set its properties and attachment points.
 
 Ids are ``surface_gripper1``, ``surface_gripper2``, ... The prefix is not
 cosmetic: ``assemble_robot`` takes one ``gripper_id`` for either kind of gripper
 and tells them apart by which registry the id is in, so the two id spaces must not
 collide.
 
-It owns mutable state (the device table and the id counter), so exactly one
+It owns mutable state (the device table), so exactly one
 instance is shared across all requests -- :class:`BridgeServer` builds it once and
 stashes it on ``app.state`` for the routers to reach via ``Depends`` (see
 :mod:`..comm.dependencies`).
@@ -34,24 +35,24 @@ from fastapi import HTTPException
 from ...core.asset_loader import raise_if_inside_physics_body, reference_usd_at
 from ...core.surface_gripper import SurfaceGripper
 from .asset_library import AssetLibraryService
+from .device_registry import DeviceRegistry
 
 
-class SurfaceGripperService:
+class SurfaceGripperService(DeviceRegistry):
     """The surface gripper registry shared by every request.
 
-    Holds the ``surface_gripper_id`` -> device table and an id counter, and exposes
-    create / get / delete / list, close / open / status, and the property and
-    attachment-point getters and setters. One instance per running bridge.
+    Holds the ``surface_gripper_id`` -> device table and exposes create / get / delete
+    / list, close / open / status, and the property and attachment-point getters and
+    setters. Each gripper's prim stores its id, so reopening a saved stage restores the
+    gripper under the same id. One instance per running bridge.
     """
 
+    device_kind = "surface_gripper"
+
     def __init__(self, asset_library_service: AssetLibraryService):
+        super().__init__()
         # Downloads the catalogue asset a create names by asset_info.
         self._asset_library_service = asset_library_service
-        self._devices = {}  # surface_gripper_id -> SurfaceGripper
-        self._id_by_prim = {}  # requested prim_path -> surface_gripper_id (stable on re-create)
-        self._count = 0  # for ids like surface_gripper1, surface_gripper2
-        # prim_path -> asyncio.Lock, serializes concurrent creates of the same prim
-        self._create_locks = {}
         # Called with a surface_gripper_id when one is deleted, so the articulation
         # service can drop any assembly record naming it. Set by BridgeServer when
         # it composes the two services; None until then.
@@ -61,12 +62,12 @@ class SurfaceGripperService:
         # by BridgeServer alongside on_deleted; None until then.
         self.on_timeline_stopped = None
 
-    def clear(self):
-        """Drop every bound gripper (called when the bridge stops or the stage changes)."""
-        self._devices = {}
-        self._id_by_prim = {}
-        self._count = 0
-        self._create_locks = {}
+    def release_device(self, device):
+        """Nothing to free: a gripper's component lives and dies with its USD prim."""
+
+    async def restore_device(self, prim_path):
+        """Create the surface gripper at ``prim_path`` from the prim as it is."""
+        await self.create_surface_gripper(prim_path)
 
     async def create_surface_gripper(self, prim_path, usd_path=None, asset_info=None):
         """Register (and bind) the surface gripper at ``prim_path`` and return its info.
@@ -77,7 +78,8 @@ class SurfaceGripperService:
         subtree.
 
         One gripper per *requested* prim; PUTting the same prim again returns the
-        same id and rebinds. The bind runs every time: the gripper's component is
+        same id and rebinds. The id is stored on the prim, so it survives saving and
+        reopening the stage. The bind runs every time: the gripper's component is
         rebuilt whenever the timeline is stopped and replayed, and again when the
         gripper is assembled onto an arm.
 
@@ -102,12 +104,9 @@ class SurfaceGripperService:
         async with lock:
             await self._load_if_missing(prim_path, usd_path, asset_info)
 
-            surface_gripper_id = self._id_by_prim.get(prim_path)
-            if surface_gripper_id is None:
-                self._count += 1
-                surface_gripper_id = f"surface_gripper{self._count}"
-                self._devices[surface_gripper_id] = SurfaceGripper(prim_path)
-                self._id_by_prim[prim_path] = surface_gripper_id
+            surface_gripper_id = self.allocate_device_id(prim_path)
+            if surface_gripper_id not in self._devices:
+                self.register_device(prim_path, surface_gripper_id, SurfaceGripper(prim_path))
 
             device = self._devices[surface_gripper_id]
             try:
@@ -183,32 +182,23 @@ class SurfaceGripperService:
             **device.info(),
         }
 
-    def delete_surface_gripper(self, surface_gripper_id):
-        """Unregister the gripper (the USD prim is left in the stage). 404 if unknown."""
-        if surface_gripper_id not in self._devices:
-            raise HTTPException(
-                status_code=404,
-                detail=f"no surface gripper registered with id '{surface_gripper_id}'",
-            )
-        del self._devices[surface_gripper_id]
-        for prim, registered_id in list(self._id_by_prim.items()):
-            if registered_id == surface_gripper_id:
-                del self._id_by_prim[prim]
-                # Drop the create-lock too, or it lingers forever under a prim_path
-                # that no longer maps to anything.
-                self._create_locks.pop(prim, None)
-        if self.on_deleted is not None:
-            # Forget any assembly this gripper took part in, so a later re-create +
-            # assemble of the same pair is not refused as already assembled.
-            self.on_deleted(surface_gripper_id)
-        return {"deleted": surface_gripper_id}
+    def delete_device(self, device_id):
+        """Unregister the gripper and the id its prim stores; the USD prim stays in the stage.
 
-    def list_surface_grippers(self):
-        """Return a ``{surface_gripper_id: prim_path}`` map of every registered gripper."""
-        return {
-            surface_gripper_id: device.prim_path
-            for surface_gripper_id, device in self._devices.items()
-        }
+        Any assembly the gripper took part in is forgotten too.
+
+        Returns:
+            ``{"deleted": device_id}``.
+
+        Raises:
+            HTTPException: 404 if the id was never registered.
+        """
+        response = super().delete_device(device_id)
+        if self.on_deleted is not None:
+            # So a later re-create + assemble of the same pair is not refused as
+            # already assembled.
+            self.on_deleted(device_id)
+        return response
 
     # -- actuation --------------------------------------------------------------
 
@@ -312,19 +302,6 @@ class SurfaceGripperService:
             }
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    def get_device(self, surface_gripper_id):
-        """Resolve a ``surface_gripper_id`` to its device object, or 404."""
-        device = self._devices.get(surface_gripper_id)
-        if device is None:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    f"no surface gripper registered with id '{surface_gripper_id}', "
-                    "call PUT /surface_grippers to create one"
-                ),
-            )
-        return device
 
     def find_device(self, surface_gripper_id):
         """The device for ``surface_gripper_id``, or ``None`` if this registry has no such id.
