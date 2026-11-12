@@ -219,7 +219,6 @@ class SolverThresholdRequest(BaseModel):
     threshold: float
 
 
-
 class Transformation(BaseModel):
     """A rigid transform: translation (meters) + rotation (XYZ Euler degrees).
 

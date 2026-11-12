@@ -7696,122 +7696,6 @@
         }
       }
     },
-    "/prims/poses/default": {
-      "get": {
-        "tags": [
-          "prims"
-        ],
-        "summary": "List Default Poses",
-        "description": "Map every prim that has a stored default pose to that pose (local rotvec).",
-        "operationId": "list_default_poses_prims_poses_default_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "prims"
-        ],
-        "summary": "Assign Default Poses",
-        "description": "Record the prim's current local pose as its default (for later reset).",
-        "operationId": "assign_default_poses_prims_poses_default_put",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PrimPathRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "prims"
-        ],
-        "summary": "Clear Default Poses",
-        "description": "Forget every stored default pose.",
-        "operationId": "clear_default_poses_prims_poses_default_delete",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/prims/poses/default/reset": {
-      "post": {
-        "tags": [
-          "prims"
-        ],
-        "summary": "Reset Prim Poses To Default",
-        "description": "Restore a prim to its stored default pose (404 if none was assigned).",
-        "operationId": "reset_to_default_poses_prims_poses_default_reset_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PrimPathRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/prims/metadata": {
       "put": {
         "tags": [
@@ -9856,7 +9740,7 @@
           "model"
         ],
         "title": "FetchAssetRequest",
-        "description": "Body of POST /asset_library/fetch -- make one catalogue asset available locally.\n\n``category`` is a catalogue category such as ``robots/manipulators``;\n``manufacturer`` and ``model`` name the entry exactly as ``GET /asset_library``\nlists it (the manufacturer folder and the bundle ZIP name). Also the\n``asset_info`` of the routes that load an asset from the catalogue."
+        "description": "Body of POST /asset_library/fetch -- make one catalogue asset available locally.\n\n``category`` is a catalogue category such as ``robots/manipulators``;\n``manufacturer`` and ``model`` name the entry either by its manufacturer folder and\nbundle ZIP name (``epson``, ``cx4a601s``) or exactly as ``GET /asset_library``\nlists it. Also the\n``asset_info`` of the routes that load an asset from the catalogue."
       },
       "GripperActionRequest": {
         "properties": {
@@ -10357,20 +10241,6 @@
         ],
         "title": "PrimMetadata",
         "description": "Spec ``CustomPrimData`` -- user metadata stored on a prim."
-      },
-      "PrimPathRequest": {
-        "properties": {
-          "prim_path": {
-            "type": "string",
-            "title": "Prim Path"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prim_path"
-        ],
-        "title": "PrimPathRequest",
-        "description": "Body of PUT /prims/poses/default or POST /prims/poses/default/reset.\n\nA named model for consistency with every other body-carrying route (was\npreviously a bare ``Body(..., embed=False)`` string on these two only)."
       },
       "SetDrivenJointsRequest": {
         "properties": {

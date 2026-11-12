@@ -192,11 +192,12 @@ class AssetLibraryService:
             manufacturer = manufacturer_folder.relative_path.rstrip("/")
             for bundle_file in await self._list_bucket_folder(f"{category}/{manufacturer}/"):
                 if bundle_file.relative_path.endswith(".zip"):
+                    model = bundle_file.relative_path.removesuffix(".zip")
                     entries.append(
                         {
                             "manufacturer": manufacturer,
-                            "model": bundle_file.relative_path.removesuffix(".zip"),
-                            "identifier": f"{manufacturer}/{bundle_file.relative_path.removesuffix('.zip')}",
+                            "model": model,
+                            "identifier": f"{manufacturer}/{model}",
                             "bundle": f"{category}/{manufacturer}/{bundle_file.relative_path}",
                         }
                     )
