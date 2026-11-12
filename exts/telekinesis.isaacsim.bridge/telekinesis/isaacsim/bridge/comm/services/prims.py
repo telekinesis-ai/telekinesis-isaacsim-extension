@@ -18,11 +18,6 @@ import math
 
 from fastapi import HTTPException
 
-# customData namespace where we persist a prim's "default pose" (local-space,
-# 6-float rotation-vector form). Mirrors how the extension remembers a pose to
-# reset prims back to.
-_DEFAULT_POSE_KEY = "telekinesis:default_pose"
-
 
 def _matrix_to_pose(matrix, rotation_type):
     """Gf.Matrix4d -> {"pose": [...]} in cartesian (rotvec) or quaternion form.
@@ -196,40 +191,6 @@ class PrimService:
         xform = UsdGeom.Xformable(prim)
         xform.ClearXformOpOrder()
         xform.AddTransformOp().Set(transform.GetMatrix())
-
-    def list_default_poses(self):
-        """Map every prim that has a stored default pose to that pose (local rotvec)."""
-        from pxr import Usd
-
-        poses = {}
-        for prim in Usd.PrimRange(self._stage_service.stage().GetPseudoRoot()):
-            stored = prim.GetCustomDataByKey(_DEFAULT_POSE_KEY)
-            if stored is not None:
-                poses[prim.GetPath().pathString] = {"pose": list(stored)}
-        return poses
-
-    def assign_default_pose(self, prim_path):
-        """Record the prim's current local pose as its default (for later reset)."""
-        prim = self._prim_or_404(prim_path)
-        prim.SetCustomDataByKey(
-            _DEFAULT_POSE_KEY, _matrix_to_pose(_local_matrix(prim), "cartesian")["pose"]
-        )
-
-    def clear_default_poses(self):
-        """Forget every stored default pose."""
-        from pxr import Usd
-
-        for prim in Usd.PrimRange(self._stage_service.stage().GetPseudoRoot()):
-            if prim.GetCustomDataByKey(_DEFAULT_POSE_KEY) is not None:
-                prim.ClearCustomDataByKey(_DEFAULT_POSE_KEY)
-
-    def reset_to_default_pose(self, prim_path):
-        """Restore a prim to its stored default pose (404 if none was assigned)."""
-        prim = self._prim_or_404(prim_path)
-        stored = prim.GetCustomDataByKey(_DEFAULT_POSE_KEY)
-        if stored is None:
-            raise HTTPException(status_code=404, detail=f"prim '{prim_path}' has no default pose")
-        _set_local_matrix(prim, _wspose_to_matrix(list(stored)))
 
     def set_metadata(self, prim_path, metadata):
         """Store user metadata (category/type, a plain dict) on a prim under customData."""

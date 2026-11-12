@@ -17,6 +17,10 @@
   again afterwards, unless it was already playing. Requests wait until the restore is done.
 - An id handed out to a `PUT` that is refused with 400 is no longer handed to the next device, so
   ids can skip a number.
+### Removed
+- The default-pose routes `GET`, `PUT` and `DELETE /prims/poses/default` and
+  `POST /prims/poses/default/reset`, and the `telekinesis:default_pose` customData they stored on
+  prims. The `PrimPathRequest` model went with them.
 ### Fixed
 - After a stage was reopened, a gripper merged onto an arm drove all of its joints, mimic joints
   included, until a client narrowed it again. It now drives the joints it was narrowed to, or the
