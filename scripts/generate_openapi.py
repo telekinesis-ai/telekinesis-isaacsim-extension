@@ -37,7 +37,7 @@ bridge_package = types.ModuleType("telekinesis.isaacsim.bridge")
 bridge_package.__path__ = [str(package_root)]
 sys.modules["telekinesis.isaacsim.bridge"] = bridge_package
 
-from telekinesis.isaacsim.bridge.comm import routers
+from telekinesis.isaacsim.bridge.comm import routers  # noqa: E402
 
 # Generate OpenAPI schema from FastAPI routers and write to public/openapi.json
 app = FastAPI(title="Telekinesis Isaac Sim Bridge")

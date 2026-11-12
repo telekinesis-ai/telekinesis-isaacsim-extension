@@ -16,4 +16,4 @@
 
 # Required by Kit's extension loader, which discovers the `Extension` class via this
 # wildcard import.
-from .extension import *
+from .extension import *  # noqa: F403
