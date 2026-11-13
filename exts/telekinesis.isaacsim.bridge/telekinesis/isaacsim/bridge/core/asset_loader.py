@@ -350,7 +350,9 @@ def parking_shift(stage, bounds, dest_prim_path):
     An asset loaded under a prop, such as a box, lands at the origin of the prim it was
     loaded under, inside the prop. The prop is the prim directly under the default
     prim (or under the stage root, outside the default prim) that holds the asset, and
-    every collider in it counts, wherever the prop keeps them. Any of them the asset
+    every collider in it counts, wherever the prop keeps them. A collider authored on an
+    Xform, such as an instanceable CAD part, counts by the geometry below it, unless the
+    asset was loaded below that Xform. Any of them the asset
     would still overlap is resolved by lifting it along world +Z until its bounds stand
     on the highest of them, repeated while the lift brings it into another, so it ends
     up inside none. Colliders that belong to a robot are left to the +X parking. An
@@ -408,11 +410,25 @@ def parking_shift(stage, bounds, dest_prim_path):
                 robot_paths.append(robot.GetPath())
             if candidate.HasAPI(UsdPhysics.CollisionAPI):
                 colliders.append(candidate)
+    # Every purpose: a collision mesh is often a guide the viewport hides.
+    collider_cache = UsdGeom.BBoxCache(
+        Usd.TimeCode.Default(), UsdGeom.Imageable.GetOrderedPurposeTokens()
+    )
     collider_bounds = []
     for collider in colliders:
         if collider.GetPath().HasPrefix(dest_path) or any(
             collider.GetPath().HasPrefix(robot_path) for robot_path in robot_paths
         ):
+            continue
+        if not collider.IsA(UsdGeom.Boundable):
+            # An Xform has no extent of its own; an instanceable CAD part keeps its
+            # meshes in its prototype. Below it, the asset would be part of its bound
+            # and could never be lifted out of it.
+            if dest_path.HasPrefix(collider.GetPath()):
+                continue
+            collider_bound = collider_cache.ComputeWorldBound(collider).ComputeAlignedRange()
+            if not collider_bound.IsEmpty():
+                collider_bounds.append(collider_bound)
             continue
         # The collider's own extent rather than its BBoxCache bound: that bound
         # includes the collider's descendants, and the asset may just have been

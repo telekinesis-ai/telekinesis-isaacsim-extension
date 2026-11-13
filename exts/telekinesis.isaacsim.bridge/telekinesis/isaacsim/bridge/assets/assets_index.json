@@ -1237,13 +1237,6 @@
       "simulation_mount_link": "Link6"
     },
     {
-      "manufacturer": "Epson",
-      "model": "CX4A-601S",
-      "identifier": "epson/cx4a601s",
-      "bundle": "usd/robots/manipulators/epson/cx4a601s.zip",
-      "simulation_mount_link": "j6_link"
-    },
-    {
       "manufacturer": "Fanuc",
       "model": "CR-35iA",
       "identifier": "fanuc/cr35ia",

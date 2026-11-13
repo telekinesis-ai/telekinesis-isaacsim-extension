@@ -1,4 +1,10 @@
 # Changelog
+## [0.10.2] - 2026-11-13
+### Fixed
+- Loading a robot, tool or mesh under a prop whose colliders are authored on Xforms, such as
+  instanceable CAD parts, failed with `Invalid UsdGeomBoundable` after the asset was already in
+  the stage; Auto-calculate Placement failed the same way. Such colliders now count, by the
+  geometry below them, when the asset is lifted onto the prop.
 ## [0.10.1] - 2026-11-12
 ### Changed
 - Asset listings carry an `identifier` per entry (the bundle path below the category without
