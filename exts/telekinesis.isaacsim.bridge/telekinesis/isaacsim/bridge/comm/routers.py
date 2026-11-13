@@ -81,7 +81,6 @@ from .models import (
     MountPrimRequest,
     MultiCaptureRequest,
     OpenSceneRequest,
-    PrimPathRequest,
     SetDrivenJointsRequest,
     SetEnabledRequest,
     SetJointPositionsRequest,
@@ -951,30 +950,6 @@ async def apply_relative_pose(
 ):
     """Pre/post-multiply a prim's world pose by a relative ``WSPose``."""
     prim_service.apply_relative_pose(req.prim_path, req.relative_pose.pose, req.object_first)
-
-
-@prims.get("/poses/default", summary="List Default Poses")
-async def list_default_poses(prim_service=Depends(get_prim_service)):
-    """Map every prim that has a stored default pose to that pose (local rotvec)."""
-    return prim_service.list_default_poses()
-
-
-@prims.put("/poses/default", summary="Assign Default Poses")
-async def assign_default_poses(req: PrimPathRequest, prim_service=Depends(get_prim_service)):
-    """Record the prim's current local pose as its default (for later reset)."""
-    prim_service.assign_default_pose(req.prim_path)
-
-
-@prims.delete("/poses/default", summary="Clear Default Poses")
-async def clear_default_poses(prim_service=Depends(get_prim_service)):
-    """Forget every stored default pose."""
-    prim_service.clear_default_poses()
-
-
-@prims.post("/poses/default/reset", summary="Reset Prim Poses To Default")
-async def reset_to_default_poses(req: PrimPathRequest, prim_service=Depends(get_prim_service)):
-    """Restore a prim to its stored default pose (404 if none was assigned)."""
-    prim_service.reset_to_default_pose(req.prim_path)
 
 
 @prims.put("/metadata", summary="Set Prim Metadata")

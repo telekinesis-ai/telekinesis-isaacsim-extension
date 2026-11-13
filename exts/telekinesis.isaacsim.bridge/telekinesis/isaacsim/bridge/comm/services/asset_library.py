@@ -20,7 +20,7 @@ from ...global_variables import ASSET_LIBRARY_URL
 
 # While ASSET_LIBRARY_URL is None, the catalogue is read from this file in the extension
 # folder, and bundles are downloaded from the host that serves them today.
-LOCAL_ASSET_INDEX_FILE = "data/assets_index.json"
+LOCAL_ASSET_INDEX_FILE = "telekinesis/isaacsim/bridge/assets/assets_index.json"
 LEGACY_BUNDLE_URL = "https://assets.telekinesis.ai"
 
 # The bucket keeps one tree per description format, each holding the same categories.
@@ -44,9 +44,12 @@ class AssetLibraryService:
     ``"robots/manipulators"`` is a folder path below a format tree and is listed from
     both trees; each folder below it is a manufacturer, and each ``.zip`` in a
     manufacturer folder is one model's bundle. A model found in both trees is taken
-    from its USD bundle. An entry is ``{"manufacturer", "model", "bundle"}``, where
-    ``model`` is the ZIP name without extension and ``bundle`` the bucket-relative key
-    of the ZIP, format tree included. Each category is listed once per session;
+    from its USD bundle. An entry is ``{"manufacturer", "model", "identifier", "bundle"}``,
+    where ``bundle`` is the bucket-relative key of the ZIP, format tree included, and
+    ``identifier`` is its path below the category without ``.zip`` (``epson/cx4a601s``).
+    ``manufacturer`` and ``model`` of a local index entry are display names.
+    ``fetch_asset`` finds an entry by its identifier or by its listed manufacturer and
+    model. Each category is listed once per session;
     bundles are downloaded once and kept in the cache across sessions.
 
     The bucket must allow public listing. Kit's storage client also caches
@@ -114,11 +117,15 @@ class AssetLibraryService:
         import omni.client
 
         entries = await self.list_assets(category)
+        # Clients name an asset by its bundle folder and file name; the Add windows pass
+        # the entry they listed, whose manufacturer and model may be display names.
+        identifier = f"{manufacturer}/{model}" if manufacturer else model
         entry = next(
             (
                 candidate
                 for candidate in entries
-                if candidate["manufacturer"] == manufacturer and candidate["model"] == model
+                if candidate["identifier"] == identifier
+                or (candidate["manufacturer"], candidate["model"]) == (manufacturer, model)
             ),
             None,
         )
@@ -185,10 +192,12 @@ class AssetLibraryService:
             manufacturer = manufacturer_folder.relative_path.rstrip("/")
             for bundle_file in await self._list_bucket_folder(f"{category}/{manufacturer}/"):
                 if bundle_file.relative_path.endswith(".zip"):
+                    model = bundle_file.relative_path.removesuffix(".zip")
                     entries.append(
                         {
                             "manufacturer": manufacturer,
-                            "model": bundle_file.relative_path.removesuffix(".zip"),
+                            "model": model,
+                            "identifier": f"{manufacturer}/{model}",
                             "bundle": f"{category}/{manufacturer}/{bundle_file.relative_path}",
                         }
                     )
@@ -220,8 +229,9 @@ class AssetLibraryService:
         """Return ``category``'s entries from the extension's local ``assets_index.json``.
 
         The file maps a category to its entries in the same shape the bucket listing
-        produces: ``{"<category>": [{"manufacturer", "model", "bundle"}, ...]}``, where
-        ``manufacturer`` may be ``null``. A robot entry may also carry
+        produces: ``{"<category>": [{"manufacturer", "model", "identifier", "bundle"}, ...]}``,
+        where ``manufacturer`` may be ``null`` and ``manufacturer`` and ``model`` are
+        display names. A robot entry may also carry
         ``simulation_mount_link``, which is passed through unchanged.
         """
         import omni.kit.app

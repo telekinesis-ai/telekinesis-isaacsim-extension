@@ -1,4 +1,13 @@
 # Changelog
+## [0.10.1] - 2026-11-12
+### Changed
+- Asset listings carry an `identifier` per entry (the bundle path below the category without
+  `.zip`, e.g. `epson/cx4a601s`), and `fetch_asset` finds an entry by it or by its listed
+  manufacturer and model. The local `assets_index.json` moved into the extension package.
+### Removed
+- The default-pose routes `GET`, `PUT` and `DELETE /prims/poses/default` and
+  `POST /prims/poses/default/reset`, and the `telekinesis:default_pose` customData they stored on
+  prims. The `PrimPathRequest` model went with them.
 ## [0.10.0] - 2026-11-10
 ### Added
 - Registered devices are saved with the stage and restored when it is opened. Each device prim

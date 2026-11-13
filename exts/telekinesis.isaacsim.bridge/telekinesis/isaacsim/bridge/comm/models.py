@@ -19,8 +19,9 @@ class FetchAssetRequest(BaseModel):
     """Body of POST /asset_library/fetch -- make one catalogue asset available locally.
 
     ``category`` is a catalogue category such as ``robots/manipulators``;
-    ``manufacturer`` and ``model`` name the entry exactly as ``GET /asset_library``
-    lists it (the manufacturer folder and the bundle ZIP name). Also the
+    ``manufacturer`` and ``model`` name the entry either by its manufacturer folder and
+    bundle ZIP name (``epson``, ``cx4a601s``) or exactly as ``GET /asset_library``
+    lists it. Also the
     ``asset_info`` of the routes that load an asset from the catalogue.
     """
 
@@ -216,16 +217,6 @@ class SolverThresholdRequest(BaseModel):
     """Body of PUT .../solver/stabilization_threshold or .../solver/sleep_threshold."""
 
     threshold: float
-
-
-class PrimPathRequest(BaseModel):
-    """Body of PUT /prims/poses/default or POST /prims/poses/default/reset.
-
-    A named model for consistency with every other body-carrying route (was
-    previously a bare ``Body(..., embed=False)`` string on these two only).
-    """
-
-    prim_path: str
 
 
 class Transformation(BaseModel):

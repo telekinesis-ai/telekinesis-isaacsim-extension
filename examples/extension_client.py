@@ -124,26 +124,6 @@ def apply_relative_pose(base_url, prim_path, pose, object_first=False):
     return _request(base_url, "POST", "/prims/poses/relative", body=body)
 
 
-def list_default_poses(base_url):
-    """GET /prims/poses/default -> {prim_path: {"pose": [...]}}."""
-    return _request(base_url, "GET", "/prims/poses/default")
-
-
-def assign_default_poses(base_url, prim_path):
-    """PUT /prims/poses/default -> record a prim's current pose as its default."""
-    return _request(base_url, "PUT", "/prims/poses/default", body={"prim_path": prim_path})
-
-
-def clear_default_poses(base_url):
-    """DELETE /prims/poses/default -> forget all stored default poses."""
-    return _request(base_url, "DELETE", "/prims/poses/default")
-
-
-def reset_to_default_poses(base_url, prim_path):
-    """POST /prims/poses/default/reset -> restore a prim to its default pose."""
-    return _request(base_url, "POST", "/prims/poses/default/reset", body={"prim_path": prim_path})
-
-
 def set_prim_metadata(base_url, prim_path, category, type_):
     """PUT /prims/metadata -> store {category, type} on a prim."""
     body = {"prim_path": prim_path, "metadata": {"category": category, "type": type_}}
@@ -200,9 +180,6 @@ def test_prims(base_url, prim_path):
     original_pose = get_pose(base_url, prim_path, "world")["pose"]
     print(f"  pose (original):       {original_pose}")
 
-    assign_default_poses(base_url, prim_path)
-    print("  default poses (saved): ", list_default_poses(base_url))
-
     nudged_pose = list(original_pose)
     nudged_pose[0] += 0.01
     update_pose(base_url, prim_path, nudged_pose)
@@ -214,13 +191,10 @@ def test_prims(base_url, prim_path):
     print("  pose (after nudge):    ", get_pose(base_url, prim_path, "world"))
 
     # --- Restore ---
-    reset_to_default_poses(base_url, prim_path)
+    update_pose(base_url, prim_path, original_pose)
     restored_pose = get_pose(base_url, prim_path, "world")["pose"]
     print(f"  pose (restored):       {restored_pose}")
     print(f"  matches original:      {restored_pose == original_pose}")
-
-    clear_default_poses(base_url)
-    print("  default poses (clear): ", list_default_poses(base_url))
 
     # --- Metadata ---
     set_prim_metadata(base_url, prim_path, "test_category", "test_type")
