@@ -35,6 +35,7 @@ from ...core.robot_assembler import (
     MOUNT_JOINT_NAME,
     assemble_tool,
     attach_surface_gripper,
+    bind_gripping_friction,
     bind_shared_articulation,
     mount_prim,
     place_tcp,
@@ -703,6 +704,10 @@ class ArticulationService(DeviceRegistry):
         record is cleared with the registry when the stage changes, and rebuilt from
         the stage when a saved stage with the assembled pair is reopened.
 
+        An articulated gripper's colliders that have no physics material of their own
+        get friction 1.0 with ``max`` combine, so gripped objects do not slide at the
+        PhysX default friction.
+
         ``mask_collisions`` only applies to a suction gripper (see
         :class:`..comm.models.AssembleRobotRequest`). ``arm_mount_link`` ``None`` means
         the arm's stored mount link (see :meth:`create_articulation`).
@@ -858,6 +863,7 @@ class ArticulationService(DeviceRegistry):
             namespace="Tool",
             variant=f"{arm_leaf}_with_tool",
         )
+        bind_gripping_friction(stage, gripper.prim_path)
 
         await self._bind_assembly(arm, gripper, arm_names, gripper_driven)
         self.write_stored_value(

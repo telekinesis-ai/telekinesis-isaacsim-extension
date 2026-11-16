@@ -1,4 +1,30 @@
 # Changelog
+## [0.10.2] - 2026-11-13
+### Changed
+- `assemble_robot` of an articulated gripper binds a physics material with static and dynamic
+  friction 1.0 and `max` friction combine to each of the gripper's colliders that has no physics
+  material of its own. Objects that were not prepared with `set_rigid_body` no longer slide out of
+  the fingers at the PhysX default friction of 0.5. Colliders with an authored physics material
+  keep it.
+- Add Mesh also offers the library's couplers. Its first dropdown is named Group and lists each
+  mesh under the last folder of its category (`attachments`, `couplers`) instead of its
+  manufacturer.
+### Fixed
+- Fetching a catalogue asset whose bundle is a single USD or mesh file, such as the couplers and
+  props, failed with "is not a ZIP". Such a bundle is now stored as it is.
+- A USD asset whose root prim is a Mesh, such as the Robotiq UR coupler, arrived as an Xform
+  without geometry, so mounting it failed with "has no mass, colliders or extent". A loaded
+  asset's prim now takes the type of the asset's root prim.
+- Loading a robot, tool or mesh under a prop whose colliders are authored on Xforms, such as
+  instanceable CAD parts, failed with `Invalid UsdGeomBoundable` after the asset was already in
+  the stage; Auto-calculate Placement failed the same way. Such colliders now count, by the
+  geometry below them, when the asset is lifted onto the prop.
+- A `move_j` with `joint_speeds` and `max_efforts` on a stage that solves articulation contacts
+  last pressed on an obstruction with a small force unrelated to `max_efforts`, so a gripper
+  lost what it held. On such a stage the move now limits the joints' own position drives to
+  `max_efforts`: the joints move with the drives' own response rather than at `joint_speeds`,
+  and the limit stays until the next command to the device or a timeout. Stages that do not
+  solve contacts last behave as before.
 ## [0.10.1] - 2026-11-12
 ### Changed
 - Asset listings carry an `identifier` per entry (the bundle path below the category without

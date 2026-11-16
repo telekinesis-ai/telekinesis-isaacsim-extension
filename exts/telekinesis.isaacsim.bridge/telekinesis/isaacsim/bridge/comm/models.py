@@ -90,6 +90,11 @@ class JointPositionsRequest(BaseModel):
     velocity control. Omitting both uses the existing position drives.
     This mode requires force-type joint drives; acceleration drives are rejected.
 
+    On a stage that solves articulation contacts last, the pair instead limits
+    the existing position drives to ``max_efforts``: the joints move with the
+    drives' own response rather than at ``joint_speeds``, and the limit stays
+    until the next command to the device or a timeout.
+
     Example:
         JointPositionsRequest(joint_positions=[0.7], position_stall_tolerance=0.0001)
     """

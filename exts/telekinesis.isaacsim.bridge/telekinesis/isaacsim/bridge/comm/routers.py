@@ -413,7 +413,8 @@ async def assemble_robot(
 ):
     """Assemble a gripper onto this arm, either articulated (merged into the arm's
     articulation) or suction (bolted on, staying its own device). A no-op if this arm
-    and gripper are already assembled.
+    and gripper are already assembled. An articulated gripper's colliders without a
+    physics material of their own get friction 1.0 with ``max`` combine.
     """
     return await articulation_service.assemble_robot(
         articulation_id,

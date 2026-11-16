@@ -32,7 +32,7 @@ import omni.kit.commands
 import omni.timeline
 import omni.usd
 from isaacsim.core.prims import SingleArticulation
-from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics
+from pxr import Gf, PhysxSchema, Sdf, Tf, Usd, UsdGeom, UsdPhysics, UsdShade
 from scipy.spatial import transform
 
 _BIND_RETRIES = 60
@@ -245,6 +245,49 @@ def _disable_world_welds(stage, gripper_prim):
         joint.CreateJointEnabledAttr(False)
         carb.log_info(
             f"[bridge] disabled {prim.GetPath()}, which still held {gripper_prim} to the world"
+        )
+
+
+def define_gripping_friction_material(stage, material_path):
+    """Define the physics material the bridge uses for surfaces that grip or are gripped.
+
+    Static and dynamic friction are 1.0 and restitution is 0. The friction combine mode
+    is ``max``, so the material's friction applies against any surface with lower
+    friction, such as the PhysX default of 0.5. Defining it again at the same path
+    rewrites the same values. Returns the ``UsdShade.Material`` at ``material_path``.
+    """
+    material = UsdShade.Material.Define(stage, material_path)
+    physics_material = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
+    physics_material.CreateStaticFrictionAttr(1.0)
+    physics_material.CreateDynamicFrictionAttr(1.0)
+    physics_material.CreateRestitutionAttr(0.0)
+    PhysxSchema.PhysxMaterialAPI.Apply(material.GetPrim()).CreateFrictionCombineModeAttr("max")
+    return material
+
+
+def bind_gripping_friction(stage, gripper_prim):
+    """Give the gripper's colliders the gripping friction material.
+
+    A gripper asset without its own physics material grips at the PhysX default
+    friction of 0.5, averaged with the object's, and parts slide out of the fingers
+    unless squeezed hard. The material from :func:`define_gripping_friction_material`
+    is defined at ``<gripper_prim>/PhysicsMaterial`` and bound, for the physics
+    purpose, to every prim with a collision API beneath ``gripper_prim``. A collider
+    already bound to a physics material keeps it, so an asset's tuned pads are left as
+    authored. PhysX reads materials when simulation starts, so call this while the
+    timeline is stopped. Calling it again changes nothing. Returns None.
+    """
+    material = define_gripping_friction_material(stage, f"{gripper_prim}/PhysicsMaterial")
+    for prim in Usd.PrimRange(stage.GetPrimAtPath(gripper_prim)):
+        if not prim.HasAPI(UsdPhysics.CollisionAPI):
+            continue
+        bound_material, _ = UsdShade.MaterialBindingAPI(prim).ComputeBoundMaterial("physics")
+        if bound_material and bound_material.GetPrim().HasAPI(UsdPhysics.MaterialAPI):
+            continue
+        # Bound per collider: an all-purpose render binding on the collider would
+        # otherwise win over a physics binding further up.
+        UsdShade.MaterialBindingAPI.Apply(prim).Bind(
+            material, UsdShade.Tokens.weakerThanDescendants, "physics"
         )
 
 

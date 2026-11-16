@@ -228,7 +228,8 @@ async def _reference_asset_at(stage, asset_path, dest_prim_path):
     or shipped as USD. Stops the timeline (a PhysX requirement while the stage is
     rebuilt) and leaves it stopped, defines the destination and any missing parent, adds
     the reference, then pumps the app so the stage recomposes before the caller measures,
-    plays or binds anything.
+    plays or binds anything. The destination takes the type of the asset's root prim,
+    such as an Xform or a Mesh.
 
     What is parked is the outermost prim this call creates: the asset's prim, or the
     new parent it is loaded into, so the parent arrives clear of the robots beside it
@@ -251,7 +252,9 @@ async def _reference_asset_at(stage, asset_path, dest_prim_path):
     if parent.pathString not in ("", "/") and not stage.GetPrimAtPath(parent).IsValid():
         UsdGeom.Xform.Define(stage, parent.pathString)
 
-    UsdGeom.Xform.Define(stage, dest_prim_path)
+    # Typeless, so the prim takes the asset root's type: a local type would win over it,
+    # and an asset whose root is a Mesh would arrive as an Xform without geometry.
+    stage.DefinePrim(dest_prim_path)
     omni.kit.commands.execute(
         "AddReference",
         stage=stage,
@@ -350,7 +353,9 @@ def parking_shift(stage, bounds, dest_prim_path):
     An asset loaded under a prop, such as a box, lands at the origin of the prim it was
     loaded under, inside the prop. The prop is the prim directly under the default
     prim (or under the stage root, outside the default prim) that holds the asset, and
-    every collider in it counts, wherever the prop keeps them. Any of them the asset
+    every collider in it counts, wherever the prop keeps them. A collider authored on an
+    Xform, such as an instanceable CAD part, counts by the geometry below it, unless the
+    asset was loaded below that Xform. Any of them the asset
     would still overlap is resolved by lifting it along world +Z until its bounds stand
     on the highest of them, repeated while the lift brings it into another, so it ends
     up inside none. Colliders that belong to a robot are left to the +X parking. An
@@ -408,11 +413,25 @@ def parking_shift(stage, bounds, dest_prim_path):
                 robot_paths.append(robot.GetPath())
             if candidate.HasAPI(UsdPhysics.CollisionAPI):
                 colliders.append(candidate)
+    # Every purpose: a collision mesh is often a guide the viewport hides.
+    collider_cache = UsdGeom.BBoxCache(
+        Usd.TimeCode.Default(), UsdGeom.Imageable.GetOrderedPurposeTokens()
+    )
     collider_bounds = []
     for collider in colliders:
         if collider.GetPath().HasPrefix(dest_path) or any(
             collider.GetPath().HasPrefix(robot_path) for robot_path in robot_paths
         ):
+            continue
+        if not collider.IsA(UsdGeom.Boundable):
+            # An Xform has no extent of its own; an instanceable CAD part keeps its
+            # meshes in its prototype. Below it, the asset would be part of its bound
+            # and could never be lifted out of it.
+            if dest_path.HasPrefix(collider.GetPath()):
+                continue
+            collider_bound = collider_cache.ComputeWorldBound(collider).ComputeAlignedRange()
+            if not collider_bound.IsEmpty():
+                collider_bounds.append(collider_bound)
             continue
         # The collider's own extent rather than its BBoxCache bound: that bound
         # includes the collider's descendants, and the asset may just have been

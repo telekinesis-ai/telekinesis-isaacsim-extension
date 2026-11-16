@@ -901,50 +901,12 @@
       "bundle": "usd/conveyors/simple_conveyor.zip"
     }
   ],
-  "usd/environments/assembly": [
+  "usd/couplers": [
     {
       "manufacturer": null,
-      "model": "automotive assembly",
-      "identifier": "automotive_assembly",
-      "bundle": "usd/environments/assembly/automotive_assembly.zip"
-    }
-  ],
-  "usd/environments/bin_picking": [
-    {
-      "manufacturer": null,
-      "model": "bin picking scene",
-      "identifier": "bin_picking_scene",
-      "bundle": "usd/environments/bin_picking/bin_picking_scene.zip"
-    }
-  ],
-  "usd/environments/machine_tending": [
-    {
-      "manufacturer": null,
-      "model": "cnc machine tending",
-      "identifier": "cnc_machine_tending",
-      "bundle": "usd/environments/machine_tending/cnc_machine_tending.zip"
-    }
-  ],
-  "usd/environments/palletizing": [
-    {
-      "manufacturer": null,
-      "model": "palletizing rough scene",
-      "identifier": "palletizing_rough_scene",
-      "bundle": "usd/environments/palletizing/palletizing_rough_scene.zip"
-    }
-  ],
-  "usd/environments/welding": [
-    {
-      "manufacturer": null,
-      "model": "spot welding automotive",
-      "identifier": "spot_welding_automotive",
-      "bundle": "usd/environments/welding/spot_welding_automotive.zip"
-    },
-    {
-      "manufacturer": null,
-      "model": "stationary spot welding scene",
-      "identifier": "stationary_spot_welding_scene",
-      "bundle": "usd/environments/welding/stationary_spot_welding_scene.zip"
+      "model": "Robotiq UR Coupler",
+      "identifier": "Robotiq_UR_Coupler.usda",
+      "bundle": "usd/couplers/Robotiq_UR_Coupler.usda"
     }
   ],
   "usd/machines": [
@@ -953,6 +915,48 @@
       "model": "cnc machine",
       "identifier": "cnc_machine",
       "bundle": "usd/machines/cnc_machine.zip"
+    }
+  ],
+  "usd/props": [
+    {
+      "manufacturer": null,
+      "model": "50 pin male Centronics connector",
+      "identifier": "50_pin_male_Centronics_connector.usdc",
+      "bundle": "usd/props/50_pin_male_Centronics_connector.usdc"
+    },
+    {
+      "manufacturer": null,
+      "model": "black cable gland",
+      "identifier": "black_cable_gland.usdc",
+      "bundle": "usd/props/black_cable_gland.usdc"
+    },
+    {
+      "manufacturer": null,
+      "model": "multi pin circular connector",
+      "identifier": "multi_pin_circular_connector.usdc",
+      "bundle": "usd/props/multi_pin_circular_connector.usdc"
+    },
+    {
+      "manufacturer": null,
+      "model": "panel mount pilot light",
+      "identifier": "panel_mount_pilot_light.usdc",
+      "bundle": "usd/props/panel_mount_pilot_light.usdc"
+    }
+  ],
+  "usd/props/bins": [
+    {
+      "manufacturer": null,
+      "model": "five bin set 590x370x80mm",
+      "identifier": "five_bin_set_590x370x80mm.usd",
+      "bundle": "usd/props/bins/five_bin_set_590x370x80mm.usd"
+    }
+  ],
+  "usd/props/mounts": [
+    {
+      "manufacturer": null,
+      "model": "table 1400x800x900mm",
+      "identifier": "table_1400x800x900mm.usd",
+      "bundle": "usd/props/mounts/table_1400x800x900mm.usd"
     }
   ],
   "usd/robots/manipulators": [
@@ -1789,12 +1793,6 @@
       "model": "RG6",
       "identifier": "onrobot/onrobotrg6",
       "bundle": "usd/tools/parallel_grippers/onrobot/onrobotrg6.zip"
-    },
-    {
-      "manufacturer": "Robotiq",
-      "model": "HandE",
-      "identifier": "robotiq/HandE",
-      "bundle": "usd/tools/parallel_grippers/robotiq/HandE.zip"
     },
     {
       "manufacturer": "Robotiq",
