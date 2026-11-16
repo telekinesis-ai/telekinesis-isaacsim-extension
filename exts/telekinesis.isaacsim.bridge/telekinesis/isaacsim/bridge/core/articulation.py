@@ -465,6 +465,14 @@ class SingleArticulation:
         behavior. Arrays must match the selected joints and contain finite values.
         Velocity control requires force-type drives; acceleration drives raise
         ValueError because their gains do not specify actuator effort.
+
+        On a stage whose physics scene solves articulation contacts last, the
+        same pair instead limits the joints' own position drives to
+        ``max_efforts``. The joints then move with the drives' own response,
+        not at ``joint_speeds``, and push on an obstruction with at most the
+        drive stiffness times the remaining distance to the target. The effort
+        limit stays in place, also after target arrival, until the next command
+        to this device or a timeout.
         """
         if position_stall_tolerance is not None and (
             not np.isfinite(position_stall_tolerance) or position_stall_tolerance <= 0
@@ -522,28 +530,43 @@ class SingleArticulation:
                     damping,
                     view.get_max_efforts(joint_indices=idx),
                 )
-                velocities = (
-                    np.sign(target - self._articulation.get_joint_positions()[idx]) * joint_speeds
+                contacts_solved_after_drives = any(
+                    prim.GetAttribute("physxScene:solveArticulationContactLast").Get()
+                    for prim in self._articulation.prim.GetStage().Traverse()
+                    if prim.IsA(UsdPhysics.Scene)
                 )
-                self._velocity_motion = ArticulationAction(
-                    joint_positions=target,
-                    joint_velocities=velocities,
-                    joint_indices=idx,
-                )
-                self._velocity_completed = np.zeros(len(idx), dtype=bool)
-                # With no position spring, a blocked motor applies damping * speed.
-                view.set_gains(
-                    kps=np.zeros((1, len(idx))),
-                    kds=(max_efforts / joint_speeds)[None, :],
-                    joint_indices=idx,
-                )
-                view.set_max_efforts(max_efforts[None, :], joint_indices=idx)
-                self._velocity_subscription = (
-                    omni.physx.get_physx_interface().subscribe_physics_step_events(
-                        self._update_velocity_drive
+                if contacts_solved_after_drives:
+                    # Contacts solved after the drive cancel a velocity drive's push; only
+                    # the position spring carries the requested effort to the object.
+                    view.set_max_efforts(max_efforts[None, :], joint_indices=idx)
+                    self._velocity_motion = ArticulationAction(
+                        joint_positions=target, joint_indices=idx
                     )
-                )
-                self._update_velocity_drive(0.0)
+                    self._articulation.apply_action(self._velocity_motion)
+                else:
+                    velocities = (
+                        np.sign(target - self._articulation.get_joint_positions()[idx])
+                        * joint_speeds
+                    )
+                    self._velocity_motion = ArticulationAction(
+                        joint_positions=target,
+                        joint_velocities=velocities,
+                        joint_indices=idx,
+                    )
+                    self._velocity_completed = np.zeros(len(idx), dtype=bool)
+                    # With no position spring, a blocked motor applies damping * speed.
+                    view.set_gains(
+                        kps=np.zeros((1, len(idx))),
+                        kds=(max_efforts / joint_speeds)[None, :],
+                        joint_indices=idx,
+                    )
+                    view.set_max_efforts(max_efforts[None, :], joint_indices=idx)
+                    self._velocity_subscription = (
+                        omni.physx.get_physx_interface().subscribe_physics_step_events(
+                            self._update_velocity_drive
+                        )
+                    )
+                    self._update_velocity_drive(0.0)
 
             if asynchronous:
                 # Fire-and-forget: the action is queued; the client owns "done".

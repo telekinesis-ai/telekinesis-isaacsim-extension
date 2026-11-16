@@ -5,6 +5,12 @@
   instanceable CAD parts, failed with `Invalid UsdGeomBoundable` after the asset was already in
   the stage; Auto-calculate Placement failed the same way. Such colliders now count, by the
   geometry below them, when the asset is lifted onto the prop.
+- A `move_j` with `joint_speeds` and `max_efforts` on a stage that solves articulation contacts
+  last pressed on an obstruction with a small force unrelated to `max_efforts`, so a gripper
+  lost what it held. On such a stage the move now limits the joints' own position drives to
+  `max_efforts`: the joints move with the drives' own response rather than at `joint_speeds`,
+  and the limit stays until the next command to the device or a timeout. Stages that do not
+  solve contacts last behave as before.
 ## [0.10.1] - 2026-11-12
 ### Changed
 - Asset listings carry an `identifier` per entry (the bundle path below the category without
