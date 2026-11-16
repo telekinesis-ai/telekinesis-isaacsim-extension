@@ -6,11 +6,14 @@ from ..comm.services.asset_library import AssetLibraryService
 from ..comm.services.stage import StageService
 from .add_asset_window import AddAssetWindow
 
-ATTACHMENT_CATEGORY = "attachments"
+MESH_CATEGORIES = ["attachments", "couplers"]
 
 
 class AddMeshWindow(AddAssetWindow):
     """A window that loads a mesh from the Telekinesis asset library, mounting it on a robot.
+
+    It offers the library's attachments and couplers, picked by Group (``attachments``
+    or ``couplers``) and Model.
 
     The mesh is added as ``POST /stage/scene/reference`` would. When the attaching prim
     is part of a robot, the mesh is placed beside the robot -- in the robot's
@@ -40,9 +43,15 @@ class AddMeshWindow(AddAssetWindow):
         self._stage_service = stage_service
         super().__init__("Add Mesh", asset_library_service, articulation_service)
 
+    GROUP_LABEL = "Group"
+
     def asset_categories(self) -> list[str]:
-        """Offer the attachment meshes of the catalogue."""
-        return [ATTACHMENT_CATEGORY]
+        """Offer the attachment and coupler meshes of the catalogue."""
+        return MESH_CATEGORIES
+
+    def group_of_asset(self, asset: dict) -> str:
+        """List the mesh under the last folder of its category, e.g. ``couplers``."""
+        return asset["category"].rsplit("/", 1)[-1]
 
     async def add_selected_asset(self, asset: dict, attaching_prim_path: str) -> str:
         """Add the mesh and, when ``attaching_prim_path`` is part of a robot, mount it there."""

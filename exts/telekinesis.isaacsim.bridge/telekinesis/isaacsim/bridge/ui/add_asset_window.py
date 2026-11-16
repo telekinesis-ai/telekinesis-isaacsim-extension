@@ -24,7 +24,7 @@ from .transformation_fields import TransformationFields
 
 # Shown in the Manufacturer dropdown for catalogue entries listed without a manufacturer.
 GENERIC_MANUFACTURER_LABEL = "Generic"
-# First entry of the Manufacturer and Model dropdowns; it matches no catalogue entry, so
+# First entry of the group and Model dropdowns; it matches no catalogue entry, so
 # nothing is loaded while it is selected.
 NO_SELECTION_LABEL = "None"
 # Width, in pixels, of every button in the windows' centered button rows.
@@ -44,8 +44,10 @@ KEY_CAP_TEXT_COLOR = 0xFF1E1E1E
 class AddAssetWindow(abc.ABC):
     """A window that adds one asset from the Telekinesis asset library to the stage.
 
-    The user picks a manufacturer and model from the catalogue categories the window
-    covers. Both read None whenever the window opens, and picking a manufacturer sets
+    The user picks a group and a model from the catalogue categories the window
+    covers. The group dropdown is labelled :attr:`GROUP_LABEL` and lists what
+    :meth:`group_of_asset` returns, the manufacturer unless a subclass groups
+    otherwise. Both read None whenever the window opens, and picking a group sets
     Model back to None, so no model is loaded until one is picked. The prim the asset
     is added at, the Attaching Prim, is the right-clicked prim and cannot be edited.
     While the window is open, a see-through ghost of the
@@ -71,15 +73,18 @@ class AddAssetWindow(abc.ABC):
     a warning that stays until dismissed. Add is disabled while an add runs. Every add
     creates a new prim: a name already taken in the stage gets a numeric suffix.
 
-    A subclass names its categories, may add buttons and hints, names its
-    transformation frame, places the ghost where its add puts the asset, may stand the
-    gizmo on a part of the asset, and implements the add itself.
+    A subclass names its categories, may group them differently, may add buttons and
+    hints, names its transformation frame, places the ghost where its add puts the
+    asset, may stand the gizmo on a part of the asset, and implements the add itself.
 
     Example:
         window = AddRobotWindow(bridge_server.asset_library_service,
                                 bridge_server.articulation_service)
         window.show("/World")
     """
+
+    # Label of the dropdown that lists the groups :meth:`group_of_asset` returns.
+    GROUP_LABEL = "Manufacturer"
 
     def __init__(
         self,
@@ -117,14 +122,14 @@ class AddAssetWindow(abc.ABC):
         with self._window.frame, ui.VStack(spacing=5, height=0):
             # Every row is a label of the property panel's label width and a field
             # filling the rest, so the fields line up on both edges.
-            self._manufacturer_dropdown = element_wrappers.DropDown(
-                "Manufacturer",
-                on_selection_fn=self._on_manufacturer_selected,
+            self._group_dropdown = element_wrappers.DropDown(
+                self.GROUP_LABEL,
+                on_selection_fn=self._on_group_selected,
                 add_flourish=False,
             )
             self._model_dropdown = element_wrappers.DropDown(
                 "Model",
-                populate_fn=self._models_of_selected_manufacturer,
+                populate_fn=self._models_of_selected_group,
                 on_selection_fn=lambda _: self.update_ghost(),
                 add_flourish=False,
             )
@@ -164,8 +169,19 @@ class AddAssetWindow(abc.ABC):
         """Return the catalogue categories this window offers, e.g. ``["robots/manipulators"]``.
 
         Called when the catalogue is first loaded. The entries of all returned
-        categories share the Manufacturer and Model dropdowns.
+        categories share the group and Model dropdowns.
         """
+
+    def group_of_asset(self, asset: dict) -> str:
+        """Return the group dropdown entry ``asset`` is listed under.
+
+        Called whenever the dropdowns are filled or read, with a catalogue entry tagged
+        with its ``category``. Models of one group must have distinct names.
+
+        Optional; the default is the asset's manufacturer, and
+        :data:`GENERIC_MANUFACTURER_LABEL` for an entry listed without one.
+        """
+        return asset["manufacturer"] or GENERIC_MANUFACTURER_LABEL
 
     def build_extra_buttons(self):
         """Build buttons shown left of Add, in the same row. Optional; the default
@@ -254,16 +270,16 @@ class AddAssetWindow(abc.ABC):
 
         The catalogue is loaded on the first open, and retried on later opens until
         it yields any asset. Opening the window while it loads starts no second load.
-        Manufacturer and Model are set to None, and Position and Rotation are reset to
+        The group and Model are set to None, and Position and Rotation are reset to
         zero unless an add is running.
         """
         self._attaching_prim_model.set_value(attaching_prim_path)
         # Add is disabled exactly while an add runs, and that add still reads the fields.
         if self._add_button.enabled:
             self._transformation_fields.reset()
-        if self._manufacturer_dropdown.get_items():
-            # Selecting the manufacturer's None also sets Model to None.
-            self._manufacturer_dropdown.set_selection(NO_SELECTION_LABEL)
+        if self._group_dropdown.get_items():
+            # Selecting the group's None also sets Model to None.
+            self._group_dropdown.set_selection(NO_SELECTION_LABEL)
         self._window.visible = True
         if not self._assets and (self._catalogue_load is None or self._catalogue_load.done()):
             self._catalogue_load = asyncio.ensure_future(self._load_catalogue())
@@ -369,8 +385,8 @@ class AddAssetWindow(abc.ABC):
             models.Transformation(translation=translation, rotation=rotation)
         )
 
-    def _on_manufacturer_selected(self, _manufacturer: str):
-        """Offer the manufacturer's models and show the selected one as the ghost."""
+    def _on_group_selected(self, _group: str):
+        """Offer the group's models and show the selected one as the ghost."""
         self._model_dropdown.repopulate()
         # Repopulating calls the model callback only when the selected name changed.
         self.update_ghost()
@@ -510,10 +526,10 @@ class AddAssetWindow(abc.ABC):
                 continue
             assets.extend({**entry, "category": category} for entry in entries)
         self._assets = assets
-        self._manufacturer_dropdown.set_items(
+        self._group_dropdown.set_items(
             [
                 NO_SELECTION_LABEL,
-                *sorted({self._manufacturer_label(asset) for asset in self._assets}),
+                *sorted({self.group_of_asset(asset) for asset in self._assets}),
             ],
             select_index=0,
         )
@@ -521,29 +537,25 @@ class AddAssetWindow(abc.ABC):
         self._status_label.text = "; ".join(errors)
         self.update_ghost()
 
-    def _models_of_selected_manufacturer(self) -> list[str]:
-        """Return None followed by the models of the manufacturer selected in the
-        Manufacturer dropdown."""
-        manufacturer = self._manufacturer_dropdown.get_selection()
+    def _models_of_selected_group(self) -> list[str]:
+        """Return None followed by the models of the group selected in the group dropdown."""
+        group = self._group_dropdown.get_selection()
         return [
             NO_SELECTION_LABEL,
             *sorted(
-                asset["model"]
-                for asset in self._assets
-                if self._manufacturer_label(asset) == manufacturer
+                asset["model"] for asset in self._assets if self.group_of_asset(asset) == group
             ),
         ]
 
     def _selected_asset(self) -> dict | None:
         """Return the catalogue entry selected in the dropdowns, or ``None`` when there is none."""
-        manufacturer = self._manufacturer_dropdown.get_selection()
+        group = self._group_dropdown.get_selection()
         model = self._model_dropdown.get_selection()
         return next(
             (
                 candidate
                 for candidate in self._assets
-                if self._manufacturer_label(candidate) == manufacturer
-                and candidate["model"] == model
+                if self.group_of_asset(candidate) == group and candidate["model"] == model
             ),
             None,
         )
@@ -557,7 +569,7 @@ class AddAssetWindow(abc.ABC):
         """
         asset = self._selected_asset()
         if asset is None:
-            self._status_label.text = "Select a manufacturer and model first."
+            self._status_label.text = f"Select a {self.GROUP_LABEL.lower()} and model first."
             return
         attaching_prim_path = self._attaching_prim_model.get_value_as_string()
         if not omni.usd.get_context().get_stage().GetPrimAtPath(attaching_prim_path):
@@ -570,7 +582,7 @@ class AddAssetWindow(abc.ABC):
 
     async def _add_asset(self, asset: dict, attaching_prim_path: str):
         """Pass ``asset`` to :meth:`add_selected_asset` and notify the outcome."""
-        asset_label = f"{self._manufacturer_label(asset)} {asset['model']}"
+        asset_label = f"{self.group_of_asset(asset)} {asset['model']}"
         self._add_button.enabled = False
         notification_manager.post_notification(f"Adding {asset_label}...")
         try:
@@ -616,8 +628,3 @@ class AddAssetWindow(abc.ABC):
         else:
             path = asset_loader.path_beside_clear_of_rigid_bodies(stage, robot_prim_path, prim_name)
         return omni.usd.get_stage_next_free_path(stage, path, False)
-
-    @staticmethod
-    def _manufacturer_label(asset: dict) -> str:
-        """Return the asset's manufacturer as shown in the Manufacturer dropdown."""
-        return asset["manufacturer"] or GENERIC_MANUFACTURER_LABEL

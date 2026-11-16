@@ -47,7 +47,8 @@ class AssetLibraryService:
     from its USD bundle. An entry is ``{"manufacturer", "model", "identifier", "bundle"}``,
     where ``bundle`` is the bucket-relative key of the ZIP, format tree included, and
     ``identifier`` is its path below the category without ``.zip`` (``epson/cx4a601s``).
-    ``manufacturer`` and ``model`` of a local index entry are display names.
+    ``manufacturer`` and ``model`` of a local index entry are display names, and its
+    ``bundle`` may also be a single USD or mesh file.
     ``fetch_asset`` finds an entry by its identifier or by its listed manufacturer and
     model. Each category is listed once per session;
     bundles are downloaded once and kept in the cache across sessions.
@@ -150,6 +151,7 @@ class AssetLibraryService:
                 await asyncio.to_thread(
                     self._extract_bundle,
                     memoryview(content).tobytes(),
+                    pathlib.PurePosixPath(entry["bundle"]).name,
                     bundle_directory,
                 )
 
@@ -247,26 +249,32 @@ class AssetLibraryService:
         return index.get(category, [])
 
     @staticmethod
-    def _extract_bundle(archive_bytes: bytes, bundle_directory: pathlib.Path):
-        """Extract a bundle ZIP into ``bundle_directory``. Runs off the main thread.
+    def _extract_bundle(bundle_bytes: bytes, bundle_name: str, bundle_directory: pathlib.Path):
+        """Unpack the bundle file ``bundle_name`` into ``bundle_directory``. Runs off the
+        main thread.
 
-        Extraction goes to a temporary sibling directory that is renamed into place,
-        so an interrupted extraction never leaves a half-extracted bundle that looks
-        complete on the next fetch. A temporary directory left by such an extraction is
-        cleared first, so none of its files end up in the bundle.
+        A ``.zip`` bundle is extracted. Any other bundle is a single USD or mesh file and
+        is stored under its own name. Unpacking goes to a temporary sibling directory
+        that is renamed into place, so an interrupted extraction never leaves a
+        half-extracted bundle that looks complete on the next fetch. A temporary
+        directory left by such an extraction is cleared first, so none of its files end
+        up in the bundle.
 
         Raises:
-            HTTPException: 502 if the archive is not a valid ZIP.
+            HTTPException: 502 if a ``.zip`` bundle is not a valid ZIP.
         """
         partial_directory = bundle_directory.with_name(bundle_directory.name + ".partial")
         shutil.rmtree(partial_directory, ignore_errors=True)
         partial_directory.mkdir(parents=True)
-        try:
-            with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
-                archive.extractall(partial_directory)
-        except zipfile.BadZipFile as exc:
-            raise HTTPException(
-                status_code=502,
-                detail=f"asset bundle for '{bundle_directory.name}' is not a ZIP: {exc}",
-            ) from exc
+        if bundle_name.endswith(".zip"):
+            try:
+                with zipfile.ZipFile(io.BytesIO(bundle_bytes)) as archive:
+                    archive.extractall(partial_directory)
+            except zipfile.BadZipFile as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"asset bundle for '{bundle_directory.name}' is not a ZIP: {exc}",
+                ) from exc
+        else:
+            (partial_directory / bundle_name).write_bytes(bundle_bytes)
         partial_directory.rename(bundle_directory)

@@ -6,7 +6,15 @@
   material of its own. Objects that were not prepared with `set_rigid_body` no longer slide out of
   the fingers at the PhysX default friction of 0.5. Colliders with an authored physics material
   keep it.
+- Add Mesh also offers the library's couplers. Its first dropdown is named Group and lists each
+  mesh under the last folder of its category (`attachments`, `couplers`) instead of its
+  manufacturer.
 ### Fixed
+- Fetching a catalogue asset whose bundle is a single USD or mesh file, such as the couplers and
+  props, failed with "is not a ZIP". Such a bundle is now stored as it is.
+- A USD asset whose root prim is a Mesh, such as the Robotiq UR coupler, arrived as an Xform
+  without geometry, so mounting it failed with "has no mass, colliders or extent". A loaded
+  asset's prim now takes the type of the asset's root prim.
 - Loading a robot, tool or mesh under a prop whose colliders are authored on Xforms, such as
   instanceable CAD parts, failed with `Invalid UsdGeomBoundable` after the asset was already in
   the stage; Auto-calculate Placement failed the same way. Such colliders now count, by the

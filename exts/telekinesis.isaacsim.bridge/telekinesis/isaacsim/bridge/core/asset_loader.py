@@ -228,7 +228,8 @@ async def _reference_asset_at(stage, asset_path, dest_prim_path):
     or shipped as USD. Stops the timeline (a PhysX requirement while the stage is
     rebuilt) and leaves it stopped, defines the destination and any missing parent, adds
     the reference, then pumps the app so the stage recomposes before the caller measures,
-    plays or binds anything.
+    plays or binds anything. The destination takes the type of the asset's root prim,
+    such as an Xform or a Mesh.
 
     What is parked is the outermost prim this call creates: the asset's prim, or the
     new parent it is loaded into, so the parent arrives clear of the robots beside it
@@ -251,7 +252,9 @@ async def _reference_asset_at(stage, asset_path, dest_prim_path):
     if parent.pathString not in ("", "/") and not stage.GetPrimAtPath(parent).IsValid():
         UsdGeom.Xform.Define(stage, parent.pathString)
 
-    UsdGeom.Xform.Define(stage, dest_prim_path)
+    # Typeless, so the prim takes the asset root's type: a local type would win over it,
+    # and an asset whose root is a Mesh would arrive as an Xform without geometry.
+    stage.DefinePrim(dest_prim_path)
     omni.kit.commands.execute(
         "AddReference",
         stage=stage,
