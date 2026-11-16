@@ -1,5 +1,11 @@
 # Changelog
 ## [0.10.2] - 2026-11-13
+### Changed
+- `assemble_robot` of an articulated gripper binds a physics material with static and dynamic
+  friction 1.0 and `max` friction combine to each of the gripper's colliders that has no physics
+  material of its own. Objects that were not prepared with `set_rigid_body` no longer slide out of
+  the fingers at the PhysX default friction of 0.5. Colliders with an authored physics material
+  keep it.
 ### Fixed
 - Loading a robot, tool or mesh under a prop whose colliders are authored on Xforms, such as
   instanceable CAD parts, failed with `Invalid UsdGeomBoundable` after the asset was already in

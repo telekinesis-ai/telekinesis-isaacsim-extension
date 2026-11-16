@@ -248,19 +248,18 @@ class PrimService:
         combine mode is ``max``, so the prop's friction applies against any surface
         with lower friction, such as gripper pads that use the PhysX default of 0.5.
         """
-        from pxr import PhysxSchema, Usd, UsdGeom, UsdPhysics, UsdShade
+        from pxr import Usd, UsdGeom, UsdPhysics, UsdShade
+
+        from ...core.robot_assembler import define_gripping_friction_material
 
         prim = self._prim_or_404(prim_path)
         UsdPhysics.RigidBodyAPI.Apply(prim).CreateRigidBodyEnabledAttr(True)
         UsdPhysics.MassAPI.Apply(prim).CreateMassAttr(mass)
         # Small plastic parts slid out of parallel-jaw grippers at the 0.5 default,
         # which PhysX averages with the pads' friction.
-        material = UsdShade.Material.Define(prim.GetStage(), f"{prim_path}/PhysicsMaterial")
-        physics_material = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
-        physics_material.CreateStaticFrictionAttr(1.0)
-        physics_material.CreateDynamicFrictionAttr(1.0)
-        physics_material.CreateRestitutionAttr(0.0)
-        PhysxSchema.PhysxMaterialAPI.Apply(material.GetPrim()).CreateFrictionCombineModeAttr("max")
+        material = define_gripping_friction_material(
+            prim.GetStage(), f"{prim_path}/PhysicsMaterial"
+        )
         for descendant in Usd.PrimRange(prim):
             if not descendant.IsA(UsdGeom.Mesh):
                 continue
