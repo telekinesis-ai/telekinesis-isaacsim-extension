@@ -327,6 +327,12 @@ async def stream_articulation_state(websocket: WebSocket, articulation_id: str):
     the server sends one frame per simulator update, shaped exactly like the
     ``articulation_state`` getter's response (radians). The client sends nothing.
 
+    Each frame carries ``simulation_time``, the simulated seconds since the timeline
+    last started playing. A client that plays a trajectory against this stream
+    advances it by the change in ``simulation_time`` rather than by wall-clock time,
+    so the motion keeps its planned path and accelerations when the simulator runs
+    slower than real time.
+
     Nothing is sent while the timeline is stopped or the articulation's handle is
     otherwise unreadable; the connection stays open and frames resume on play. A
     client that reads more slowly than the server sends misses frames rather than

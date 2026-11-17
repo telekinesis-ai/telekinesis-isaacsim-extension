@@ -853,8 +853,18 @@ class SingleArticulation:
 
     def get_joints_state(self):
         """Snapshot of the driven joints' positions / velocities / torques (rad) +
-        a timestamp. Reports only the driven columns (``joint_indices``), so a
-        merged rig still presents just this device's joints."""
+        two clocks. Reports only the driven columns (``joint_indices``), so a
+        merged rig still presents just this device's joints.
+
+        ``timestamp`` is wall-clock seconds since the device was bound.
+        ``simulation_time`` is the simulated seconds since the timeline last
+        started playing: it advances only while physics steps, so it runs slower
+        than ``timestamp`` whenever the simulator runs slower than real time, and
+        it restarts from zero when the timeline is stopped and played again.
+        Clients that pace motion against the simulator use ``simulation_time``.
+        """
+        from isaacsim.core.simulation_manager import SimulationManager
+
         positions = self._articulation.get_joint_positions()
         velocities = self._articulation.get_joint_velocities()
         efforts = self._articulation.get_measured_joint_efforts()
@@ -871,6 +881,7 @@ class SingleArticulation:
                 else [0.0] * self.num_dof
             ),
             "timestamp": time.monotonic() - self._start_time,
+            "simulation_time": SimulationManager.get_simulation_time(),
         }
 
     def get_articulation_state(self):

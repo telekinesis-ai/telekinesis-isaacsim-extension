@@ -7,6 +7,11 @@
   cameras and meshes loaded into it move and delete with the robot, and Add Tool and Add Mesh on
   it attach to the robot. A robot requested where its parent exists, such as `/World/cr10`, loads
   as before.
+- The articulation joint state (`joints_state`, `articulation_state` and every
+  `stream_articulation_state` frame) reports `simulation_time`: the simulated seconds since the
+  timeline last started playing. It advances only while physics steps and restarts from zero on
+  stop and play, so a client can pace motion against the simulator instead of the wall clock.
+  `timestamp` is unchanged.
 ### Fixed
 - A blocking surface gripper `close` could return `Closed` with an empty `gripped_objects`: the
   gripper component reports `Closed` a physics step before it lists what it holds. A close now

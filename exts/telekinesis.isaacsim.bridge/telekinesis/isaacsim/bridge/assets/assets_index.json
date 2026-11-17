@@ -882,7 +882,7 @@
       "manufacturer": null,
       "model": "realsense regular mount",
       "identifier": "realsense_regular_mount",
-      "bundle": "usd/attachments/realsense_regular_mount.zip"
+      "bundle": "usd/attachments/realsense_regular_mount.obj"
     }
   ],
   "usd/cameras/RealSense": [
