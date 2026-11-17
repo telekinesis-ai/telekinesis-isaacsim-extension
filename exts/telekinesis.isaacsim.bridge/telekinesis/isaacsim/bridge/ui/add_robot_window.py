@@ -9,13 +9,12 @@ from pxr import Gf, Tf, UsdGeom
 from ..comm import models
 from ..comm.services.articulations import (
     ASSEMBLY_ROBOT_RELATIONSHIP,
+    ROBOT_CATEGORY,
     ArticulationService,
 )
 from ..comm.services.asset_library import AssetLibraryService
 from ..core import asset_loader, robot_assembler
 from .add_asset_window import BUTTON_WIDTH, AddAssetWindow
-
-ROBOT_CATEGORY = "robots/manipulators"
 
 
 class AddRobotWindow(AddAssetWindow):

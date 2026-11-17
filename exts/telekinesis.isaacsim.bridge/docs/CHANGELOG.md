@@ -1,5 +1,12 @@
 # Changelog
 ## [0.10.3] - 2026-11-17
+### Added
+- `PUT /articulations` that loads a catalogue robot arm into a parent prim that does not exist
+  yet, such as `/World/cr10_assembly/cr10`, builds that parent as the robot's assembly the way
+  Add Robot does: an Xform targeting the robot through `telekinesis:assemblyRobot`. Grippers,
+  cameras and meshes loaded into it move and delete with the robot, and Add Tool and Add Mesh on
+  it attach to the robot. A robot requested where its parent exists, such as `/World/cr10`, loads
+  as before.
 ### Fixed
 - A blocking surface gripper `close` could return `Closed` with an empty `gripped_objects`: the
   gripper component reports `Closed` a physics step before it lists what it holds. A close now

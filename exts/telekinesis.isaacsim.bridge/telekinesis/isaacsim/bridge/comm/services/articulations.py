@@ -47,8 +47,11 @@ from .device_registry import DeviceRegistry
 # onto. Stored in USD so it survives saving the stage and is shared by every client.
 MOUNT_LINK_ATTRIBUTE = "telekinesis:mountLink"
 # Relationship on a robot's assembly Xform targeting the robot prim, so the assembly and
-# everything attached in it count as part of that robot. Authored by Add Robot.
+# everything attached in it count as part of that robot. Authored by Add Robot, and by
+# create_articulation when it loads a catalogue robot into a parent that does not exist.
 ASSEMBLY_ROBOT_RELATIONSHIP = "telekinesis:assemblyRobot"
+# Catalogue category of robot arms.
+ROBOT_CATEGORY = "robots/manipulators"
 
 
 class ArticulationService(DeviceRegistry):
@@ -171,7 +174,11 @@ class ArticulationService(DeviceRegistry):
 
         ``asset_info`` (``{"category", "manufacturer", "model"}``) names a catalogue
         asset to load when no prim is at ``prim_path``: it is downloaded into the
-        cache once, then imported (a URDF) or referenced (a USD). At most one of
+        cache once, then imported (a URDF) or referenced (a USD). A robot arm from
+        the catalogue whose parent prim does not exist yet, such as
+        ``/World/cr10_assembly/cr10``, is loaded into an assembly Xform at that parent
+        targeting the robot, as Add Robot builds it, so tools and meshes loaded into
+        the assembly move and delete with the robot. At most one of
         ``urdf_path``, ``usd_path`` and ``asset_info`` is given (see
         :meth:`_resolve_prim`).
 
@@ -1181,12 +1188,18 @@ class ArticulationService(DeviceRegistry):
         ``catalogue_entry`` is the entry :meth:`AssetLibraryService.fetch_asset`
         returned when ``asset_info`` was loaded, else ``None``.
 
+        A catalogue robot arm loaded into a parent that does not exist yet gets that
+        parent as its assembly, as Add Robot builds it: an Xform defined before the
+        load (so parking moves only the robot), targeting the robot through
+        :data:`ASSEMBLY_ROBOT_RELATIONSHIP`, and removed again if the load fails.
+
         Raises:
             HTTPException: 400 if more than one source is given, or none while the
                 prim is missing; 404/502 from the catalogue download; 422 if loading
                 fails.
         """
         import omni.usd
+        from pxr import Sdf, UsdGeom
 
         if sum(1 for source in (urdf_path, usd_path, asset_info) if source) > 1:
             raise HTTPException(
@@ -1215,6 +1228,14 @@ class ArticulationService(DeviceRegistry):
                 urdf_path = catalogue_entry["local_path"]
             else:
                 usd_path = catalogue_entry["local_path"]
+        assembly_path = Sdf.Path(requested_prim_path).GetParentPath()
+        builds_assembly = (
+            asset_info is not None
+            and asset_info["category"] == ROBOT_CATEGORY
+            and not stage.GetPrimAtPath(assembly_path)
+        )
+        if builds_assembly:
+            UsdGeom.Xform.Define(stage, assembly_path)
         try:
             if urdf_path:
                 resolved = await import_urdf_at(stage, urdf_path, requested_prim_path)
@@ -1222,7 +1243,13 @@ class ArticulationService(DeviceRegistry):
             else:
                 resolved = await reference_usd_at(stage, usd_path, requested_prim_path)
                 prim_source = "referenced_usd"
-            return resolved, prim_source, catalogue_entry
         except RuntimeError as exc:
+            if builds_assembly and not stage.GetPrimAtPath(assembly_path).GetChildren():
+                stage.RemovePrim(assembly_path)
             # 422: well-formed request, but loading the file itself failed.
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if builds_assembly:
+            stage.GetPrimAtPath(assembly_path).CreateRelationship(
+                ASSEMBLY_ROBOT_RELATIONSHIP
+            ).SetTargets([resolved])
+        return resolved, prim_source, catalogue_entry
