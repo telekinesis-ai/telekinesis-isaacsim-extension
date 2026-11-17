@@ -1,4 +1,10 @@
 # Changelog
+## [0.10.3] - 2026-11-17
+### Fixed
+- A blocking surface gripper `close` could return `Closed` with an empty `gripped_objects`: the
+  gripper component reports `Closed` a physics step before it lists what it holds. A close now
+  counts as `Closed` only once `gripped_objects` is filled, so the response names the gripped
+  objects.
 ## [0.10.2] - 2026-11-13
 ### Changed
 - `assemble_robot` of an articulated gripper binds a physics material with static and dynamic
