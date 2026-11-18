@@ -7,6 +7,7 @@ import math
 import carb
 import numpy as np
 import omni.usd
+from fastapi import HTTPException
 from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics, UsdShade, Vt
 
 from ...core import asset_loader, robot_assembler
@@ -33,11 +34,6 @@ GHOST_MDL = "SimPBR_Translucent.mdl"
 # as Wandelbots' PrimPoseWatcher does: metres of translation and radians of XYZ Euler rotation.
 MIN_TRANSLATION_CHANGE = 0.001
 MIN_ROTATION_CHANGE = 0.01
-
-
-class GhostObjectError(Exception):
-    """Raised when a ghost object cannot be created or solved. The message is meant for the
-    user."""
 
 
 class GhostObjectService:
@@ -127,16 +123,16 @@ class GhostObjectService:
             ``{"prim_path": ..., "reachable": ...}`` of the new ghost object.
 
         Raises:
-            GhostObjectError: If the stage is not in metres, the prim is not a tool mounted on a
-                robot, the robot is not connected or no longer known to the server, the robot does
-                not match its connected model, the tool has no meshes, or the server cannot be
-                reached.
+            HTTPException: 422 if the stage is not in metres, the prim is not a tool mounted on
+                a robot, the robot is not connected or no longer known to the server, the robot
+                does not match its connected model, or the tool has no meshes; 503 if the server
+                cannot be reached.
         """
         stage = omni.usd.get_context().get_stage()
         if UsdGeom.GetStageMetersPerUnit(stage) != 1.0:
             # The bridge loads robots at metre scale whatever the stage unit, so a pose read in
             # another unit would not match the robot.
-            raise GhostObjectError("Ghost objects need a stage in metres (metersPerUnit = 1).")
+            raise HTTPException(422, "Ghost objects need a stage in metres (metersPerUnit = 1).")
 
         articulation_id = await self._articulation_service.find_robot_for_prim(tool_prim_path)
         robot_prim_path = (
@@ -151,9 +147,10 @@ class GhostObjectService:
             or Sdf.Path(tool_prim_path).HasPrefix(Sdf.Path(robot_prim_path))
             or Sdf.Path(robot_prim_path).HasPrefix(Sdf.Path(tool_prim_path))
         ):
-            raise GhostObjectError(
+            raise HTTPException(
+                422,
                 f"'{tool_prim_path}' is not a tool mounted on a robot. Right-click a tool added "
-                "with Add Tool."
+                "with Add Tool.",
             )
         robot_id = _connected_robot_id(stage, robot_prim_path)
         robot = await self._describe_robot(robot_id)
@@ -168,7 +165,9 @@ class GhostObjectService:
             stage, tool_prim_path, default_tcp_world
         )
         if not face_vertex_counts:
-            raise GhostObjectError(f"'{tool_prim_path}' has no visible meshes to show as a ghost.")
+            raise HTTPException(
+                422, f"'{tool_prim_path}' has no visible meshes to show as a ghost."
+            )
 
         pose = _pose_in_frame(default_tcp_world, base_world)
         solution = await _call_server(
@@ -209,6 +208,73 @@ class GhostObjectService:
         # solve the new ghost a second time.
         self._solved_poses[ghost_prim.GetPath()] = pose
         return {"prim_path": ghost_path, "reachable": reachable}
+
+    async def list_ghost_objects(self, robot_prim_path: str | None = None) -> list[dict]:
+        """Return the ghost objects of the open stage, sorted by prim path.
+
+        Each entry is ``{"name", "prim_path", "robot_prim_path", "pose", "joint_names",
+        "joint_positions", "reachable"}``: ``pose`` is the ghost's ``[x, y, z, rx, ry, rz]`` in
+        its robot's base frame, metres and extrinsic XYZ Euler degrees, the pose a program moves
+        the robot's default TCP to; ``joint_positions`` is the stored solution in radians.
+
+        Args:
+            robot_prim_path: Only the ghosts of this robot, or every ghost when ``None``.
+
+        Raises:
+            HTTPException: 422 if a listed ghost's robot is not connected or no longer known to
+                the server, does not match its connected model, or the stage changes while the
+                ghosts are listed; 503 if the server cannot be reached.
+        """
+        stage = self._stage
+        if stage is None:
+            return []
+        ghost_objects = []
+        for ghost_path in sorted(self._ghost_paths):
+            robot_targets = (
+                stage.GetPrimAtPath(ghost_path)
+                .GetRelationship(GHOST_ROBOT_RELATIONSHIP)
+                .GetTargets()
+            )
+            if not robot_targets:
+                continue
+            ghost_robot_path = robot_targets[0].pathString
+            if robot_prim_path is not None and ghost_robot_path != robot_prim_path:
+                continue
+            base_world = await self._base_frame_world(stage, ghost_robot_path)
+            if stage is not self._stage:
+                raise HTTPException(422, "The stage changed while the ghost objects were listed.")
+            ghost = stage.GetPrimAtPath(ghost_path)
+            ghost_objects.append(
+                {
+                    "name": ghost_path.name,
+                    "prim_path": ghost_path.pathString,
+                    "robot_prim_path": ghost_robot_path,
+                    "pose": _pose_in_frame(omni.usd.get_world_transform_matrix(ghost), base_world),
+                    "joint_names": list(
+                        ghost.GetAttribute(GHOST_JOINT_NAMES_ATTRIBUTE).Get() or []
+                    ),
+                    "joint_positions": [
+                        float(position)
+                        for position in ghost.GetAttribute(GHOST_JOINT_POSITIONS_ATTRIBUTE).Get()
+                        or []
+                    ],
+                    "reachable": bool(ghost.GetAttribute(GHOST_REACHABLE_ATTRIBUTE).Get()),
+                }
+            )
+        return ghost_objects
+
+    async def _base_frame_world(self, stage: Usd.Stage, robot_prim_path: str) -> Gf.Matrix4d:
+        """Return the world transform of the base frame of the connected robot at
+        ``robot_prim_path``.
+
+        Raises:
+            HTTPException: 422 if the robot is not connected or no longer known to the server,
+                or does not match its connected model; 503 if the server cannot be reached.
+        """
+        robot = await self._describe_robot(_connected_robot_id(stage, robot_prim_path))
+        return _world_transform_of_robot_frame(
+            stage, robot_prim_path, robot["base_frame"], robot["class_name"]
+        )
 
     def _on_objects_changed(self, notice, sender):
         """Hand the prims a change to the followed stage moved or re-created to Isaac Sim's loop.
@@ -266,8 +332,10 @@ class GhostObjectService:
                 self._moved_while_solving.discard(ghost_path)
                 try:
                     await self._solve_moved_ghost(ghost_path)
-                except GhostObjectError as error:
-                    carb.log_warn(f"[bridge] could not solve ghost object {ghost_path}: {error}")
+                except HTTPException as error:
+                    carb.log_warn(
+                        f"[bridge] could not solve ghost object {ghost_path}: {error.detail}"
+                    )
                 if ghost_path not in self._moved_while_solving:
                     return
         finally:
@@ -284,9 +352,9 @@ class GhostObjectService:
         solution is written only if the ghost is still on the followed stage.
 
         Raises:
-            GhostObjectError: If the ghost names no robot, the robot is not connected or no
-                longer known to the server, the robot does not match its connected model, or the
-                server cannot be reached.
+            HTTPException: 422 if the ghost names no robot, the robot is not connected or no
+                longer known to the server, or the robot does not match its connected model; 503
+                if the server cannot be reached.
         """
         stage = self._stage
         ghost = stage.GetPrimAtPath(ghost_path)
@@ -294,16 +362,12 @@ class GhostObjectService:
             return
         robot_targets = ghost.GetRelationship(GHOST_ROBOT_RELATIONSHIP).GetTargets()
         if not robot_targets or not stage.GetPrimAtPath(robot_targets[0]):
-            raise GhostObjectError("its robot is not in the stage.")
+            raise HTTPException(422, "its robot is not in the stage.")
         robot_prim_path = robot_targets[0].pathString
         robot_id = _connected_robot_id(stage, robot_prim_path)
-        robot = await self._describe_robot(robot_id)
+        base_world = await self._base_frame_world(stage, robot_prim_path)
         if stage is not self._stage or not ghost.IsValid():
             return
-
-        base_world = _world_transform_of_robot_frame(
-            stage, robot_prim_path, robot["base_frame"], robot["class_name"]
-        )
         pose = _pose_in_frame(omni.usd.get_world_transform_matrix(ghost), base_world)
         solved_pose = self._solved_poses.get(ghost_path)
         if solved_pose is not None and not _moved_enough(solved_pose, pose):
@@ -330,7 +394,8 @@ class GhostObjectService:
         """Return the server's description of robot ``robot_id``, asking the server only once.
 
         Raises:
-            GhostObjectError: If the server no longer knows the robot or cannot be reached.
+            HTTPException: 422 if the server no longer knows the robot; 503 if it cannot be
+                reached.
         """
         if robot_id not in self._robot_descriptions:
             self._robot_descriptions[robot_id] = await _call_server(
@@ -382,13 +447,14 @@ def _connected_robot_id(stage: Usd.Stage, robot_prim_path: str) -> str:
     """Return the server robot id stored on the robot prim.
 
     Raises:
-        GhostObjectError: If the robot is not connected to Telekinesis.
+        HTTPException: 422 if the robot is not connected to Telekinesis.
     """
     robot_id = stage.GetPrimAtPath(robot_prim_path).GetAttribute(ROBOT_ID_ATTRIBUTE).Get()
     if not robot_id:
-        raise GhostObjectError(
+        raise HTTPException(
+            422,
             f"{robot_prim_path} is not connected. Right-click the robot and choose Connect to "
-            "Telekinesis first."
+            "Telekinesis first.",
         )
     return robot_id
 
@@ -399,14 +465,15 @@ def _world_transform_of_robot_frame(
     """Return the world transform of the robot's prim named ``frame_name``.
 
     Raises:
-        GhostObjectError: If the robot has no such prim, so it does not match ``class_name``.
+        HTTPException: 422 if the robot has no such prim, so it does not match ``class_name``.
     """
     try:
         frame_path = robot_assembler.find_prim_by_name(stage, robot_prim_path, frame_name)
     except RuntimeError as error:
-        raise GhostObjectError(
+        raise HTTPException(
+            422,
             f"{robot_prim_path} has no '{frame_name}', so it does not match its connected "
-            f"model {class_name}. Connect it to Telekinesis with the right model."
+            f"model {class_name}. Connect it to Telekinesis with the right model.",
         ) from error
     return omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(frame_path))
 
@@ -467,19 +534,21 @@ def _write_ghost_solution(
 
 
 async def _call_server(request):
-    """Await a server request, turning its failure into a :class:`GhostObjectError`.
+    """Await a server request, turning its failure into an ``HTTPException`` for the user.
 
-    A 404 means the server no longer has the robot, e.g. because it restarted.
+    A 404 from the server means it no longer has the robot, e.g. because it restarted; that
+    and any other server error is answered with 422, a server that cannot be reached with 503.
     """
     try:
         return await request
     except IsaacSimServerError as error:
         if error.status_code == 404:
-            raise GhostObjectError(
+            raise HTTPException(
+                422,
                 "The Telekinesis Isaac Sim Server no longer has this robot, e.g. because it "
-                "restarted. Right-click the robot and choose Connect to Telekinesis again."
+                "restarted. Right-click the robot and choose Connect to Telekinesis again.",
             ) from error
-        raise GhostObjectError(str(error)) from error
+        raise HTTPException(422 if error.status_code is not None else 503, str(error)) from error
 
 
 def _merge_meshes_in_frame(

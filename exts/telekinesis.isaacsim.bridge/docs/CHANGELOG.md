@@ -23,6 +23,14 @@
   configuration; a duplicated ghost is solved too. Its joints and tint follow the latest pose.
   Out of reach, it turns red and keeps its last solution. A solve that fails, e.g. because the
   server is not running, logs a warning and leaves the ghost unchanged.
+- `GET /teaching/ghost-objects` lists the stage's ghost objects, optionally only those of the
+  robot `robot_prim_path`: each with its name, prim path, robot, pose in the robot's base frame
+  (the pose to move the robot's default TCP to, metres and extrinsic XYZ Euler degrees), stored
+  joint solution in radians and whether it is reachable. It answers 422 when a robot is not
+  connected and 503 when the Telekinesis Isaac Sim Server cannot be reached.
+- `examples/ur10e_hande_ghost_pick_place.py` picks objects at ghost objects named `PickPose_*`
+  and places them at ghost objects named `PlacePose_*`, paired in name order, with the UR10e
+  and its Hand-E.
 - `PUT /articulations` that loads a catalogue robot arm into a parent prim that does not exist
   yet, such as `/World/cr10_assembly/cr10`, builds that parent as the robot's assembly the way
   Add Robot does: an Xform targeting the robot through `telekinesis:assemblyRobot`. Grippers,

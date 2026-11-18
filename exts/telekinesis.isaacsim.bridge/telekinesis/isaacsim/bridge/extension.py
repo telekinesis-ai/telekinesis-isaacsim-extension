@@ -38,9 +38,9 @@ from omni.kit.menu.utils import add_menu_items, remove_menu_items
 from omni.usd import StageEventType
 from pxr import Usd
 
-from .comm.isaacsim_server_client import IsaacSimServerClient
+from fastapi import HTTPException
+
 from .comm.server import BridgeServer
-from .comm.services.ghost_objects import GhostObjectError, GhostObjectService
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_TITLE
 from .ui.add_asset_window import AddAssetWindow
 from .ui.add_camera_window import AddCameraWindow
@@ -146,13 +146,10 @@ class Extension(omni.ext.IExt):
             self._bridge_server.articulation_service,
             self._bridge_server.stage_service,
         )
-        server_client = IsaacSimServerClient()
         self._connect_telekinesis_window = ConnectTelekinesisWindow(
-            self._bridge_server.articulation_service, server_client
+            self._bridge_server.articulation_service, self._bridge_server.isaacsim_server_client
         )
-        self._ghost_object_service = GhostObjectService(
-            self._bridge_server.articulation_service, server_client
-        )
+        self._ghost_object_service = self._bridge_server.ghost_object_service
 
         # Shown under right-click -> Create in the Stage panel and viewport. The returned
         # subscription keeps the entry alive; dropping it in on_shutdown removes it.
@@ -345,9 +342,9 @@ class Extension(omni.ext.IExt):
         tool_prim_path = self._clicked_prim_path(objects)
         try:
             ghost = await self._ghost_object_service.create_ghost_object(tool_prim_path)
-        except GhostObjectError as error:
+        except HTTPException as error:
             notification_manager.post_notification(
-                f"Creating a ghost object failed: {error}",
+                f"Creating a ghost object failed: {error.detail}",
                 hide_after_timeout=False,
                 status=notification_manager.NotificationStatus.WARNING,
                 button_infos=[notification_manager.NotificationButtonInfo("OK", on_complete=None)],

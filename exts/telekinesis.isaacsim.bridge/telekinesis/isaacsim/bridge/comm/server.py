@@ -57,12 +57,14 @@ import uvicorn
 from fastapi import responses
 from pxr import Tf, Usd
 
+from .isaacsim_server_client import IsaacSimServerClient
 from .routers import ALL_ROUTERS
 from .services.articulations import ArticulationService
 from .services.asset_library import AssetLibraryService
 from .services.cameras import CameraService
 from .services.conveyors import ConveyorService
 from .services.general import GeneralService
+from .services.ghost_objects import GhostObjectService
 from .services.lidars import LidarService
 from .services.lightbeams import LightBeamService
 from .services.prims import PrimService
@@ -85,6 +87,8 @@ class BridgeServer:
     asset_library_service: AssetLibraryService
     stage_service: StageService
     surface_gripper_service: SurfaceGripperService
+    isaacsim_server_client: IsaacSimServerClient
+    ghost_object_service: GhostObjectService
 
     def __init__(self, host="127.0.0.1", port=8766):
         """Build the FastAPI app (and its services); call `start()` to begin serving."""
@@ -296,6 +300,13 @@ class BridgeServer:
         app.state.prim_service = prim_service
         app.state.general_service = GeneralService()
         app.state.asset_library_service = asset_library_service
+        # The client of the Telekinesis Isaac Sim Server, which solves the ghost objects'
+        # inverse kinematics; the GUI's Connect to Telekinesis window uses it too.
+        isaacsim_server_client = IsaacSimServerClient()
+        ghost_object_service = GhostObjectService(articulation_service, isaacsim_server_client)
+        app.state.ghost_object_service = ghost_object_service
+        self.isaacsim_server_client = isaacsim_server_client
+        self.ghost_object_service = ghost_object_service
         self.articulation_service = articulation_service
         self.asset_library_service = asset_library_service
         self.stage_service = stage_service

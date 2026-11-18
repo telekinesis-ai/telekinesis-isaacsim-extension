@@ -39,6 +39,7 @@ from .dependencies import (
     get_camera_service,
     get_conveyor_service,
     get_general_service,
+    get_ghost_object_service,
     get_lidar_service,
     get_lightbeam_service,
     get_prim_service,
@@ -2302,9 +2303,20 @@ async def clear_ghost_objects():
 
 
 @teaching.get("/ghost-objects", summary="List Ghost Objects")
-async def list_ghost_objects():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
+async def list_ghost_objects(
+    robot_prim_path: str | None = None,
+    ghost_object_service=Depends(get_ghost_object_service),
+):
+    """The ghost objects of the open stage, optionally only those of one robot.
+
+    Each ghost has its ``name``, ``prim_path``, ``robot_prim_path``, its ``pose``
+    ``[x, y, z, rx, ry, rz]`` in its robot's base frame (metres and extrinsic XYZ Euler
+    degrees, the pose to move the robot's default TCP to), the stored solution
+    ``joint_names`` and ``joint_positions`` (radians), and whether it is ``reachable``.
+    Needs the Telekinesis Isaac Sim Server for the robots' base frames: 422 when a robot is
+    not connected or the server no longer knows it, 503 when the server cannot be reached.
+    """
+    return await ghost_object_service.list_ghost_objects(robot_prim_path)
 
 
 @teaching.get("/ghost-objects/export", summary="Export Ghost Objects")
