@@ -11,10 +11,10 @@
   server is not reachable, the window says so.
 - Right-click a tool mounted on a robot connected to Telekinesis → Telekinesis Isaac Sim Bridge
   → **Ghost Object** creates a ghost object: a see-through copy of the tool, standing where the
-  tool is, in a `ghosts` Xform beside the robot. Its origin is the robot's default TCP, and it
-  stores the robot's inverse-kinematics solution from the Telekinesis Isaac Sim Server as
-  `telekinesis:ghost:joint_names` and `telekinesis:ghost:joint_positions` (radians), whether
-  there is one as `telekinesis:ghost:reachable`, and its robot as the
+  tool is, named `<tool>_Pose` in a `poses` Xform beside the robot. Its origin is the robot's
+  default TCP, and it stores the robot's inverse-kinematics solution from the Telekinesis Isaac
+  Sim Server as `telekinesis:ghost:joint_names` and `telekinesis:ghost:joint_positions`
+  (radians), whether there is one as `telekinesis:ghost:reachable`, and its robot as the
   `telekinesis:ghost:robot` relationship. It is tinted green when the robot can reach it and
   red when it cannot. Ghost objects carry no physics and are saved with the stage; they need a
   stage in metres.

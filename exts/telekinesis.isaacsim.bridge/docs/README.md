@@ -225,7 +225,7 @@ inverse kinematics is solved by the **Telekinesis Isaac Sim Server**, which must
    connect the robot again.
 2. **Create a ghost.** Right-click a tool mounted on the robot, such as a gripper added with Add
    Tool, and choose **Create ▸ Telekinesis Isaac Sim Bridge ▸ Ghost Object**. The ghost appears
-   where the tool stands, in a `ghosts` Xform beside the robot. It is green when the robot can
+   where the tool stands, as `<tool>_Pose` in a `poses` Xform beside the robot. It is green when the robot can
    reach it and red when it cannot.
 3. **Place it.** Rename the ghost, move it with the viewport gizmo or the Transform fields, or
    duplicate it. Every ghost that moves more than 1 mm or 0.01 rad is solved again, starting from

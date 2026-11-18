@@ -22,8 +22,10 @@ GHOST_JOINT_NAMES_ATTRIBUTE = "telekinesis:ghost:joint_names"
 GHOST_JOINT_POSITIONS_ATTRIBUTE = "telekinesis:ghost:joint_positions"
 GHOST_REACHABLE_ATTRIBUTE = "telekinesis:ghost:reachable"
 
-# Name of the Xform beside the robot that holds its ghost objects.
-GHOSTS_GROUP_NAME = "ghosts"
+# Name of the Xform beside the robot that holds its ghost objects, and the suffix of a new
+# ghost's name after its tool's: Wandelbots' default ghost path is <tool parent>/poses/<tool>_Pose.
+GHOSTS_GROUP_NAME = "poses"
+GHOST_NAME_SUFFIX = "_Pose"
 # Look of a ghost object: Wandelbots' reachability tints on Kit's SimPBR_Translucent material,
 # the material their ghosts use. It is in Kit's core MDL library, so a saved stage finds it by
 # name on any Isaac Sim install.
@@ -42,7 +44,7 @@ class GhostObjectService:
 
     A ghost object is a single ``Mesh`` prim: the tool's visible meshes merged into the frame of
     the robot's default TCP, so the ghost's origin is where that TCP has to go for the real tool
-    to cover the ghost. Ghosts live in a ``ghosts`` Xform beside the robot, in its assembly when
+    to cover the ghost. Ghosts live in a ``poses`` Xform beside the robot, in its assembly when
     it has one, carry no physics, and are saved with the stage. Each ghost stores the robot's
     inverse-kinematics solution for it, solved by the Telekinesis Isaac Sim Server, and is tinted
     green when the robot can reach it and red when it cannot.
@@ -180,11 +182,8 @@ class GhostObjectService:
             stage, robot_prim_path, GHOSTS_GROUP_NAME
         )
         UsdGeom.Xform.Define(stage, ghosts_path)
-        ghost_path = omni.usd.get_stage_next_free_path(
-            stage,
-            f"{ghosts_path}/{Tf.MakeValidIdentifier(Sdf.Path(tool_prim_path).name)}_ghost",
-            False,
-        )
+        ghost_name = Tf.MakeValidIdentifier(Sdf.Path(tool_prim_path).name) + GHOST_NAME_SUFFIX
+        ghost_path = omni.usd.get_stage_next_free_path(stage, f"{ghosts_path}/{ghost_name}", False)
         ghost = UsdGeom.Mesh.Define(stage, ghost_path)
         ghost.CreatePointsAttr(points)
         ghost.CreateFaceVertexCountsAttr(face_vertex_counts)
