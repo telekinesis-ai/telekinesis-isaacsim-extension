@@ -22,7 +22,8 @@ OVERLAY_LINKS_PATH = f"{OVERLAY_ROOT_PATH}/Links"
 OVERLAY_COLOR = Gf.Vec3f(0xA9, 0x36, 0xDA) / 255.0
 
 
-class RobotOverlay:
+# It reacts to selection and solve events on its own, so destroy() is all a caller needs.
+class RobotOverlay:  # pylint: disable=too-few-public-methods
     """A see-through copy of a robot, drawn in the solution of the selected ghost object.
 
     While exactly one ghost object is selected and the robot can reach it, the ghost's robot is
