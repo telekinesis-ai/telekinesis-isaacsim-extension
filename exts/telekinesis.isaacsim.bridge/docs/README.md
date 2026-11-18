@@ -9,6 +9,7 @@ Telekinesis Isaac Sim Bridge lets you connect NVIDIA Isaac Sim to local applicat
 - Start and stop conveyor belts, and read lightbeam sensors
 - Attach a gripper to an arm, articulated or suction
 - Send motion commands and read articulation state
+- Teach robot poses with ghost objects, solved by the Telekinesis Isaac Sim Server
 - Stream updates in real time over WebSocket
 - Explore the API interactively through Swagger UI
 
@@ -207,6 +208,41 @@ unbroken. Only prims with a collider break the beam; purely visual geometry is i
 
 `linear_depth` is a raycast distance rather than something a physical light barrier measures. It is
 useful as simulation ground truth, and wrong to build a controller on that has to run on hardware.
+
+### Ghost objects
+
+A ghost object marks where a robot's tool should go: it is a see-through copy of the tool that you
+place in the stage, for example around an object to pick, and that stores the robot's joint
+positions for it. A program then reads the ghosts and moves the robot to them. The robot's
+inverse kinematics is solved by the **Telekinesis Isaac Sim Server**, which must be running at
+`http://127.0.0.1:8770`.
+
+1. **Connect the robot.** Right-click a robot added with Add Robot, or any of its prims, and choose
+   **Create ▸ Telekinesis Isaac Sim Bridge ▸ Connect to Telekinesis**. Pick the robot's model, a
+   Synapse robot class such as `UniversalRobotsUR10E`, and press **Connect**. The robot prim stores
+   the id the server gave it as `telekinesis:robot:id` and the class as
+   `telekinesis:robot:class_name`. The server keeps robots only while it runs: after it restarts,
+   connect the robot again.
+2. **Create a ghost.** Right-click a tool mounted on the robot, such as a gripper added with Add
+   Tool, and choose **Create ▸ Telekinesis Isaac Sim Bridge ▸ Ghost Object**. The ghost appears
+   where the tool stands, in a `ghosts` Xform beside the robot. It is green when the robot can
+   reach it and red when it cannot.
+3. **Place it.** Rename the ghost, move it with the viewport gizmo or the Transform fields, or
+   duplicate it. Every ghost that moves more than 1 mm or 0.01 rad is solved again, starting from
+   its stored joint positions so the arm keeps its configuration; a ghost moved out of reach turns
+   red and keeps its last solution.
+4. **Read the ghosts.** `GET /teaching/ghost-objects?robot_prim_path=<robot>` lists them with their
+   `name`, `pose` and stored `joint_positions`. The pose is `[x, y, z, rx, ry, rz]` of the robot's
+   default TCP (`tool0` on a Universal Robots arm) in the robot's base frame, in metres and
+   extrinsic XYZ Euler degrees, so it can be passed to a Synapse robot's `pick` and `place`
+   unchanged. `examples/ur10e_hande_ghost_pick_place.py` picks at ghosts named `PickPose_*` and
+   places at ghosts named `PlacePose_*`.
+
+A ghost is a single `Mesh` with no physics, saved with the stage. Its origin is the robot's default
+TCP, and it stores `telekinesis:ghost:robot` (its robot), `telekinesis:ghost:joint_names`,
+`telekinesis:ghost:joint_positions` (radians) and `telekinesis:ghost:reachable`. Ghost objects need
+a stage in metres. When the server is not running, creating a ghost reports it and a moved ghost
+keeps its last solution, with a warning in the console.
 
 ### Saved stages
 

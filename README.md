@@ -12,6 +12,7 @@ Enable the extension under **Window ▸ Extensions** if you haven't.
 
 - Control and inspect Isaac Sim articulations
 - Send commands through a simple HTTP API
+- Teach robot poses with ghost objects, solved by the Telekinesis Isaac Sim Server
 - Stream updates in real time with WebSocket
 - Explore the interface through Swagger UI
 
