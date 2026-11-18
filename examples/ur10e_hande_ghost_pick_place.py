@@ -53,6 +53,7 @@ def ghost_poses(prefix: str) -> list[list[float]]:
 
 
 def main() -> None:
+    """Read the taught ghost poses, then pick and place one object per PickPose/PlacePose pair."""
     pick_poses = ghost_poses(PICK_GHOST_PREFIX)
     place_poses = ghost_poses(PLACE_GHOST_PREFIX)
     if not pick_poses or len(pick_poses) != len(place_poses):

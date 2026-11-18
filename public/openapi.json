@@ -8663,24 +8663,6 @@
       }
     },
     "/teaching/ghost-objects": {
-      "get": {
-        "tags": [
-          "teaching"
-        ],
-        "summary": "List Ghost Objects",
-        "description": "Mirrored from the spec; not yet implemented.",
-        "operationId": "list_ghost_objects_teaching_ghost_objects_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      },
       "post": {
         "tags": [
           "teaching"
@@ -8712,6 +8694,52 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "teaching"
+        ],
+        "summary": "List Ghost Objects",
+        "description": "The ghost objects of the open stage, optionally only those of one robot.\n\nEach ghost has its ``name``, ``prim_path``, ``robot_prim_path``, its ``pose``\n``[x, y, z, rx, ry, rz]`` in its robot's base frame (metres and extrinsic XYZ Euler\ndegrees, the pose to move the robot's default TCP to), the stored solution\n``joint_names`` and ``joint_positions`` (radians), and whether it is ``reachable``.\nNeeds the Telekinesis Isaac Sim Server for the robots' base frames: 422 when a robot is\nnot connected or the server no longer knows it, 503 when the server cannot be reached.",
+        "operationId": "list_ghost_objects_teaching_ghost_objects_get",
+        "parameters": [
+          {
+            "name": "robot_prim_path",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Robot Prim Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
