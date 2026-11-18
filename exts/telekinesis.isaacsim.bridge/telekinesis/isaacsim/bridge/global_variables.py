@@ -12,13 +12,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Extension-wide constants: display title, the bridge server's host/port, and the
-asset library's base URL."""
+"""Extension-wide constants: display title, the bridge server's host/port, the Telekinesis
+Isaac Sim Server's URL, and the asset library's base URL."""
 
 EXTENSION_TITLE = "TelekinesisIsaacSimBridge"
 
 BRIDGE_HOST = "127.0.0.1"
 BRIDGE_PORT = 8766
+
+# Base URL of the Telekinesis Isaac Sim Server's API, which loads robots for kinematics.
+ISAACSIM_SERVER_URL = "http://127.0.0.1:8770/api/v1"
 
 # S3 endpoint of the public asset bucket (Kit's storage client lists S3 only through the
 # endpoint URL, not a custom domain). None uses the local asset index instead.

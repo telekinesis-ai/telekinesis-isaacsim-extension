@@ -1,6 +1,23 @@
 # Changelog
 ## [0.10.3] - 2026-11-17
 ### Added
+- Right-click a robot (or its assembly, a link or a mounted tool) → Telekinesis Isaac Sim Bridge
+  → **Connect to Telekinesis** opens a window that connects the robot to the Telekinesis Isaac
+  Sim Server at `http://127.0.0.1:8770`. The user picks the robot's model, a Synapse robot class
+  such as `UniversalRobotsUR10E`, from the classes the server offers; Connect loads it on the
+  server and saves the server's robot id and the class name on the robot prim as
+  `telekinesis:robot:id` and `telekinesis:robot:class_name`, which are kept when the stage is
+  saved. Connecting a robot again replaces both and deletes its previous server robot. When the
+  server is not reachable, the window says so.
+- Right-click a tool mounted on a robot connected to Telekinesis → Telekinesis Isaac Sim Bridge
+  → **Ghost Object** creates a ghost object: a see-through copy of the tool, standing where the
+  tool is, in a `ghosts` Xform beside the robot. Its origin is the robot's default TCP, and it
+  stores the robot's inverse-kinematics solution from the Telekinesis Isaac Sim Server as
+  `telekinesis:ghost:joint_names` and `telekinesis:ghost:joint_positions` (radians), whether
+  there is one as `telekinesis:ghost:reachable`, and its robot as the
+  `telekinesis:ghost:robot` relationship. It is tinted green when the robot can reach it and
+  red when it cannot. Ghost objects carry no physics and are saved with the stage; they need a
+  stage in metres.
 - `PUT /articulations` that loads a catalogue robot arm into a parent prim that does not exist
   yet, such as `/World/cr10_assembly/cr10`, builds that parent as the robot's assembly the way
   Add Robot does: an Xform targeting the robot through `telekinesis:assemblyRobot`. Grippers,

@@ -33,17 +33,21 @@ import omni.usd
 from isaacsim.gui.components.element_wrappers import ScrollingWindow
 from isaacsim.gui.components.menu import MenuItemDescription
 from omni import ui
+from omni.kit import notification_manager
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 from omni.usd import StageEventType
 from pxr import Usd
 
+from .comm.isaacsim_server_client import IsaacSimServerClient
 from .comm.server import BridgeServer
+from .comm.services.ghost_objects import GhostObjectError, GhostObjectService
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_TITLE
 from .ui.add_asset_window import AddAssetWindow
 from .ui.add_camera_window import AddCameraWindow
 from .ui.add_mesh_window import AddMeshWindow
 from .ui.add_robot_window import AddRobotWindow
 from .ui.add_tool_window import AddToolWindow
+from .ui.connect_telekinesis_window import ConnectTelekinesisWindow
 from .ui_builder import UIBuilder
 
 
@@ -142,6 +146,13 @@ class Extension(omni.ext.IExt):
             self._bridge_server.articulation_service,
             self._bridge_server.stage_service,
         )
+        server_client = IsaacSimServerClient()
+        self._connect_telekinesis_window = ConnectTelekinesisWindow(
+            self._bridge_server.articulation_service, server_client
+        )
+        self._ghost_object_service = GhostObjectService(
+            self._bridge_server.articulation_service, server_client
+        )
 
         # Shown under right-click -> Create in the Stage panel and viewport. The returned
         # subscription keeps the entry alive; dropping it in on_shutdown removes it.
@@ -174,6 +185,18 @@ class Extension(omni.ext.IExt):
                                 self._add_camera_window, objects
                             ),
                         },
+                        {
+                            "name": "Connect to Telekinesis",
+                            "onclick_fn": lambda objects: self._show_add_asset_window(
+                                self._connect_telekinesis_window, objects
+                            ),
+                        },
+                        {
+                            "name": "Ghost Object",
+                            "onclick_fn": lambda objects: asyncio.ensure_future(
+                                self._create_ghost_object(objects)
+                            ),
+                        },
                     ],
                 },
                 "glyph": f"{extension_path}/data/icon.png",
@@ -188,6 +211,7 @@ class Extension(omni.ext.IExt):
         self._add_tool_window.destroy()
         self._add_mesh_window.destroy()
         self._add_camera_window.destroy()
+        self._connect_telekinesis_window.destroy()
         self._bridge_stage_event_sub = None
         if getattr(self, "_bridge_server", None) is not None:
             self._bridge_server.stop()
@@ -286,28 +310,63 @@ class Extension(omni.ext.IExt):
                 self._add_tool_window,
                 self._add_mesh_window,
                 self._add_camera_window,
+                self._connect_telekinesis_window,
             ):
                 window.close()
 
-    def _show_add_asset_window(self, window: AddAssetWindow, objects: dict):
+    def _show_add_asset_window(
+        self, window: AddAssetWindow | ConnectTelekinesisWindow, objects: dict
+    ):
         """Open ``window`` with the right-clicked prim as its Attaching Prim.
 
         Args:
-            window: The Add Robot, Add Tool, Add Mesh or Add Camera window the menu entry opens.
+            window: The Add Robot, Add Tool, Add Mesh, Add Camera or Connect to Telekinesis
+                window the menu entry opens.
             objects: Kit context-menu payload. ``prim_list`` holds the right-clicked prims, as
                 ``Usd.Prim`` or ``Sdf.Path`` depending on the window, and is empty when the click
                 was on empty space; the stage's default prim is then the Attaching Prim, or the
                 stage root when the stage has none.
         """
+        window.show(self._clicked_prim_path(objects))
+
+    async def _create_ghost_object(self, objects: dict):
+        """Create a ghost object of the right-clicked tool and notify the outcome, a failure as a
+        warning that stays until dismissed.
+
+        Args:
+            objects: Kit context-menu payload, as for :meth:`_show_add_asset_window`.
+        """
+        tool_prim_path = self._clicked_prim_path(objects)
+        try:
+            ghost = await self._ghost_object_service.create_ghost_object(tool_prim_path)
+        except GhostObjectError as error:
+            notification_manager.post_notification(
+                f"Creating a ghost object failed: {error}",
+                hide_after_timeout=False,
+                status=notification_manager.NotificationStatus.WARNING,
+                button_infos=[notification_manager.NotificationButtonInfo("OK", on_complete=None)],
+            )
+            return
+        reach = "reachable" if ghost["reachable"] else "not reachable by the robot"
+        notification_manager.post_notification(
+            f"Created ghost object {ghost['prim_path']} ({reach})."
+        )
+
+    @staticmethod
+    def _clicked_prim_path(objects: dict) -> str:
+        """Return the path of the right-clicked prim in a Kit context-menu payload.
+
+        ``prim_list`` holds the right-clicked prims, as ``Usd.Prim`` or ``Sdf.Path``, and is
+        empty when the click was on empty space; the stage's default prim is then returned, or
+        the stage root when the stage has none.
+        """
         prim_list = objects.get("prim_list") or []
         if not prim_list:
             default_prim = omni.usd.get_context().get_stage().GetDefaultPrim()
-            attaching_prim_path = str(default_prim.GetPath()) if default_prim else "/"
-        elif isinstance(prim_list[0], Usd.Prim):
-            attaching_prim_path = str(prim_list[0].GetPath())
-        else:
-            attaching_prim_path = str(prim_list[0])
-        window.show(attaching_prim_path)
+            return str(default_prim.GetPath()) if default_prim else "/"
+        if isinstance(prim_list[0], Usd.Prim):
+            return str(prim_list[0].GetPath())
+        return str(prim_list[0])
 
     def _on_stage_event(self, event):
         """Clean up physics subscription on stage open/close; forward event to UIBuilder."""

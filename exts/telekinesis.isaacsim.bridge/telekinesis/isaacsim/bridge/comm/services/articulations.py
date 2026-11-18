@@ -50,6 +50,11 @@ MOUNT_LINK_ATTRIBUTE = "telekinesis:mountLink"
 # everything attached in it count as part of that robot. Authored by Add Robot, and by
 # create_articulation when it loads a catalogue robot into a parent that does not exist.
 ASSEMBLY_ROBOT_RELATIONSHIP = "telekinesis:assemblyRobot"
+# String attributes on a robot prim connected to Telekinesis: the id of the robot loaded for it
+# on the Telekinesis Isaac Sim Server, and the Synapse class name it was loaded from. Authored
+# by the Connect to Telekinesis window.
+ROBOT_ID_ATTRIBUTE = "telekinesis:robot:id"
+ROBOT_CLASS_NAME_ATTRIBUTE = "telekinesis:robot:class_name"
 # Catalogue category of robot arms.
 ROBOT_CATEGORY = "robots/manipulators"
 
