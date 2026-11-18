@@ -18,6 +18,11 @@
   `telekinesis:ghost:robot` relationship. It is tinted green when the robot can reach it and
   red when it cannot. Ghost objects carry no physics and are saved with the stage; they need a
   stage in metres.
+- A ghost object that is moved, directly or with a parent prim, is solved again once it has
+  moved more than 1 mm or 0.01 rad, seeded with its stored solution so the arm keeps its
+  configuration; a duplicated ghost is solved too. Its joints and tint follow the latest pose.
+  Out of reach, it turns red and keeps its last solution. A solve that fails, e.g. because the
+  server is not running, logs a warning and leaves the ghost unchanged.
 - `PUT /articulations` that loads a catalogue robot arm into a parent prim that does not exist
   yet, such as `/World/cr10_assembly/cr10`, builds that parent as the robot's assembly the way
   Add Robot does: an Xform targeting the robot through `telekinesis:assemblyRobot`. Grippers,

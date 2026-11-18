@@ -212,6 +212,7 @@ class Extension(omni.ext.IExt):
         self._add_mesh_window.destroy()
         self._add_camera_window.destroy()
         self._connect_telekinesis_window.destroy()
+        self._ghost_object_service.follow_stage(None)
         self._bridge_stage_event_sub = None
         if getattr(self, "_bridge_server", None) is not None:
             self._bridge_server.stop()
@@ -289,8 +290,8 @@ class Extension(omni.ext.IExt):
         self.ui_builder.on_physics_step(step)
 
     def _on_bridge_stage_event(self, event):
-        """Rebuild the bridge's device registry and close the Add windows when the stage
-        is opened or closed.
+        """Rebuild the bridge's device registry, follow the opened stage's ghost objects and
+        close the Add windows when the stage is opened or closed.
 
         The device handles held by the bridge belong to the stage that was active
         when they were created; replacing the stage strands them. The registry is
@@ -305,6 +306,11 @@ class Extension(omni.ext.IExt):
                     self._bridge_server.restore_devices()
                 else:
                     self._bridge_server.reset_devices()
+            self._ghost_object_service.follow_stage(
+                omni.usd.get_context().get_stage()
+                if event.type == int(StageEventType.OPENED)
+                else None
+            )
             for window in (
                 self._add_robot_window,
                 self._add_tool_window,

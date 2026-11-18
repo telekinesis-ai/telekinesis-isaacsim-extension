@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Ghost objects: see-through copies of a robot's tool that mark where the tool should go."""
 
+import asyncio
 import math
 
+import carb
 import numpy as np
 import omni.usd
 from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics, UsdShade, Vt
@@ -27,14 +29,20 @@ GHOSTS_GROUP_NAME = "ghosts"
 REACHABLE_COLOR = Gf.Vec3f(0.15, 0.8, 0.25)
 UNREACHABLE_COLOR = Gf.Vec3f(0.9, 0.15, 0.15)
 GHOST_MDL = "SimPBR_Translucent.mdl"
+# A moved ghost is solved again only when it moved more than this since it was last solved,
+# as Wandelbots' PrimPoseWatcher does: metres of translation and radians of XYZ Euler rotation.
+MIN_TRANSLATION_CHANGE = 0.001
+MIN_ROTATION_CHANGE = 0.01
 
 
 class GhostObjectError(Exception):
-    """Raised when a ghost object cannot be created. The message is meant for the user."""
+    """Raised when a ghost object cannot be created or solved. The message is meant for the
+    user."""
 
 
 class GhostObjectService:
-    """Creates ghost objects of the tools mounted on robots connected to Telekinesis.
+    """Creates ghost objects of the tools mounted on robots connected to Telekinesis, and solves
+    them again when they are moved.
 
     A ghost object is a single ``Mesh`` prim: the tool's visible meshes merged into the frame of
     the robot's default TCP, so the ghost's origin is where that TCP has to go for the real tool
@@ -42,6 +50,14 @@ class GhostObjectService:
     it has one, carry no physics, and are saved with the stage. Each ghost stores the robot's
     inverse-kinematics solution for it, solved by the Telekinesis Isaac Sim Server, and is tinted
     green when the robot can reach it and red when it cannot.
+
+    While the service follows a stage, a ghost that is moved, directly or with one of its parent
+    prims, is solved again once it has moved more than :data:`MIN_TRANSLATION_CHANGE` or
+    :data:`MIN_ROTATION_CHANGE` since it was last solved; so is a ghost that appears, such as a
+    duplicate. One solve runs per ghost at a time, and a move during a solve leads to one more
+    solve, so the stored solution always ends at the ghost's latest pose. A ghost moved out of
+    reach keeps its last solution, which seeds the next solve. A solve that fails, e.g. because
+    the server is not running, logs a warning and leaves the ghost as it was.
 
     Example:
         service = GhostObjectService(bridge_server.articulation_service, IsaacSimServerClient())
@@ -56,6 +72,45 @@ class GhostObjectService:
     ):
         self._articulation_service = articulation_service
         self._server_client = server_client
+        # Isaac Sim's loop. A stage notice arrives on the thread that made the change, which
+        # need not be this one.
+        self._event_loop = asyncio.get_event_loop()
+        # Server answers of GET /robots/{id}, by robot id. Ids are never reused, so an entry
+        # never goes stale.
+        self._robot_descriptions: dict[str, dict] = {}
+        # The stage whose ghosts are followed and its change listener; see follow_stage.
+        self._stage: Usd.Stage | None = None
+        self._objects_changed_listener = None
+        # Ghost prims of the followed stage, and the pose each was last solved at, in its
+        # robot's base frame.
+        self._ghost_paths: set[Sdf.Path] = set()
+        self._solved_poses: dict[Sdf.Path, list[float]] = {}
+        # The solve running for each ghost, and the ghosts moved while theirs ran.
+        self._solve_tasks: dict[Sdf.Path, asyncio.Task] = {}
+        self._moved_while_solving: set[Sdf.Path] = set()
+        self.follow_stage(omni.usd.get_context().get_stage())
+
+    def follow_stage(self, stage: Usd.Stage | None):
+        """Solve the ghost objects of ``stage`` again whenever they are moved; with ``None``,
+        stop following any stage.
+
+        Called when the extension starts, with the open stage, and whenever a stage is opened or
+        closed. Solves still running for the previously followed stage are cancelled.
+        """
+        if self._objects_changed_listener is not None:
+            self._objects_changed_listener.Revoke()
+            self._objects_changed_listener = None
+        for task in self._solve_tasks.values():
+            task.cancel()
+        self._solve_tasks.clear()
+        self._moved_while_solving.clear()
+        self._solved_poses.clear()
+        self._stage = stage
+        self._ghost_paths = set() if stage is None else _find_ghosts(stage.GetPseudoRoot())
+        if stage is not None:
+            self._objects_changed_listener = Tf.Notice.Register(
+                Usd.Notice.ObjectsChanged, self._on_objects_changed, stage
+            )
 
     async def create_ghost_object(self, tool_prim_path: str) -> dict:
         """Create a ghost object of the tool at ``tool_prim_path``, where the tool stands now.
@@ -100,18 +155,13 @@ class GhostObjectService:
                 f"'{tool_prim_path}' is not a tool mounted on a robot. Right-click a tool added "
                 "with Add Tool."
             )
-        robot_id = stage.GetPrimAtPath(robot_prim_path).GetAttribute(ROBOT_ID_ATTRIBUTE).Get()
-        if not robot_id:
-            raise GhostObjectError(
-                f"{robot_prim_path} is not connected. Right-click the robot and choose Connect to "
-                "Telekinesis first."
-            )
-        robot = await self._call_server(self._server_client.describe_robot(robot_id))
+        robot_id = _connected_robot_id(stage, robot_prim_path)
+        robot = await self._describe_robot(robot_id)
 
-        default_tcp_world = self._world_transform_of_robot_frame(
+        default_tcp_world = _world_transform_of_robot_frame(
             stage, robot_prim_path, robot["default_tcp"], robot["class_name"]
         )
-        base_world = self._world_transform_of_robot_frame(
+        base_world = _world_transform_of_robot_frame(
             stage, robot_prim_path, robot["base_frame"], robot["class_name"]
         )
         points, face_vertex_counts, face_vertex_indices = _merge_meshes_in_frame(
@@ -120,17 +170,12 @@ class GhostObjectService:
         if not face_vertex_counts:
             raise GhostObjectError(f"'{tool_prim_path}' has no visible meshes to show as a ghost.")
 
-        translation, rotation = robot_assembler.matrix_to_translation_rotation(
-            default_tcp_world * base_world.GetInverse()
-        )
-        solution = await self._call_server(
+        pose = _pose_in_frame(default_tcp_world, base_world)
+        solution = await _call_server(
             self._server_client.inverse_kinematics(
-                robot_id,
-                [translation + rotation],
-                self._current_joints(stage, articulation_id, robot_prim_path),
+                robot_id, [pose], self._current_joints(stage, articulation_id, robot_prim_path)
             )
         )
-        joint_positions = solution["joint_positions"][0]
 
         ghosts_path = asset_loader.path_beside_clear_of_rigid_bodies(
             stage, robot_prim_path, GHOSTS_GROUP_NAME
@@ -157,32 +202,161 @@ class GhostObjectService:
 
         ghost_prim = ghost.GetPrim()
         ghost_prim.CreateRelationship(GHOST_ROBOT_RELATIONSHIP).SetTargets([robot_prim_path])
-        ghost_prim.CreateAttribute(GHOST_JOINT_NAMES_ATTRIBUTE, Sdf.ValueTypeNames.StringArray).Set(
-            solution["joint_names"]
+        reachable = _write_ghost_solution(
+            stage, ghost_prim, solution["joint_names"], solution["joint_positions"][0]
         )
-        ghost_prim.CreateAttribute(
-            GHOST_JOINT_POSITIONS_ATTRIBUTE, Sdf.ValueTypeNames.DoubleArray
-        ).Set(joint_positions or [])
-        reachable = joint_positions is not None
-        ghost_prim.CreateAttribute(GHOST_REACHABLE_ATTRIBUTE, Sdf.ValueTypeNames.Bool).Set(
-            reachable
-        )
-        _set_ghost_look(stage, ghost_prim, reachable)
+        # Recorded before the creation's own change notice is handled, so that notice does not
+        # solve the new ghost a second time.
+        self._solved_poses[ghost_prim.GetPath()] = pose
         return {"prim_path": ghost_path, "reachable": reachable}
 
-    def _current_joints(self, stage: Usd.Stage, articulation_id: str, robot_prim_path: str) -> dict:
+    def _on_objects_changed(self, notice, sender):
+        """Hand the prims a change to the followed stage moved or re-created to Isaac Sim's loop.
+
+        USD calls this while it is still processing the change, on whichever thread made it, so
+        the ghosts are looked up and solved on the loop instead. A move is a change to an
+        ``xformOp`` property or to ``xformOpOrder``; a re-created prim, such as a new or
+        duplicated ghost or one whose transform ops were replaced, is a resync.
+        """
+        moved_paths = [
+            path.GetPrimPath()
+            for path in notice.GetChangedInfoOnlyPaths()
+            if path.IsPropertyPath()
+            and (path.name.startswith("xformOp:") or path.name == "xformOpOrder")
+        ]
+        resynced_paths = [path.GetPrimPath() for path in notice.GetResyncedPaths()]
+        if moved_paths or resynced_paths:
+            self._event_loop.call_soon_threadsafe(
+                self._on_prims_changed, sender, moved_paths, resynced_paths
+            )
+
+    def _on_prims_changed(
+        self, stage: Usd.Stage, moved_paths: list[Sdf.Path], resynced_paths: list[Sdf.Path]
+    ):
+        """Update the known ghosts under the re-created prims, then solve every ghost that is or
+        lies under a moved or re-created prim. Runs on Isaac Sim's loop."""
+        if stage is not self._stage:
+            return
+        for resynced_path in resynced_paths:
+            self._ghost_paths = {
+                path for path in self._ghost_paths if not path.HasPrefix(resynced_path)
+            }
+            resynced_prim = stage.GetPrimAtPath(resynced_path)
+            if resynced_prim:
+                self._ghost_paths |= _find_ghosts(resynced_prim)
+        for path in [path for path in self._solved_poses if path not in self._ghost_paths]:
+            del self._solved_poses[path]
+        changed_paths = set(moved_paths) | set(resynced_paths)
+        for ghost_path in self._ghost_paths:
+            if any(ghost_path.HasPrefix(changed_path) for changed_path in changed_paths):
+                self._schedule_solve(ghost_path)
+
+    def _schedule_solve(self, ghost_path: Sdf.Path):
+        """Solve the ghost at ``ghost_path`` again, or once more after its running solve."""
+        if ghost_path in self._solve_tasks:
+            self._moved_while_solving.add(ghost_path)
+            return
+        self._solve_tasks[ghost_path] = asyncio.ensure_future(self._solve_until_unmoved(ghost_path))
+
+    async def _solve_until_unmoved(self, ghost_path: Sdf.Path):
+        """Solve the ghost at ``ghost_path`` until it was not moved during the last solve."""
+        task = asyncio.current_task()
+        try:
+            while True:
+                self._moved_while_solving.discard(ghost_path)
+                try:
+                    await self._solve_moved_ghost(ghost_path)
+                except GhostObjectError as error:
+                    carb.log_warn(f"[bridge] could not solve ghost object {ghost_path}: {error}")
+                if ghost_path not in self._moved_while_solving:
+                    return
+        finally:
+            # A stage change replaces the tasks, so only this task's own entry is removed.
+            if self._solve_tasks.get(ghost_path) is task:
+                del self._solve_tasks[ghost_path]
+
+    async def _solve_moved_ghost(self, ghost_path: Sdf.Path):
+        """Solve the ghost at ``ghost_path`` for its current pose and store the solution.
+
+        Nothing happens when the ghost is gone or has moved less than the thresholds since it
+        was last solved. The solve is seeded with the ghost's stored solution, so it stays on the
+        same arm configuration, or with the robot's current joints when it has none. The
+        solution is written only if the ghost is still on the followed stage.
+
+        Raises:
+            GhostObjectError: If the ghost names no robot, the robot is not connected or no
+                longer known to the server, the robot does not match its connected model, or the
+                server cannot be reached.
+        """
+        stage = self._stage
+        ghost = stage.GetPrimAtPath(ghost_path)
+        if not ghost:
+            return
+        robot_targets = ghost.GetRelationship(GHOST_ROBOT_RELATIONSHIP).GetTargets()
+        if not robot_targets or not stage.GetPrimAtPath(robot_targets[0]):
+            raise GhostObjectError("its robot is not in the stage.")
+        robot_prim_path = robot_targets[0].pathString
+        robot_id = _connected_robot_id(stage, robot_prim_path)
+        robot = await self._describe_robot(robot_id)
+        if stage is not self._stage or not ghost.IsValid():
+            return
+
+        base_world = _world_transform_of_robot_frame(
+            stage, robot_prim_path, robot["base_frame"], robot["class_name"]
+        )
+        pose = _pose_in_frame(omni.usd.get_world_transform_matrix(ghost), base_world)
+        solved_pose = self._solved_poses.get(ghost_path)
+        if solved_pose is not None and not _moved_enough(solved_pose, pose):
+            return
+
+        stored_positions = ghost.GetAttribute(GHOST_JOINT_POSITIONS_ATTRIBUTE).Get()
+        if stored_positions:
+            seed = {
+                "joint_names": list(ghost.GetAttribute(GHOST_JOINT_NAMES_ATTRIBUTE).Get()),
+                "joint_positions": list(stored_positions),
+            }
+        else:
+            articulation_id = await self._articulation_service.find_robot_for_prim(robot_prim_path)
+            seed = self._current_joints(stage, articulation_id, robot_prim_path)
+        solution = await _call_server(
+            self._server_client.inverse_kinematics(robot_id, [pose], seed)
+        )
+        if stage is not self._stage or not ghost.IsValid():
+            return
+        _write_ghost_solution(stage, ghost, solution["joint_names"], solution["joint_positions"][0])
+        self._solved_poses[ghost_path] = pose
+
+    async def _describe_robot(self, robot_id: str) -> dict:
+        """Return the server's description of robot ``robot_id``, asking the server only once.
+
+        Raises:
+            GhostObjectError: If the server no longer knows the robot or cannot be reached.
+        """
+        if robot_id not in self._robot_descriptions:
+            self._robot_descriptions[robot_id] = await _call_server(
+                self._server_client.describe_robot(robot_id)
+            )
+        return self._robot_descriptions[robot_id]
+
+    def _current_joints(
+        self, stage: Usd.Stage, articulation_id: str | None, robot_prim_path: str
+    ) -> dict:
         """Return the robot's current joints in radians, as an IK seed.
 
         The seed keeps the solution on the robot's current arm configuration; without it the
         solver may return another configuration reaching the same pose. While the simulation
-        runs, the joints are read from it. Otherwise they are the joint states stored in the
-        stage, which is where the robot stands while the simulation is stopped: PhysX's
-        ``state:<axis>:physics:position`` on every joint under the robot, in degrees for a
-        revolute joint (USD physics' angular unit) and metres for a prismatic one, and 0, the
-        schema's fallback, where none is stored. The server ignores names that are not joints of
-        its robot.
+        runs, the joints of the robot's registered articulation are read from it. Otherwise they
+        are the joint states stored in the stage, which is where the robot stands while the
+        simulation is stopped: PhysX's ``state:<axis>:physics:position`` on every joint under the
+        robot, in degrees for a revolute joint (USD physics' angular unit) and metres for a
+        prismatic one, and 0, the schema's fallback, where none is stored. The server ignores
+        names that are not joints of its robot.
         """
-        state = self._articulation_service.get_articulation_state(articulation_id)
+        state = (
+            None
+            if articulation_id is None
+            else self._articulation_service.get_articulation_state(articulation_id)
+        )
         if state is not None:
             return {
                 "joint_names": list(
@@ -203,39 +377,109 @@ class GhostObjectService:
             joint_names.append(prim.GetName())
         return {"joint_names": joint_names, "joint_positions": joint_positions}
 
-    @staticmethod
-    def _world_transform_of_robot_frame(
-        stage: Usd.Stage, robot_prim_path: str, frame_name: str, class_name: str
-    ) -> Gf.Matrix4d:
-        """Return the world transform of the robot's prim named ``frame_name``.
 
-        Raises:
-            GhostObjectError: If the robot has no such prim, so it does not match ``class_name``.
-        """
-        try:
-            frame_path = robot_assembler.find_prim_by_name(stage, robot_prim_path, frame_name)
-        except RuntimeError as error:
+def _connected_robot_id(stage: Usd.Stage, robot_prim_path: str) -> str:
+    """Return the server robot id stored on the robot prim.
+
+    Raises:
+        GhostObjectError: If the robot is not connected to Telekinesis.
+    """
+    robot_id = stage.GetPrimAtPath(robot_prim_path).GetAttribute(ROBOT_ID_ATTRIBUTE).Get()
+    if not robot_id:
+        raise GhostObjectError(
+            f"{robot_prim_path} is not connected. Right-click the robot and choose Connect to "
+            "Telekinesis first."
+        )
+    return robot_id
+
+
+def _world_transform_of_robot_frame(
+    stage: Usd.Stage, robot_prim_path: str, frame_name: str, class_name: str
+) -> Gf.Matrix4d:
+    """Return the world transform of the robot's prim named ``frame_name``.
+
+    Raises:
+        GhostObjectError: If the robot has no such prim, so it does not match ``class_name``.
+    """
+    try:
+        frame_path = robot_assembler.find_prim_by_name(stage, robot_prim_path, frame_name)
+    except RuntimeError as error:
+        raise GhostObjectError(
+            f"{robot_prim_path} has no '{frame_name}', so it does not match its connected "
+            f"model {class_name}. Connect it to Telekinesis with the right model."
+        ) from error
+    return omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(frame_path))
+
+
+def _pose_in_frame(world: Gf.Matrix4d, frame_world: Gf.Matrix4d) -> list[float]:
+    """Return the pose of the world transform ``world`` in the frame ``frame_world`` as
+    ``[x, y, z, rx, ry, rz]``: metres, then extrinsic XYZ Euler angles in degrees."""
+    # Gf matrices act on row vectors: the pose in world, then world into the frame.
+    translation, rotation = robot_assembler.matrix_to_translation_rotation(
+        world * frame_world.GetInverse()
+    )
+    return translation + rotation
+
+
+def _moved_enough(previous_pose: list[float], pose: list[float]) -> bool:
+    """Return whether ``pose`` differs from ``previous_pose`` by more than
+    :data:`MIN_TRANSLATION_CHANGE` or :data:`MIN_ROTATION_CHANGE`."""
+    translation_change = np.linalg.norm(np.subtract(pose[:3], previous_pose[:3]))
+    rotation_change = np.linalg.norm(np.radians(np.subtract(pose[3:], previous_pose[3:])))
+    return translation_change > MIN_TRANSLATION_CHANGE or rotation_change > MIN_ROTATION_CHANGE
+
+
+def _find_ghosts(root: Usd.Prim) -> set[Sdf.Path]:
+    """Return the paths of the ghost objects at or under ``root``."""
+    return {
+        prim.GetPath()
+        for prim in Usd.PrimRange(root)
+        if prim.HasAttribute(GHOST_REACHABLE_ATTRIBUTE)
+    }
+
+
+def _write_ghost_solution(
+    stage: Usd.Stage,
+    ghost_prim: Usd.Prim,
+    joint_names: list[str],
+    joint_positions: list[float] | None,
+) -> bool:
+    """Store an inverse-kinematics solution on a ghost and tint it; return whether it is
+    reachable.
+
+    ``joint_positions`` is ``None`` when the ghost is out of reach: the ghost is then marked
+    unreachable and keeps the joint positions it stored before, empty for a new ghost.
+    """
+    ghost_prim.CreateAttribute(GHOST_JOINT_NAMES_ATTRIBUTE, Sdf.ValueTypeNames.StringArray).Set(
+        joint_names
+    )
+    positions_attribute = ghost_prim.CreateAttribute(
+        GHOST_JOINT_POSITIONS_ATTRIBUTE, Sdf.ValueTypeNames.DoubleArray
+    )
+    if joint_positions is not None:
+        positions_attribute.Set(joint_positions)
+    elif positions_attribute.Get() is None:
+        positions_attribute.Set([])
+    reachable = joint_positions is not None
+    ghost_prim.CreateAttribute(GHOST_REACHABLE_ATTRIBUTE, Sdf.ValueTypeNames.Bool).Set(reachable)
+    _set_ghost_look(stage, ghost_prim, reachable)
+    return reachable
+
+
+async def _call_server(request):
+    """Await a server request, turning its failure into a :class:`GhostObjectError`.
+
+    A 404 means the server no longer has the robot, e.g. because it restarted.
+    """
+    try:
+        return await request
+    except IsaacSimServerError as error:
+        if error.status_code == 404:
             raise GhostObjectError(
-                f"{robot_prim_path} has no '{frame_name}', so it does not match its connected "
-                f"model {class_name}. Connect it to Telekinesis with the right model."
+                "The Telekinesis Isaac Sim Server no longer has this robot, e.g. because it "
+                "restarted. Right-click the robot and choose Connect to Telekinesis again."
             ) from error
-        return omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(frame_path))
-
-    @staticmethod
-    async def _call_server(request):
-        """Await a server request, turning its failure into a :class:`GhostObjectError`.
-
-        A 404 means the server no longer has the robot, e.g. because it restarted.
-        """
-        try:
-            return await request
-        except IsaacSimServerError as error:
-            if error.status_code == 404:
-                raise GhostObjectError(
-                    "The Telekinesis Isaac Sim Server no longer has this robot, e.g. because it "
-                    "restarted. Right-click the robot and choose Connect to Telekinesis again."
-                ) from error
-            raise GhostObjectError(str(error)) from error
+        raise GhostObjectError(str(error)) from error
 
 
 def _merge_meshes_in_frame(
