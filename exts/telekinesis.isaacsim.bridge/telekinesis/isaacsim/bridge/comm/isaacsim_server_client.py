@@ -94,6 +94,23 @@ class IsaacSimServerClient:
         body = {"poses": poses} if seed is None else {"poses": poses, "seed": seed}
         return await self._request("POST", f"/robots/{robot_id}/inverse_kinematics", body)
 
+    async def link_poses(self, robot_id: str, joints: dict) -> dict:
+        """Return the pose of every link of the robot's URDF for the given joints.
+
+        Args:
+            robot_id: Id of the server's robot.
+            joints: ``{"joint_names": [...], "joint_positions": [...]}`` in radians.
+
+        Returns:
+            ``{"link_poses": {link_name: [x, y, z, rx, ry, rz]}}``, each pose in the robot's base
+            frame, metres and extrinsic XYZ Euler degrees.
+
+        Raises:
+            IsaacSimServerError: If the server is not reachable or answers with an error, e.g.
+                404 when it has no robot of that id.
+        """
+        return await self._request("POST", f"/robots/{robot_id}/link_poses", joints)
+
     async def delete_robot(self, robot_id: str) -> None:
         """Shut the server's robot ``robot_id`` down and forget it.
 

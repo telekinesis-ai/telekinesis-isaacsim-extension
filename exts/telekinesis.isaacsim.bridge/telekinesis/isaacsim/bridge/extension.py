@@ -48,6 +48,7 @@ from .ui.add_mesh_window import AddMeshWindow
 from .ui.add_robot_window import AddRobotWindow
 from .ui.add_tool_window import AddToolWindow
 from .ui.connect_telekinesis_window import ConnectTelekinesisWindow
+from .ui.robot_overlay import RobotOverlay
 from .ui_builder import UIBuilder
 
 
@@ -150,6 +151,7 @@ class Extension(omni.ext.IExt):
             self._bridge_server.articulation_service, self._bridge_server.isaacsim_server_client
         )
         self._ghost_object_service = self._bridge_server.ghost_object_service
+        self._robot_overlay = RobotOverlay(self._ghost_object_service)
 
         # Shown under right-click -> Create in the Stage panel and viewport. The returned
         # subscription keeps the entry alive; dropping it in on_shutdown removes it.
@@ -209,6 +211,7 @@ class Extension(omni.ext.IExt):
         self._add_mesh_window.destroy()
         self._add_camera_window.destroy()
         self._connect_telekinesis_window.destroy()
+        self._robot_overlay.destroy()
         self._ghost_object_service.follow_stage(None)
         self._bridge_stage_event_sub = None
         if getattr(self, "_bridge_server", None) is not None:

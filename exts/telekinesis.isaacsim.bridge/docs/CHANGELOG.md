@@ -28,6 +28,12 @@
   (the pose to move the robot's default TCP to, metres and extrinsic XYZ Euler degrees), stored
   joint solution in radians and whether it is reachable. It answers 422 when a robot is not
   connected and 503 when the Telekinesis Isaac Sim Server cannot be reached.
+- While one ghost object is selected and its robot can reach it, the robot is drawn see-through
+  in Wandelbots' overlay colour with every link where the ghost's solution puts it, so the arm
+  visibly reaches the ghost; the overlay follows the ghost while it is dragged and disappears
+  when the ghost is out of reach or no single ghost is selected. It lives in the session layer:
+  never saved, not selectable, not listed in the Stage window. It needs the Telekinesis Isaac Sim
+  Server's `POST /robots/{robot_id}/link_poses`.
 - `examples/ur10e_hande_ghost_pick_place.py` picks objects at ghost objects named `PickPose_*`
   and places them at ghost objects named `PlacePose_*`, paired in name order, with the UR10e
   and its Hand-E.

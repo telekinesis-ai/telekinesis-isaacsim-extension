@@ -3,14 +3,16 @@
 
 import asyncio
 import math
+from collections.abc import Callable
 
 import carb
 import numpy as np
 import omni.usd
 from fastapi import HTTPException
-from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics, UsdShade, Vt
+from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics, UsdShade
 
-from ...core import asset_loader, robot_assembler
+from ...core import asset_loader, meshes, robot_assembler
+from .. import models
 from ..isaacsim_server_client import IsaacSimServerClient, IsaacSimServerError
 from .articulations import ROBOT_ID_ATTRIBUTE, ArticulationService
 
@@ -86,6 +88,9 @@ class GhostObjectService:
         # The solve running for each ghost, and the ghosts moved while theirs ran.
         self._solve_tasks: dict[Sdf.Path, asyncio.Task] = {}
         self._moved_while_solving: set[Sdf.Path] = set()
+        # Called on Isaac Sim's loop with a ghost's path whenever its solution was written, so
+        # the robot overlay can follow the selected ghost.
+        self.on_ghost_solved: Callable[[Sdf.Path], None] | None = None
         self.follow_stage(omni.usd.get_context().get_stage())
 
     def follow_stage(self, stage: Usd.Stage | None):
@@ -163,7 +168,7 @@ class GhostObjectService:
         base_world = _world_transform_of_robot_frame(
             stage, robot_prim_path, robot["base_frame"], robot["class_name"]
         )
-        points, face_vertex_counts, face_vertex_indices = _merge_meshes_in_frame(
+        points, face_vertex_counts, face_vertex_indices = meshes.merge_meshes_in_frame(
             stage, tool_prim_path, default_tcp_world
         )
         if not face_vertex_counts:
@@ -206,6 +211,8 @@ class GhostObjectService:
         # Recorded before the creation's own change notice is handled, so that notice does not
         # solve the new ghost a second time.
         self._solved_poses[ghost_prim.GetPath()] = pose
+        if self.on_ghost_solved is not None:
+            self.on_ghost_solved(ghost_prim.GetPath())
         return {"prim_path": ghost_path, "reachable": reachable}
 
     async def list_ghost_objects(self, robot_prim_path: str | None = None) -> list[dict]:
@@ -261,6 +268,48 @@ class GhostObjectService:
                 }
             )
         return ghost_objects
+
+    async def link_world_transforms(
+        self, ghost_path: Sdf.Path
+    ) -> tuple[str, dict[str, Gf.Matrix4d]] | None:
+        """Return the ghost's robot and the world transform of each of its links in the ghost's
+        stored solution, by link name, or ``None`` when the ghost has no solution.
+
+        A ghost has no solution when it is unreachable or was never solved. The transforms place
+        the robot where its arm reaches the ghost, relative to where the robot stands now.
+
+        Raises:
+            HTTPException: 422 if the ghost names no robot in the stage, the robot is not
+                connected or no longer known to the server, does not match its connected model,
+                or the stage changes meanwhile; 503 if the server cannot be reached.
+        """
+        stage = self._stage
+        ghost = stage.GetPrimAtPath(ghost_path) if stage is not None else None
+        if not ghost or not ghost.GetAttribute(GHOST_REACHABLE_ATTRIBUTE).Get():
+            return None
+        joint_positions = ghost.GetAttribute(GHOST_JOINT_POSITIONS_ATTRIBUTE).Get()
+        if not joint_positions:
+            return None
+        robot_targets = ghost.GetRelationship(GHOST_ROBOT_RELATIONSHIP).GetTargets()
+        if not robot_targets or not stage.GetPrimAtPath(robot_targets[0]):
+            raise HTTPException(422, f"The robot of {ghost_path} is not in the stage.")
+        robot_prim_path = robot_targets[0].pathString
+        robot_id = _connected_robot_id(stage, robot_prim_path)
+        joints = {
+            "joint_names": list(ghost.GetAttribute(GHOST_JOINT_NAMES_ATTRIBUTE).Get()),
+            "joint_positions": [float(position) for position in joint_positions],
+        }
+        base_world = await self._base_frame_world(stage, robot_prim_path)
+        link_poses = await _call_server(self._server_client.link_poses(robot_id, joints))
+        if stage is not self._stage:
+            raise HTTPException(422, "The stage changed while the robot overlay was computed.")
+        return robot_prim_path, {
+            link_name: robot_assembler.offset_matrix(
+                models.Transformation(translation=pose[:3], rotation=pose[3:])
+            )
+            * base_world
+            for link_name, pose in link_poses["link_poses"].items()
+        }
 
     async def _base_frame_world(self, stage: Usd.Stage, robot_prim_path: str) -> Gf.Matrix4d:
         """Return the world transform of the base frame of the connected robot at
@@ -388,6 +437,8 @@ class GhostObjectService:
             return
         _write_ghost_solution(stage, ghost, solution["joint_names"], solution["joint_positions"][0])
         self._solved_poses[ghost_path] = pose
+        if self.on_ghost_solved is not None:
+            self.on_ghost_solved(ghost_path)
 
     async def _describe_robot(self, robot_id: str) -> dict:
         """Return the server's description of robot ``robot_id``, asking the server only once.
@@ -550,75 +601,20 @@ async def _call_server(request):
         raise HTTPException(422 if error.status_code is not None else 503, str(error)) from error
 
 
-def _merge_meshes_in_frame(
-    stage: Usd.Stage, root_path: str, frame_world: Gf.Matrix4d
-) -> tuple[Vt.Vec3fArray, Vt.IntArray, Vt.IntArray]:
-    """Merge every visible ``Mesh`` under ``root_path`` into one mesh in the frame ``frame_world``.
+def define_ghost_material(
+    stage: Usd.Stage, material_path: Sdf.Path, color: Gf.Vec3f
+) -> UsdShade.Material:
+    """Define the see-through, glowing material ghost objects use, tinted ``color``, at
+    ``material_path`` in the stage's current edit target.
 
-    Meshes inside instances are included. Meshes that are invisible or whose purpose is guide or
-    proxy, such as collision meshes, are skipped, as are gprims that are not meshes.
-
-    Returns:
-        The merged mesh's points, face vertex counts and face vertex indices.
+    It is Kit's ``SimPBR_Translucent`` with Wandelbots' ghost material settings (their
+    ``wb_ghost.mdl``), ``color`` being both the see-through tint and the glow. Defining it again
+    at the same path only updates its colour.
     """
-    xform_cache = UsdGeom.XformCache()
-    frame_from_world = np.array(frame_world.GetInverse())
-    points, face_vertex_counts, face_vertex_indices = [], [], []
-    point_count = 0
-    for prim in Usd.PrimRange(
-        stage.GetPrimAtPath(root_path), Usd.TraverseInstanceProxies(Usd.PrimDefaultPredicate)
-    ):
-        if not prim.IsA(UsdGeom.Mesh):
-            continue
-        imageable = UsdGeom.Imageable(prim)
-        if (
-            imageable.ComputeVisibility() == UsdGeom.Tokens.invisible
-            or imageable.ComputePurpose()
-            not in (
-                UsdGeom.Tokens.default_,
-                UsdGeom.Tokens.render,
-            )
-        ):
-            continue
-        mesh = UsdGeom.Mesh(prim)
-        mesh_points = mesh.GetPointsAttr().Get()
-        counts = mesh.GetFaceVertexCountsAttr().Get()
-        indices = mesh.GetFaceVertexIndicesAttr().Get()
-        if not mesh_points or not counts or not indices:
-            continue
-        # Gf matrices act on row vectors: mesh frame -> world -> the target frame.
-        mesh_to_frame = np.array(xform_cache.GetLocalToWorldTransform(prim)) @ frame_from_world
-        homogeneous = np.hstack(
-            [np.array(mesh_points, dtype=float), np.ones((len(mesh_points), 1))]
-        )
-        points.append((homogeneous @ mesh_to_frame)[:, :3])
-        face_vertex_counts.append(np.array(counts))
-        face_vertex_indices.append(np.array(indices) + point_count)
-        point_count += len(mesh_points)
-    if not points:
-        return Vt.Vec3fArray(), Vt.IntArray(), Vt.IntArray()
-    return (
-        Vt.Vec3fArray.FromNumpy(np.concatenate(points).astype(np.float32)),
-        Vt.IntArray.FromNumpy(np.concatenate(face_vertex_counts).astype(np.int32)),
-        Vt.IntArray.FromNumpy(np.concatenate(face_vertex_indices).astype(np.int32)),
-    )
-
-
-def _set_ghost_look(stage: Usd.Stage, ghost_prim: Usd.Prim, reachable: bool):
-    """Give ``ghost_prim`` its own see-through material, green if ``reachable`` and red if not.
-
-    The material lives under the ghost, at ``<ghost>/Looks/GhostMaterial``, so a duplicated
-    ghost brings its own; it is bound again on every call, so a duplicate whose binding still
-    targets the original's material gets its own.
-    """
-    material_path = ghost_prim.GetPath().AppendPath("Looks/GhostMaterial")
     material = UsdShade.Material.Define(stage, material_path)
     shader = UsdShade.Shader.Define(stage, material_path.AppendChild("Shader"))
     shader.SetSourceAsset(Sdf.AssetPath(GHOST_MDL), "mdl")
     shader.SetSourceAssetSubIdentifier("SimPBR_Translucent", "mdl")
-    color = REACHABLE_COLOR if reachable else UNREACHABLE_COLOR
-    # Wandelbots' ghost material settings (their wb_ghost.mdl), with our reachability colour
-    # for both the see-through tint and the glow.
     shader.CreateInput("ior_constant", Sdf.ValueTypeNames.Float).Set(1.1)
     shader.CreateInput("reflection_roughness_constant", Sdf.ValueTypeNames.Float).Set(1.0)
     shader.CreateInput("transmittance_color", Sdf.ValueTypeNames.Color3f).Set(color)
@@ -630,6 +626,21 @@ def _set_ghost_look(stage: Usd.Stage, ghost_prim: Usd.Prim, reachable: bool):
     shader_output = shader.CreateOutput("out", Sdf.ValueTypeNames.Token)
     material.CreateSurfaceOutput("mdl").ConnectToSource(shader_output)
     material.CreateVolumeOutput("mdl").ConnectToSource(shader_output)
+    return material
+
+
+def _set_ghost_look(stage: Usd.Stage, ghost_prim: Usd.Prim, reachable: bool):
+    """Give ``ghost_prim`` its own see-through material, green if ``reachable`` and red if not.
+
+    The material lives under the ghost, at ``<ghost>/Looks/GhostMaterial``, so a duplicated
+    ghost brings its own; it is bound again on every call, so a duplicate whose binding still
+    targets the original's material gets its own.
+    """
+    material = define_ghost_material(
+        stage,
+        ghost_prim.GetPath().AppendPath("Looks/GhostMaterial"),
+        REACHABLE_COLOR if reachable else UNREACHABLE_COLOR,
+    )
     UsdShade.MaterialBindingAPI.Apply(ghost_prim).Bind(
         material, UsdShade.Tokens.strongerThanDescendants
     )

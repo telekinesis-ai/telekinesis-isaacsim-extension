@@ -228,7 +228,9 @@ inverse kinematics is solved by the **Telekinesis Isaac Sim Server**, which must
    where the tool stands, as `<tool>_Pose` in a `poses` Xform beside the robot. It is green when the robot can
    reach it and red when it cannot.
 3. **Place it.** Rename the ghost, move it with the viewport gizmo or the Transform fields, or
-   duplicate it. Every ghost that moves more than 1 mm or 0.01 rad is solved again, starting from
+   duplicate it. While one ghost is selected and reachable, the robot is drawn see-through in
+   the ghost's solution, reaching it; the drawing is never saved and disappears when the ghost
+   is out of reach. Every ghost that moves more than 1 mm or 0.01 rad is solved again, starting from
    its stored joint positions so the arm keeps its configuration; a ghost moved out of reach turns
    red and keeps its last solution.
 4. **Read the ghosts.** `GET /teaching/ghost-objects?robot_prim_path=<robot>` lists them with their
