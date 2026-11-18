@@ -50,7 +50,6 @@ def main() -> None:
     gripper.connect(simulation_prim_path=GRIPPER_PRIM_PATH)
     robot.attach_tool(gripper)
 
-
     try:
         for index, pick_pose in enumerate(PICK_POSES):
             print(f"Object {index + 1}: picking")

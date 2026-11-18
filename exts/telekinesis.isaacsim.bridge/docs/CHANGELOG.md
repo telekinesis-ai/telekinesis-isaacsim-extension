@@ -12,6 +12,11 @@
   timeline last started playing. It advances only while physics steps and restarts from zero on
   stop and play, so a client can pace motion against the simulator instead of the wall clock.
   `timestamp` is unchanged.
+- `examples/scenes/pick_and_place_scene.py` builds the quickstart's pick-and-place scene without
+  the GUI, using only `pxr`: the sample scene with a UR10e on the Vention table, a Robotiq UR
+  coupler and a Robotiq Hand-E, assembled and tagged as Add Robot, Add Mesh and Add Tool leave
+  them. The bridge registers the robot and the gripper when the scene is opened, and the
+  quickstart's pick-and-place example runs on it.
 ### Fixed
 - A blocking surface gripper `close` could return `Closed` with an empty `gripped_objects`: the
   gripper component reports `Closed` a physics step before it lists what it holds. A close now

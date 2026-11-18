@@ -41,6 +41,11 @@ requests.post(
 )
 ```
 
+## Examples
+
+Runnable example scripts are in [examples/](examples/); see
+[examples/README.md](examples/README.md).
+
 ## Documentation
 
 - Extension README: [exts/telekinesis.isaacsim.bridge/docs/README.md](exts/telekinesis.isaacsim.bridge/docs/README.md)
