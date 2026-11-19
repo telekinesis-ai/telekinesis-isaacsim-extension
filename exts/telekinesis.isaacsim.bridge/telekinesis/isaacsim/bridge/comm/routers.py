@@ -886,6 +886,17 @@ async def set_solve_articulation_contact_last(
     await stage_service.set_solve_articulation_contact_last(req.enabled)
 
 
+@stage.put("/physics/cpu_simulation", summary="Set CPU Simulation")
+async def set_cpu_simulation(stage_service=Depends(get_stage_service)):
+    """Stop simulation and switch physics to the CPU on all physics scenes.
+
+    Selects the CPU device, disables GPU dynamics and uses the MBP broadphase.
+    Creates /physicsScene if needed; leaves the timeline stopped. Changes apply
+    on the next play and are not saved to disk. Returns 409 when no stage is open.
+    """
+    await stage_service.set_cpu_simulation()
+
+
 @stage.put("/viewport/guides", summary="Set Guides Visible")
 async def set_guides_visible(req: SetEnabledRequest, stage_service=Depends(get_stage_service)):
     """Show or hide guide-purpose prims (e.g. TCP marker axes) in the viewport.
