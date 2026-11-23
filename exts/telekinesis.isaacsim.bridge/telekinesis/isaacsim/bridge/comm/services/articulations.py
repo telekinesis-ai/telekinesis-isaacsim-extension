@@ -260,15 +260,13 @@ class ArticulationService(DeviceRegistry):
                     "arm_mount_link": merge["arm_link"].name,
                     "gripper_mount_link": merge["mounted_link"].name,
                 }
-            if mount_link is not None:
-                from pxr import Sdf
+            from pxr import Sdf
 
+            if mount_link is not None:
                 self._stage().GetPrimAtPath(device.prim_path).CreateAttribute(
                     MOUNT_LINK_ATTRIBUTE, Sdf.ValueTypeNames.String
                 ).Set(mount_link)
             if catalogue_entry is not None and asset_info["category"] == ROBOT_CATEGORY:
-                from pxr import Sdf
-
                 # Synapse names a robot class after its catalogue identifier without the
                 # separators (universal_robots/ur10e -> UniversalRobotsUR10E), and the server
                 # matches class names in any case.

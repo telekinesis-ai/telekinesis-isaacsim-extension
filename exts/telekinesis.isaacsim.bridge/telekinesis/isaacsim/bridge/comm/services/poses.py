@@ -29,7 +29,7 @@ GHOST_REACHABLE_ATTRIBUTE = "telekinesis:ghost:reachable"
 # ghost's name after its tool's: default ghost path is <tool parent>/poses/<tool>_Pose.
 GHOSTS_GROUP_NAME = "poses"
 GHOST_NAME_SUFFIX = "_Pose"
-# Look of a ghost object: ' reachability tints on Kit's SimPBR_Translucent material,
+# Look of a ghost object: reachability tints on Kit's SimPBR_Translucent material,
 # the material their ghosts use. It is in Kit's core MDL library, so a saved stage finds it by
 # name on any Isaac Sim install.
 REACHABLE_COLOR = Gf.Vec3f(0.15, 0.8, 0.25)
@@ -187,9 +187,7 @@ class PoseService:
             # another unit would not match the robot.
             raise HTTPException(422, "Poses need a stage in metres (metersPerUnit = 1).")
 
-        articulation_id = await self._articulation_service.find_robot_for_prim(
-            robot_part_prim_path
-        )
+        articulation_id = await self._articulation_service.find_robot_for_prim(robot_part_prim_path)
         if articulation_id is None:
             raise HTTPException(
                 422,

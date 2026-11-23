@@ -28,8 +28,8 @@ class IsaacSimServerWindow:
     The status light is red until Connect is pressed, then green when the server answered and
     red with the reason beside it when it did not; nothing polls the server in between. Connect
     also loads every robot of the stage on the server under a new id, from the Synapse class
-    name the robot stores, and lists the loaded robots. A robot that is not connected is loaded the first time a pose needs it, so Connect is
-    only needed after the server restarted.
+    name the robot stores, and lists the loaded robots. A robot that is not connected is loaded
+    the first time a pose needs it, so Connect is only needed after the server restarted.
 
     Example:
         window = IsaacSimServerWindow(bridge_server.pose_service, IsaacSimServerClient())

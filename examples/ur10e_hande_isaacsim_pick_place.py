@@ -43,6 +43,7 @@ def place_pose(index: int) -> list[float]:
 
 
 def main() -> None:
+    """Pick each object at PICK_POSES and place it in a row starting at PLACE_START."""
     robot = universal_robots.UniversalRobotsUR10E(name="ur10e")
     gripper = robotiq.RobotiqHandE()
 

@@ -7328,6 +7328,26 @@
         }
       }
     },
+    "/stage/physics/cpu_simulation": {
+      "put": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Set CPU Simulation",
+        "description": "Stop simulation and switch physics to the CPU on all physics scenes.\n\nSelects the CPU device, disables GPU dynamics and uses the MBP broadphase.\nCreates /physicsScene if needed; leaves the timeline stopped. Changes apply\non the next play and are not saved to disk. Returns 409 when no stage is open.",
+        "operationId": "set_cpu_simulation_stage_physics_cpu_simulation_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/stage/viewport/guides": {
       "put": {
         "tags": [

@@ -30,6 +30,7 @@ import omni.kit.context_menu
 import omni.physx as _physx
 import omni.timeline
 import omni.usd
+from fastapi import HTTPException
 from isaacsim.gui.components.element_wrappers import ScrollingWindow
 from isaacsim.gui.components.menu import MenuItemDescription
 from omni import ui
@@ -37,8 +38,6 @@ from omni.kit import notification_manager
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 from omni.usd import StageEventType
 from pxr import Sdf, Usd
-
-from fastapi import HTTPException
 
 from .comm.server import BridgeServer
 from .comm.services.articulations import ASSEMBLY_ROBOT_RELATIONSHIP, ROBOT_CLASS_NAME_ATTRIBUTE
@@ -175,8 +174,8 @@ class Extension(omni.ext.IExt):
                         {
                             "name": "Add Robot",
                             # A robot cannot be loaded inside another robot.
-                            "show_fn": lambda objects: not self._clicked_prim_is_robot_part(
-                                objects
+                            "show_fn": lambda objects: (
+                                not self._clicked_prim_is_robot_part(objects)
                             ),
                             "onclick_fn": lambda objects: self._show_add_asset_window(
                                 self._add_robot_window, objects
@@ -357,9 +356,7 @@ class Extension(omni.ext.IExt):
             objects: Kit context-menu payload, as for :meth:`_show_add_asset_window`.
         """
         try:
-            ghost = await self._pose_service.create_pose_from_tool(
-                self._clicked_prim_path(objects)
-            )
+            ghost = await self._pose_service.create_pose_from_tool(self._clicked_prim_path(objects))
         except HTTPException as error:
             notification_manager.post_notification(
                 f"Adding a pose failed: {error.detail}",
@@ -368,13 +365,9 @@ class Extension(omni.ext.IExt):
                 button_infos=[notification_manager.NotificationButtonInfo("OK", on_complete=None)],
             )
             return
-        omni.usd.get_context().get_selection().set_selected_prim_paths(
-            [ghost["prim_path"]], True
-        )
+        omni.usd.get_context().get_selection().set_selected_prim_paths([ghost["prim_path"]], True)
         reach = "reachable" if ghost["reachable"] else "not reachable by the robot"
-        notification_manager.post_notification(
-            f"Added pose {ghost['prim_path']} ({reach})."
-        )
+        notification_manager.post_notification(f"Added pose {ghost['prim_path']} ({reach}).")
 
     @staticmethod
     def _clicked_prim_path(objects: dict) -> str:
