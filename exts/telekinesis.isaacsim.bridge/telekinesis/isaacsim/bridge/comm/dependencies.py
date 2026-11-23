@@ -65,6 +65,6 @@ def get_lightbeam_service(request: Request):
     return request.app.state.lightbeam_service
 
 
-def get_ghost_object_service(request: Request):
-    """The shared :class:`..services.ghost_objects.GhostObjectService`."""
-    return request.app.state.ghost_object_service
+def get_pose_service(request: Request):
+    """The shared :class:`..services.poses.PoseService`."""
+    return request.app.state.pose_service

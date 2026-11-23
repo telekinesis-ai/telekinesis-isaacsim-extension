@@ -8,9 +8,9 @@ import omni.usd
 from fastapi import HTTPException
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
 
-from ..comm.services.ghost_objects import (
+from ..comm.services.poses import (
     GHOST_REACHABLE_ATTRIBUTE,
-    GhostObjectService,
+    PoseService,
     define_ghost_material,
 )
 from ..core import meshes
@@ -37,12 +37,12 @@ class RobotOverlay:  # pylint: disable=too-few-public-methods
     the viewport cannot select it, and it has no physics.
 
     Example:
-        overlay = RobotOverlay(bridge_server.ghost_object_service)
+        overlay = RobotOverlay(bridge_server.pose_service)
         overlay.destroy()
     """
 
-    def __init__(self, ghost_object_service: GhostObjectService):
-        self._ghost_object_service = ghost_object_service
+    def __init__(self, pose_service: PoseService):
+        self._pose_service = pose_service
         # The selected ghost object, or None while not exactly one ghost is selected.
         self._ghost_path: Sdf.Path | None = None
         # The robot whose links are built in the overlay, None while none are.
@@ -58,12 +58,12 @@ class RobotOverlay:  # pylint: disable=too-few-public-methods
                 self._on_stage_event, name="telekinesis robot overlay selection"
             )
         )
-        ghost_object_service.on_ghost_solved = self._on_ghost_solved
+        pose_service.on_ghost_solved = self._on_ghost_solved
 
     def destroy(self):
         """Remove the overlay and stop following the selection."""
         self._stage_event_subscription = None
-        self._ghost_object_service.on_ghost_solved = None
+        self._pose_service.on_ghost_solved = None
         self._remove()
 
     def _on_stage_event(self, event):
@@ -102,7 +102,7 @@ class RobotOverlay:  # pylint: disable=too-few-public-methods
                 self._hide()
                 continue
             try:
-                result = await self._ghost_object_service.link_world_transforms(ghost_path)
+                result = await self._pose_service.link_world_transforms(ghost_path)
             except HTTPException as error:
                 carb.log_warn(f"[bridge] no robot overlay for {ghost_path}: {error.detail}")
                 self._hide()

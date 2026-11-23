@@ -1,23 +1,29 @@
 # Changelog
-## [0.10.3] - 2026-11-17
+## [0.11.0] - 2026-11-19
 ### Added
-- Right-click a robot (or its assembly, a link or a mounted tool) → Telekinesis Isaac Sim Bridge
-  → **Connect to Telekinesis** opens a window that connects the robot to the Telekinesis Isaac
-  Sim Server at `http://127.0.0.1:8770`. The user picks the robot's model, a Synapse robot class
-  such as `UniversalRobotsUR10E`, from the classes the server offers; Connect loads it on the
-  server and saves the server's robot id and the class name on the robot prim as
-  `telekinesis:robot:id` and `telekinesis:robot:class_name`, which are kept when the stage is
-  saved. Connecting a robot again replaces both and deletes its previous server robot. When the
-  server is not reachable, the window says so.
-- Right-click a tool mounted on a robot connected to Telekinesis → Telekinesis Isaac Sim Bridge
-  → **Ghost Object** creates a ghost object: a see-through copy of the tool, standing where the
-  tool is, named `<tool>_Pose` in a `poses` Xform beside the robot. Its origin is the robot's
-  default TCP, and it stores the robot's inverse-kinematics solution from the Telekinesis Isaac
-  Sim Server as `telekinesis:ghost:joint_names` and `telekinesis:ghost:joint_positions`
-  (radians), whether there is one as `telekinesis:ghost:reachable`, and its robot as the
-  `telekinesis:ghost:robot` relationship. It is tinted green when the robot can reach it and
-  red when it cannot. Ghost objects carry no physics and are saved with the stage; they need a
-  stage in metres.
+- **Telekinesis Isaac Sim Bridge ▸ Telekinesis Isaac Sim Server** in the menu bar opens a window
+  that connects the bridge to the Telekinesis Isaac Sim Server at `http://127.0.0.1:8770`. Its
+  light is red until **Connect** is pressed, then green when the server answers and red with the
+  reason when it does not; the server is checked only on Connect. Connect loads every robot of
+  the stage on the server under a new id, stores the id on the robot prim as
+  `telekinesis:robot:id`, deletes the server robots of their previous ids, and lists the loaded
+  robots. A robot not loaded yet is loaded the first time a pose needs it, so Connect is only
+  needed after the server restarts.
+- A catalogue robot arm loaded by Add Robot or `PUT /articulations` with `asset_info` stores its
+  Synapse class name, in lowercase, as `telekinesis:robot:class_name` (for example
+  `universalrobotsur10e` for `universal_robots/ur10e`). The server loads the robot as that class,
+  and the bridge then stores the server's exact casing (`UniversalRobotsUR10E`). No robot model
+  has to be picked.
+- Right-click a robot (the robot, any part of it, its assembly or its tool) → Telekinesis Isaac
+  Sim Bridge → **Add Pose ▸ From Tool** creates a pose shown as a ghost object: a see-through
+  copy of the whole tool attached with Add Tool, standing where the tool is, named `<tool>_Pose`
+  in a `poses` Xform beside the robot, and selected once created. A robot without a tool gets a
+  notification saying to add one. The ghost's origin is the robot's default TCP, and it stores
+  the robot's inverse-kinematics solution from the Telekinesis Isaac Sim Server as
+  `telekinesis:ghost:joint_names` and `telekinesis:ghost:joint_positions` (radians), whether
+  there is one as `telekinesis:ghost:reachable`, and its robot as the `telekinesis:ghost:robot`
+  relationship. It is tinted green when the robot can reach it and red when it cannot. Ghost
+  objects carry no physics and are saved with the stage; they need a stage in metres.
 - A ghost object that is moved, directly or with a parent prim, is solved again once it has
   moved more than 1 mm or 0.01 rad, seeded with its stored solution so the arm keeps its
   configuration; a duplicated ghost is solved too. Its joints and tint follow the latest pose.
@@ -26,8 +32,9 @@
 - `GET /teaching/ghost-objects` lists the stage's ghost objects, optionally only those of the
   robot `robot_prim_path`: each with its name, prim path, robot, pose in the robot's base frame
   (the pose to move the robot's default TCP to, metres and extrinsic XYZ Euler degrees), stored
-  joint solution in radians and whether it is reachable. It answers 422 when a robot is not
-  connected and 503 when the Telekinesis Isaac Sim Server cannot be reached.
+  joint solution in radians and whether it is reachable. It answers 422 when a robot stores no
+  class name or the server no longer knows it, and 503 when the Telekinesis Isaac Sim Server
+  cannot be reached.
 - While one ghost object is selected and its robot can reach it, the robot is drawn see-through
   in Wandelbots' overlay colour with every link where the ghost's solution puts it, so the arm
   visibly reaches the ghost; the overlay follows the ghost while it is dragged and disappears
@@ -53,11 +60,32 @@
   coupler and a Robotiq Hand-E, assembled and tagged as Add Robot, Add Mesh and Add Tool leave
   them. The bridge registers the robot and the gripper when the scene is opened, and the
   quickstart's pick-and-place example runs on it.
+
+### Changed
+- The bridge's right-click entries are at the top of the right-click menu, under **Telekinesis
+  Isaac Sim Bridge**, instead of under **Create**. **Add Robot** is hidden when the right-clicked
+  prim is part of a robot: the robot, a prim in it, or its assembly and anything in it.
+- The menu bar tab is named **Telekinesis Isaac Sim Bridge** instead of
+  **TelekinesisIsaacSimBridge**.
+
 ### Fixed
+- Connecting an OnRobot RG2 or RG6 failed with `Failed to get DOF limits from backend` and left
+  every other articulation unable to be read or driven. Isaac Sim's SimReady variant switcher
+  overrode the gripper's `Physics` variant and re-applied the override when the bridge stored the
+  device's id or driven joints on the prim, rebuilding the gripper and invalidating the physics
+  view. `PUT /articulations` now pins the variant the asset itself selects into the stage's
+  edit-target layer, saved with the stage, whenever the switcher has overridden it, so the switcher
+  leaves the prim alone.
+- `GET /articulations/{id}/driver_joint` reported a driver speed the joint cannot reach when the
+  asset records a URDF speed above the speed PhysX enforces: the OnRobot RG6 reported its URDF's
+  1.34 rad/s, while its firmware speed, 48.66 °/s (0.849 rad/s), is the PhysX limit. The reported
+  `max_velocity` is now the lower of the two, so a client's speed scale matches what the joint
+  does; a URDF speed below a lifted PhysX limit is still reported as before.
 - A blocking surface gripper `close` could return `Closed` with an empty `gripped_objects`: the
   gripper component reports `Closed` a physics step before it lists what it holds. A close now
   counts as `Closed` only once `gripped_objects` is filled, so the response names the gripped
   objects.
+
 ## [0.10.2] - 2026-11-13
 ### Changed
 - `assemble_robot` of an articulated gripper binds a physics material with static and dynamic

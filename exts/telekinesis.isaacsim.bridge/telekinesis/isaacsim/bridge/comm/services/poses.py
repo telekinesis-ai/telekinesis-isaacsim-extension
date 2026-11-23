@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Ghost objects: see-through copies of a robot's tool that mark where the tool should go."""
+"""Poses a robot is taught, shown as ghost objects: see-through copies of the robot's tool that
+mark where the tool should go."""
 
 import asyncio
 import math
@@ -14,7 +15,7 @@ from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics, UsdShade
 from ...core import asset_loader, meshes, robot_assembler
 from .. import models
 from ..isaacsim_server_client import IsaacSimServerClient, IsaacSimServerError
-from .articulations import ROBOT_ID_ATTRIBUTE, ArticulationService
+from .articulations import ROBOT_CLASS_NAME_ATTRIBUTE, ROBOT_ID_ATTRIBUTE, ArticulationService
 
 # Properties of a ghost object prim. The relationship targets the robot prim whose default TCP
 # the ghost places; the joint attributes hold the robot's inverse-kinematics solution for the
@@ -40,9 +41,11 @@ MIN_TRANSLATION_CHANGE = 0.001
 MIN_ROTATION_CHANGE = 0.01
 
 
-class GhostObjectService:
-    """Creates ghost objects of the tools mounted on robots connected to Telekinesis, and solves
-    them again when they are moved.
+class PoseService:
+    """Creates the poses a robot is taught, and solves them again when they are moved.
+
+    A pose is shown as a ghost object. Add Pose ▸ From Tool creates one from a tool mounted on a
+    robot, where the tool stands now.
 
     A ghost object is a single ``Mesh`` prim: the tool's visible meshes merged into the frame of
     the robot's default TCP, so the ghost's origin is where that TCP has to go for the real tool
@@ -59,10 +62,15 @@ class GhostObjectService:
     reach keeps its last solution, which seeds the next solve. A solve that fails, e.g. because
     the server is not running, logs a warning and leaves the ghost as it was.
 
+    The robots are loaded on the Telekinesis Isaac Sim Server from the Synapse class name each
+    robot prim stores, which Add Robot writes. A robot is loaded the first time one of its poses
+    needs it, and again for every robot of the stage by :meth:`connect_stage_robots`; the server's
+    id is stored on the robot prim.
+
     Example:
-        service = GhostObjectService(bridge_server.articulation_service, IsaacSimServerClient())
-        ghost = await service.create_ghost_object(
-            "/World/vention_table/robot_mount/UR10e_assembly/Robotiq_Hand_E"
+        service = PoseService(bridge_server.articulation_service, IsaacSimServerClient())
+        ghost = await service.create_pose_from_tool(
+            "/World/vention_table/robot_mount/UR10e_assembly/UR10e"
         )
         ghost["reachable"]  # True
     """
@@ -75,7 +83,7 @@ class GhostObjectService:
         # Isaac Sim's loop. A stage notice arrives on the thread that made the change, which
         # need not be this one.
         self._event_loop = asyncio.get_event_loop()
-        # Server answers of GET /robots/{id}, by robot id. Ids are never reused, so an entry
+        # Server descriptions of the robots, by robot id. Ids are never reused, so an entry
         # never goes stale.
         self._robot_descriptions: dict[str, dict] = {}
         # The stage whose ghosts are followed and its change listener; see follow_stage.
@@ -88,6 +96,9 @@ class GhostObjectService:
         # The solve running for each ghost, and the ghosts moved while theirs ran.
         self._solve_tasks: dict[Sdf.Path, asyncio.Task] = {}
         self._moved_while_solving: set[Sdf.Path] = set()
+        # Serializes loading robots on the server, so concurrent solves of a robot that is not
+        # loaded yet load it once.
+        self._connect_lock = asyncio.Lock()
         # Called on Isaac Sim's loop with a ghost's path whenever its solution was written, so
         # the robot overlay can follow the selected ghost.
         self.on_ghost_solved: Callable[[Sdf.Path], None] | None = None
@@ -115,51 +126,83 @@ class GhostObjectService:
                 Usd.Notice.ObjectsChanged, self._on_objects_changed, stage
             )
 
-    async def create_ghost_object(self, tool_prim_path: str) -> dict:
-        """Create a ghost object of the tool at ``tool_prim_path``, where the tool stands now.
+    async def connect_stage_robots(self) -> dict[str, str]:
+        """Load every robot of the followed stage on the server under a new id.
 
-        The tool must be mounted on a robot connected to Telekinesis. The robot's inverse
-        kinematics for the ghost is solved before anything is written, so a failure leaves the
-        stage unchanged. It is seeded with the robot's current joints, so the solution keeps the
-        robot's current arm configuration.
+        A robot is a prim storing a Synapse class name, which Add Robot writes. Each robot's new
+        id and exact class name are stored on its prim, and the server robot of the id it stored
+        before is deleted. Called when the user connects to the server, which also repairs ids a
+        restarted server no longer knows.
+
+        Returns:
+            The class name of each loaded robot, by prim path.
+
+        Raises:
+            HTTPException: 422 if the server does not know a robot's class name or answers with
+                another error; 503 if the server cannot be reached.
+        """
+        stage = self._stage
+        if stage is None:
+            return {}
+        robot_paths = [
+            str(prim.GetPath())
+            for prim in stage.Traverse()
+            if prim.GetAttribute(ROBOT_CLASS_NAME_ATTRIBUTE).Get()
+        ]
+        class_names = {}
+        async with self._connect_lock:
+            for robot_prim_path in robot_paths:
+                await self._load_robot_on_server(stage, robot_prim_path)
+                class_names[robot_prim_path] = (
+                    stage.GetPrimAtPath(robot_prim_path)
+                    .GetAttribute(ROBOT_CLASS_NAME_ATTRIBUTE)
+                    .Get()
+                )
+        return class_names
+
+    async def create_pose_from_tool(self, robot_part_prim_path: str) -> dict:
+        """Create a pose from the tool mounted on a robot: a ghost object of the whole tool,
+        where the tool stands now.
+
+        The robot must be added with Add Robot and carry a tool added with Add Tool. The robot's
+        inverse kinematics for the ghost is solved before anything is written, so a failure
+        leaves the stage unchanged. It is seeded with the robot's current joints, so the
+        solution keeps the robot's current arm configuration.
 
         Args:
-            tool_prim_path: The tool's prim, or any prim of it.
+            robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
 
         Returns:
             ``{"prim_path": ..., "reachable": ...}`` of the new ghost object.
 
         Raises:
-            HTTPException: 422 if the stage is not in metres, the prim is not a tool mounted on
-                a robot, the robot is not connected or no longer known to the server, the robot
-                does not match its connected model, or the tool has no meshes; 503 if the server
-                cannot be reached.
+            HTTPException: 422 if the stage is not in metres, the prim is part of no robot, the
+                robot has no tool, the robot stores no class name or is no longer known to the
+                server, the robot does not match its class, or the tool has no meshes; 503 if
+                the server cannot be reached.
         """
         stage = omni.usd.get_context().get_stage()
         if UsdGeom.GetStageMetersPerUnit(stage) != 1.0:
             # The bridge loads robots at metre scale whatever the stage unit, so a pose read in
             # another unit would not match the robot.
-            raise HTTPException(422, "Ghost objects need a stage in metres (metersPerUnit = 1).")
+            raise HTTPException(422, "Poses need a stage in metres (metersPerUnit = 1).")
 
-        articulation_id = await self._articulation_service.find_robot_for_prim(tool_prim_path)
-        robot_prim_path = (
-            None
-            if articulation_id is None
-            else self._articulation_service.get_device(articulation_id).prim_path
+        articulation_id = await self._articulation_service.find_robot_for_prim(
+            robot_part_prim_path
         )
-        # The clicked prim must be the tool: not the robot or inside it, and not a prim holding
-        # the robot, such as its assembly.
-        if (
-            robot_prim_path is None
-            or Sdf.Path(tool_prim_path).HasPrefix(Sdf.Path(robot_prim_path))
-            or Sdf.Path(robot_prim_path).HasPrefix(Sdf.Path(tool_prim_path))
-        ):
+        if articulation_id is None:
             raise HTTPException(
                 422,
-                f"'{tool_prim_path}' is not a tool mounted on a robot. Right-click a tool added "
-                "with Add Tool.",
+                f"'{robot_part_prim_path}' is part of no robot. Right-click a robot added with "
+                "Add Robot, or its tool.",
             )
-        robot_id = _connected_robot_id(stage, robot_prim_path)
+        robot_prim_path = self._articulation_service.get_device(articulation_id).prim_path
+        tool_prim_path = self._articulation_service.find_tool_on_robot(articulation_id)
+        if tool_prim_path is None:
+            raise HTTPException(
+                422, f"'{robot_prim_path}' has no tool. Attach one with Add Tool first."
+            )
+        robot_id = await self._connected_robot_id(stage, robot_prim_path)
         robot = await self._describe_robot(robot_id)
 
         default_tcp_world = _world_transform_of_robot_frame(
@@ -227,8 +270,8 @@ class GhostObjectService:
             robot_prim_path: Only the ghosts of this robot, or every ghost when ``None``.
 
         Raises:
-            HTTPException: 422 if a listed ghost's robot is not connected or no longer known to
-                the server, does not match its connected model, or the stage changes while the
+            HTTPException: 422 if a listed ghost's robot stores no class name or is no longer
+                known to the server, does not match its class, or the stage changes while the
                 ghosts are listed; 503 if the server cannot be reached.
         """
         stage = self._stage
@@ -279,9 +322,9 @@ class GhostObjectService:
         the robot where its arm reaches the ghost, relative to where the robot stands now.
 
         Raises:
-            HTTPException: 422 if the ghost names no robot in the stage, the robot is not
-                connected or no longer known to the server, does not match its connected model,
-                or the stage changes meanwhile; 503 if the server cannot be reached.
+            HTTPException: 422 if the ghost names no robot in the stage, the robot stores no
+                class name or is no longer known to the server, does not match its class, or the
+                stage changes meanwhile; 503 if the server cannot be reached.
         """
         stage = self._stage
         ghost = stage.GetPrimAtPath(ghost_path) if stage is not None else None
@@ -294,7 +337,7 @@ class GhostObjectService:
         if not robot_targets or not stage.GetPrimAtPath(robot_targets[0]):
             raise HTTPException(422, f"The robot of {ghost_path} is not in the stage.")
         robot_prim_path = robot_targets[0].pathString
-        robot_id = _connected_robot_id(stage, robot_prim_path)
+        robot_id = await self._connected_robot_id(stage, robot_prim_path)
         joints = {
             "joint_names": list(ghost.GetAttribute(GHOST_JOINT_NAMES_ATTRIBUTE).Get()),
             "joint_positions": [float(position) for position in joint_positions],
@@ -312,14 +355,14 @@ class GhostObjectService:
         }
 
     async def _base_frame_world(self, stage: Usd.Stage, robot_prim_path: str) -> Gf.Matrix4d:
-        """Return the world transform of the base frame of the connected robot at
-        ``robot_prim_path``.
+        """Return the world transform of the base frame of the robot at ``robot_prim_path``.
 
         Raises:
-            HTTPException: 422 if the robot is not connected or no longer known to the server,
-                or does not match its connected model; 503 if the server cannot be reached.
+            HTTPException: 422 if the robot stores no class name or is no longer known to the
+                server, or does not match its class; 503 if the server cannot be reached.
         """
-        robot = await self._describe_robot(_connected_robot_id(stage, robot_prim_path))
+        robot_id = await self._connected_robot_id(stage, robot_prim_path)
+        robot = await self._describe_robot(robot_id)
         return _world_transform_of_robot_frame(
             stage, robot_prim_path, robot["base_frame"], robot["class_name"]
         )
@@ -400,9 +443,9 @@ class GhostObjectService:
         solution is written only if the ghost is still on the followed stage.
 
         Raises:
-            HTTPException: 422 if the ghost names no robot, the robot is not connected or no
-                longer known to the server, or the robot does not match its connected model; 503
-                if the server cannot be reached.
+            HTTPException: 422 if the ghost names no robot, the robot stores no class name or is
+                no longer known to the server, or the robot does not match its class; 503 if the
+                server cannot be reached.
         """
         stage = self._stage
         ghost = stage.GetPrimAtPath(ghost_path)
@@ -412,7 +455,7 @@ class GhostObjectService:
         if not robot_targets or not stage.GetPrimAtPath(robot_targets[0]):
             raise HTTPException(422, "its robot is not in the stage.")
         robot_prim_path = robot_targets[0].pathString
-        robot_id = _connected_robot_id(stage, robot_prim_path)
+        robot_id = await self._connected_robot_id(stage, robot_prim_path)
         base_world = await self._base_frame_world(stage, robot_prim_path)
         if stage is not self._stage or not ghost.IsValid():
             return
@@ -439,6 +482,55 @@ class GhostObjectService:
         self._solved_poses[ghost_path] = pose
         if self.on_ghost_solved is not None:
             self.on_ghost_solved(ghost_path)
+
+    async def _connected_robot_id(self, stage: Usd.Stage, robot_prim_path: str) -> str:
+        """Return the server robot id stored on the robot prim, loading the robot on the server
+        first when it stores none.
+
+        Raises:
+            HTTPException: 422 if the robot stores no class name, or the server does not know it
+                or answers with another error; 503 if the server cannot be reached.
+        """
+        async with self._connect_lock:
+            robot_id = stage.GetPrimAtPath(robot_prim_path).GetAttribute(ROBOT_ID_ATTRIBUTE).Get()
+            return robot_id or await self._load_robot_on_server(stage, robot_prim_path)
+
+    async def _load_robot_on_server(self, stage: Usd.Stage, robot_prim_path: str) -> str:
+        """Load the robot at ``robot_prim_path`` on the server from its stored class name, store
+        the new id and the exact class name on the prim, and return the id.
+
+        The server robot of the id the prim stored before is deleted. Failing to delete it only
+        logs a warning: the robot is loaded either way, and a server that restarted no longer
+        has the old robot (404). Called with ``_connect_lock`` held.
+
+        Raises:
+            HTTPException: 422 if the robot stores no class name, or the server does not know it
+                or answers with another error; 503 if the server cannot be reached.
+        """
+        robot_prim = stage.GetPrimAtPath(robot_prim_path)
+        class_name = robot_prim.GetAttribute(ROBOT_CLASS_NAME_ATTRIBUTE).Get()
+        if not class_name:
+            raise HTTPException(
+                422,
+                f"{robot_prim_path} has no robot class name. Add the robot again with Add Robot.",
+            )
+        robot = await _call_server(self._server_client.create_robot(class_name))
+        previous_robot_id = robot_prim.GetAttribute(ROBOT_ID_ATTRIBUTE).Get()
+        robot_prim.CreateAttribute(ROBOT_ID_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(robot["id"])
+        robot_prim.CreateAttribute(ROBOT_CLASS_NAME_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(
+            robot["class_name"]
+        )
+        self._robot_descriptions[robot["id"]] = robot
+        if previous_robot_id:
+            try:
+                await self._server_client.delete_robot(previous_robot_id)
+            except IsaacSimServerError as error:
+                if error.status_code != 404:
+                    carb.log_warn(
+                        f"[bridge] could not delete the previous server robot "
+                        f"{previous_robot_id} of {robot_prim_path}: {error}"
+                    )
+        return robot["id"]
 
     async def _describe_robot(self, robot_id: str) -> dict:
         """Return the server's description of robot ``robot_id``, asking the server only once.
@@ -493,22 +585,6 @@ class GhostObjectService:
         return {"joint_names": joint_names, "joint_positions": joint_positions}
 
 
-def _connected_robot_id(stage: Usd.Stage, robot_prim_path: str) -> str:
-    """Return the server robot id stored on the robot prim.
-
-    Raises:
-        HTTPException: 422 if the robot is not connected to Telekinesis.
-    """
-    robot_id = stage.GetPrimAtPath(robot_prim_path).GetAttribute(ROBOT_ID_ATTRIBUTE).Get()
-    if not robot_id:
-        raise HTTPException(
-            422,
-            f"{robot_prim_path} is not connected. Right-click the robot and choose Connect to "
-            "Telekinesis first.",
-        )
-    return robot_id
-
-
 def _world_transform_of_robot_frame(
     stage: Usd.Stage, robot_prim_path: str, frame_name: str, class_name: str
 ) -> Gf.Matrix4d:
@@ -522,8 +598,8 @@ def _world_transform_of_robot_frame(
     except RuntimeError as error:
         raise HTTPException(
             422,
-            f"{robot_prim_path} has no '{frame_name}', so it does not match its connected "
-            f"model {class_name}. Connect it to Telekinesis with the right model.",
+            f"{robot_prim_path} has no '{frame_name}', so it does not match its robot class "
+            f"{class_name}. Add the robot again with Add Robot.",
         ) from error
     return omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(frame_path))
 
@@ -596,7 +672,8 @@ async def _call_server(request):
             raise HTTPException(
                 422,
                 "The Telekinesis Isaac Sim Server no longer has this robot, e.g. because it "
-                "restarted. Right-click the robot and choose Connect to Telekinesis again.",
+                "restarted. Press Connect in Telekinesis Isaac Sim Bridge ▸ Telekinesis Isaac "
+                "Sim Server.",
             ) from error
         raise HTTPException(422 if error.status_code is not None else 503, str(error)) from error
 

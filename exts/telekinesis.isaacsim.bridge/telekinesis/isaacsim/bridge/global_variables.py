@@ -15,7 +15,7 @@
 """Extension-wide constants: display title, the bridge server's host/port, the Telekinesis
 Isaac Sim Server's URL, and the asset library's base URL."""
 
-EXTENSION_TITLE = "TelekinesisIsaacSimBridge"
+EXTENSION_TITLE = "Telekinesis Isaac Sim Bridge"
 
 BRIDGE_HOST = "127.0.0.1"
 BRIDGE_PORT = 8766

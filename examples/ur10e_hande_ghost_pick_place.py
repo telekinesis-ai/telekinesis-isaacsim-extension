@@ -1,8 +1,8 @@
 """Pick objects in Isaac Sim at poses taught with ghost objects and place them at others.
 
 Teach the poses in Isaac Sim first, with the UR10e and its Hand-E gripper in the stage:
-right-click the robot and choose Connect to Telekinesis, then right-click the gripper and choose
-Ghost Object. Name the ghosts PickPose_01, PickPose_02, ... and place each one on an object,
+right-click the gripper and choose Telekinesis Isaac Sim Bridge > Add Pose > From Tool. Name the
+ghosts PickPose_01, PickPose_02, ... and place each one on an object,
 and name others PlacePose_01, PlacePose_02, ... and place each one where an object goes. Then,
 with Isaac Sim and the Telekinesis Isaac Sim Server running, run:
     python examples/ur10e_hande_ghost_pick_place.py

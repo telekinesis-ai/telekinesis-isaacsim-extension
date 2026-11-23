@@ -41,19 +41,20 @@ class IsaacSimServerClient:
     def __init__(self, base_url: str = ISAACSIM_SERVER_URL):
         self._base_url = base_url
 
-    async def list_robot_class_names(self) -> list[str]:
-        """Return the Synapse robot classes a robot can be loaded from.
+    async def list_robots(self) -> list[dict]:
+        """Return the description of every robot loaded on the server.
 
         Raises:
             IsaacSimServerError: If the server is not reachable or answers with an error.
         """
-        return await self._request("GET", "/robot_class_names")
+        return await self._request("GET", "/robots")
 
     async def create_robot(self, class_name: str) -> dict:
         """Load a new robot of ``class_name`` on the server and return its description.
 
-        The description holds the ``id`` the server assigned, as in the server's
-        ``POST /robots`` answer.
+        ``class_name`` is a Synapse robot class in any case, such as ``universalrobotsur10e``.
+        The description holds the ``id`` the server assigned and the exactly cased
+        ``class_name``, as in the server's ``POST /robots`` answer.
 
         Raises:
             IsaacSimServerError: If the server is not reachable or answers with an error, e.g.

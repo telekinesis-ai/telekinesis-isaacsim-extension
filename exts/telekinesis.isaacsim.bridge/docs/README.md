@@ -209,24 +209,27 @@ unbroken. Only prims with a collider break the beam; purely visual geometry is i
 `linear_depth` is a raycast distance rather than something a physical light barrier measures. It is
 useful as simulation ground truth, and wrong to build a controller on that has to run on hardware.
 
-### Ghost objects
+### Poses and ghost objects
 
-A ghost object marks where a robot's tool should go: it is a see-through copy of the tool that you
-place in the stage, for example around an object to pick, and that stores the robot's joint
-positions for it. A program then reads the ghosts and moves the robot to them. The robot's
-inverse kinematics is solved by the **Telekinesis Isaac Sim Server**, which must be running at
-`http://127.0.0.1:8770`.
+A pose marks where a robot's tool should go. It is shown as a ghost object: a see-through copy of
+the tool that you place in the stage, for example around an object to pick, and that stores the
+robot's joint positions for it. A program then reads the ghosts and moves the robot to them. The
+robot's inverse kinematics is solved by the **Telekinesis Isaac Sim Server**, which must be
+running at `http://127.0.0.1:8770`.
 
-1. **Connect the robot.** Right-click a robot added with Add Robot, or any of its prims, and choose
-   **Create ▸ Telekinesis Isaac Sim Bridge ▸ Connect to Telekinesis**. Pick the robot's model, a
-   Synapse robot class such as `UniversalRobotsUR10E`, and press **Connect**. The robot prim stores
-   the id the server gave it as `telekinesis:robot:id` and the class as
-   `telekinesis:robot:class_name`. The server keeps robots only while it runs: after it restarts,
-   connect the robot again.
-2. **Create a ghost.** Right-click a tool mounted on the robot, such as a gripper added with Add
-   Tool, and choose **Create ▸ Telekinesis Isaac Sim Bridge ▸ Ghost Object**. The ghost appears
-   where the tool stands, as `<tool>_Pose` in a `poses` Xform beside the robot. It is green when the robot can
-   reach it and red when it cannot.
+1. **Connect to the server.** Open **Telekinesis Isaac Sim Bridge ▸ Telekinesis Isaac Sim Server**
+   in the menu bar. The light is red until you press **Connect**, then green when the server
+   answers and red with the reason beside it when it does not. **Connect** loads every robot of the stage on the server and lists them. A
+   robot added with Add Robot stores its Synapse class name as `telekinesis:robot:class_name`,
+   and the server loads it as that class; no model has to be picked. The robot prim stores the
+   id the server gave it as `telekinesis:robot:id`. A robot that is not loaded yet is loaded the
+   first time a pose needs it, so Connect is only needed after the server restarted, since the
+   server keeps robots only while it runs.
+2. **Add a pose.** Right-click the robot, any part of it, or its tool, and choose **Telekinesis
+   Isaac Sim Bridge ▸ Add Pose ▸ From Tool**. The robot needs a tool attached with Add Tool. A
+   ghost of the whole tool appears where the tool stands, as `<tool>_Pose` in a `poses` Xform
+   beside the robot, and is selected. It is green when the robot can reach it and red when it
+   cannot.
 3. **Place it.** Rename the ghost, move it with the viewport gizmo or the Transform fields, or
    duplicate it. While one ghost is selected and reachable, the robot is drawn see-through in
    the ghost's solution, reaching it; the drawing is never saved and disappears when the ghost
@@ -242,9 +245,10 @@ inverse kinematics is solved by the **Telekinesis Isaac Sim Server**, which must
 
 A ghost is a single `Mesh` with no physics, saved with the stage. Its origin is the robot's default
 TCP, and it stores `telekinesis:ghost:robot` (its robot), `telekinesis:ghost:joint_names`,
-`telekinesis:ghost:joint_positions` (radians) and `telekinesis:ghost:reachable`. Ghost objects need
-a stage in metres. When the server is not running, creating a ghost reports it and a moved ghost
-keeps its last solution, with a warning in the console.
+`telekinesis:ghost:joint_positions` (radians) and `telekinesis:ghost:reachable`. Poses need a
+stage in metres. When the server is not running, adding a pose reports it and a moved ghost keeps
+its last solution, with a warning in the console. A robot added before the bridge stored class
+names, and never connected, has no class name; add it again with Add Robot.
 
 ### Saved stages
 
