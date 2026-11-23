@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Poses a robot is taught, shown as ghost objects: see-through copies of the robot's tool that
-mark where the tool should go."""
+"""Poses a robot is taught, shown as ghosts: see-through copies of the robot's tool that mark
+where the tool should go."""
 
 import asyncio
 import math
@@ -17,25 +17,24 @@ from .. import models
 from ..isaacsim_server_client import IsaacSimServerClient, IsaacSimServerError
 from .articulations import ROBOT_CLASS_NAME_ATTRIBUTE, ROBOT_ID_ATTRIBUTE, ArticulationService
 
-# Properties of a ghost object prim. The relationship targets the robot prim whose default TCP
-# the ghost places; the joint attributes hold the robot's inverse-kinematics solution for the
-# ghost, in radians; ``reachable`` says whether there is one.
-GHOST_ROBOT_RELATIONSHIP = "telekinesis:ghost:robot"
-GHOST_JOINT_NAMES_ATTRIBUTE = "telekinesis:ghost:joint_names"
-GHOST_JOINT_POSITIONS_ATTRIBUTE = "telekinesis:ghost:joint_positions"
-GHOST_REACHABLE_ATTRIBUTE = "telekinesis:ghost:reachable"
+# Properties of a pose prim. The relationship targets the robot prim whose default TCP
+# the pose places; the joint attributes hold the robot's inverse-kinematics solution for the
+# pose, in radians; ``reachable`` says whether there is one.
+POSE_ROBOT_RELATIONSHIP = "telekinesis:pose:robot"
+POSE_JOINT_NAMES_ATTRIBUTE = "telekinesis:pose:joint_names"
+POSE_JOINT_POSITIONS_ATTRIBUTE = "telekinesis:pose:joint_positions"
+POSE_REACHABLE_ATTRIBUTE = "telekinesis:pose:reachable"
 
-# Name of the Xform beside the robot that holds its ghost objects, and the suffix of a new
-# ghost's name after its tool's: default ghost path is <tool parent>/poses/<tool>_Pose.
-GHOSTS_GROUP_NAME = "poses"
-GHOST_NAME_SUFFIX = "_Pose"
-# Look of a ghost object: reachability tints on Kit's SimPBR_Translucent material,
-# the material their ghosts use. It is in Kit's core MDL library, so a saved stage finds it by
-# name on any Isaac Sim install.
+# Name of the Xform beside the robot that holds its poses, and the suffix of a new
+# pose's name after its tool's: the default pose path is <tool parent>/poses/<tool>_Pose.
+POSES_GROUP_NAME = "poses"
+POSE_NAME_SUFFIX = "_Pose"
+# Look of a pose's ghost: reachability tints on Kit's SimPBR_Translucent material. It is in
+# Kit's core MDL library, so a saved stage finds it by name on any Isaac Sim install.
 REACHABLE_COLOR = Gf.Vec3f(0.15, 0.8, 0.25)
 UNREACHABLE_COLOR = Gf.Vec3f(0.9, 0.15, 0.15)
 GHOST_MDL = "SimPBR_Translucent.mdl"
-# A moved ghost is solved again only when it moved more than this since it was last solved,
+# A moved pose is solved again only when it moved more than this since it was last solved,
 # as PrimPoseWatcher does: metres of translation and radians of XYZ Euler rotation.
 MIN_TRANSLATION_CHANGE = 0.001
 MIN_ROTATION_CHANGE = 0.01
@@ -44,23 +43,23 @@ MIN_ROTATION_CHANGE = 0.01
 class PoseService:
     """Creates the poses a robot is taught, and solves them again when they are moved.
 
-    A pose is shown as a ghost object. Add Pose ▸ From Tool creates one from a tool mounted on a
-    robot, where the tool stands now.
+    A pose is shown as a ghost of the tool. Add Pose ▸ From Tool creates one from a tool mounted on
+    a robot, where the tool stands now.
 
-    A ghost object is a single ``Mesh`` prim: the tool's visible meshes merged into the frame of
-    the robot's default TCP, so the ghost's origin is where that TCP has to go for the real tool
-    to cover the ghost. Ghosts live in a ``poses`` Xform beside the robot, in its assembly when
-    it has one, carry no physics, and are saved with the stage. Each ghost stores the robot's
+    A pose is a single ``Mesh`` prim: the tool's visible meshes merged into the frame of
+    the robot's default TCP, so the pose's origin is where that TCP has to go for the real tool
+    to cover the pose. Poses live in a ``poses`` Xform beside the robot, in its assembly when
+    it has one, carry no physics, and are saved with the stage. Each pose stores the robot's
     inverse-kinematics solution for it, solved by the Telekinesis Isaac Sim Server, and is tinted
     green when the robot can reach it and red when it cannot.
 
-    While the service follows a stage, a ghost that is moved, directly or with one of its parent
+    While the service follows a stage, a pose that is moved, directly or with one of its parent
     prims, is solved again once it has moved more than :data:`MIN_TRANSLATION_CHANGE` or
-    :data:`MIN_ROTATION_CHANGE` since it was last solved; so is a ghost that appears, such as a
-    duplicate. One solve runs per ghost at a time, and a move during a solve leads to one more
-    solve, so the stored solution always ends at the ghost's latest pose. A ghost moved out of
+    :data:`MIN_ROTATION_CHANGE` since it was last solved; so is a pose that appears, such as a
+    duplicate. One solve runs per pose at a time, and a move during a solve leads to one more
+    solve, so the stored solution always ends at the pose's latest placement. A pose moved out of
     reach keeps its last solution, which seeds the next solve. A solve that fails, e.g. because
-    the server is not running, logs a warning and leaves the ghost as it was.
+    the server is not running, logs a warning and leaves the pose as it was.
 
     The robots are loaded on the Telekinesis Isaac Sim Server from the Synapse class name each
     robot prim stores, which Add Robot writes. A robot is loaded the first time one of its poses
@@ -69,10 +68,10 @@ class PoseService:
 
     Example:
         service = PoseService(bridge_server.articulation_service, IsaacSimServerClient())
-        ghost = await service.create_pose_from_tool(
+        pose = await service.create_pose_from_tool(
             "/World/vention_table/robot_mount/UR10e_assembly/UR10e"
         )
-        ghost["reachable"]  # True
+        pose["reachable"]  # True
     """
 
     def __init__(
@@ -86,26 +85,26 @@ class PoseService:
         # Server descriptions of the robots, by robot id. Ids are never reused, so an entry
         # never goes stale.
         self._robot_descriptions: dict[str, dict] = {}
-        # The stage whose ghosts are followed and its change listener; see follow_stage.
+        # The stage whose poses are followed and its change listener; see follow_stage.
         self._stage: Usd.Stage | None = None
         self._objects_changed_listener = None
-        # Ghost prims of the followed stage, and the pose each was last solved at, in its
+        # Pose prims of the followed stage, and the pose each was last solved at, in its
         # robot's base frame.
-        self._ghost_paths: set[Sdf.Path] = set()
+        self._pose_paths: set[Sdf.Path] = set()
         self._solved_poses: dict[Sdf.Path, list[float]] = {}
-        # The solve running for each ghost, and the ghosts moved while theirs ran.
+        # The solve running for each pose, and the poses moved while theirs ran.
         self._solve_tasks: dict[Sdf.Path, asyncio.Task] = {}
         self._moved_while_solving: set[Sdf.Path] = set()
         # Serializes loading robots on the server, so concurrent solves of a robot that is not
         # loaded yet load it once.
         self._connect_lock = asyncio.Lock()
-        # Called on Isaac Sim's loop with a ghost's path whenever its solution was written, so
-        # the robot overlay can follow the selected ghost.
-        self.on_ghost_solved: Callable[[Sdf.Path], None] | None = None
+        # Called on Isaac Sim's loop with a pose's path whenever its solution was written, so
+        # the robot overlay can follow the selected pose.
+        self.on_pose_solved: Callable[[Sdf.Path], None] | None = None
         self.follow_stage(omni.usd.get_context().get_stage())
 
     def follow_stage(self, stage: Usd.Stage | None):
-        """Solve the ghost objects of ``stage`` again whenever they are moved; with ``None``,
+        """Solve the poses of ``stage`` again whenever they are moved; with ``None``,
         stop following any stage.
 
         Called when the extension starts, with the open stage, and whenever a stage is opened or
@@ -120,7 +119,7 @@ class PoseService:
         self._moved_while_solving.clear()
         self._solved_poses.clear()
         self._stage = stage
-        self._ghost_paths = set() if stage is None else _find_ghosts(stage.GetPseudoRoot())
+        self._pose_paths = set() if stage is None else _find_poses(stage.GetPseudoRoot())
         if stage is not None:
             self._objects_changed_listener = Tf.Notice.Register(
                 Usd.Notice.ObjectsChanged, self._on_objects_changed, stage
@@ -161,11 +160,11 @@ class PoseService:
         return class_names
 
     async def create_pose_from_tool(self, robot_part_prim_path: str) -> dict:
-        """Create a pose from the tool mounted on a robot: a ghost object of the whole tool,
+        """Create a pose from the tool mounted on a robot: a pose of the whole tool,
         where the tool stands now.
 
         The robot must be added with Add Robot and carry a tool added with Add Tool. The robot's
-        inverse kinematics for the ghost is solved before anything is written, so a failure
+        inverse kinematics for the pose is solved before anything is written, so a failure
         leaves the stage unchanged. It is seeded with the robot's current joints, so the
         solution keeps the robot's current arm configuration.
 
@@ -173,7 +172,7 @@ class PoseService:
             robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
 
         Returns:
-            ``{"prim_path": ..., "reachable": ...}`` of the new ghost object.
+            ``{"prim_path": ..., "reachable": ...}`` of the new pose.
 
         Raises:
             HTTPException: 422 if the stage is not in metres, the prim is part of no robot, the
@@ -224,120 +223,122 @@ class PoseService:
             )
         )
 
-        ghosts_path = asset_loader.path_beside_clear_of_rigid_bodies(
-            stage, robot_prim_path, GHOSTS_GROUP_NAME
+        poses_path = asset_loader.path_beside_clear_of_rigid_bodies(
+            stage, robot_prim_path, POSES_GROUP_NAME
         )
-        UsdGeom.Xform.Define(stage, ghosts_path)
-        ghost_name = Tf.MakeValidIdentifier(Sdf.Path(tool_prim_path).name) + GHOST_NAME_SUFFIX
-        ghost_path = omni.usd.get_stage_next_free_path(stage, f"{ghosts_path}/{ghost_name}", False)
-        ghost = UsdGeom.Mesh.Define(stage, ghost_path)
-        ghost.CreatePointsAttr(points)
-        ghost.CreateFaceVertexCountsAttr(face_vertex_counts)
-        ghost.CreateFaceVertexIndicesAttr(face_vertex_indices)
+        UsdGeom.Xform.Define(stage, poses_path)
+        pose_name = Tf.MakeValidIdentifier(Sdf.Path(tool_prim_path).name) + POSE_NAME_SUFFIX
+        pose_path = omni.usd.get_stage_next_free_path(stage, f"{poses_path}/{pose_name}", False)
+        pose_mesh = UsdGeom.Mesh.Define(stage, pose_path)
+        pose_mesh.CreatePointsAttr(points)
+        pose_mesh.CreateFaceVertexCountsAttr(face_vertex_counts)
+        pose_mesh.CreateFaceVertexIndicesAttr(face_vertex_indices)
         local_transform = Gf.Transform(
             default_tcp_world
-            * omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(ghosts_path)).GetInverse()
+            * omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(poses_path)).GetInverse()
         )
-        ghost.AddTranslateOp().Set(local_transform.GetTranslation())
-        ghost.AddOrientOp(UsdGeom.XformOp.PrecisionDouble).Set(
+        pose_mesh.AddTranslateOp().Set(local_transform.GetTranslation())
+        pose_mesh.AddOrientOp(UsdGeom.XformOp.PrecisionDouble).Set(
             Gf.Quatd(local_transform.GetRotation().GetQuat())
         )
-        ghost.AddScaleOp(UsdGeom.XformOp.PrecisionDouble).Set(local_transform.GetScale())
+        pose_mesh.AddScaleOp(UsdGeom.XformOp.PrecisionDouble).Set(local_transform.GetScale())
 
-        ghost_prim = ghost.GetPrim()
-        ghost_prim.CreateRelationship(GHOST_ROBOT_RELATIONSHIP).SetTargets([robot_prim_path])
-        reachable = _write_ghost_solution(
-            stage, ghost_prim, solution["joint_names"], solution["joint_positions"][0]
+        pose_prim = pose_mesh.GetPrim()
+        pose_prim.CreateRelationship(POSE_ROBOT_RELATIONSHIP).SetTargets([robot_prim_path])
+        reachable = _write_pose_solution(
+            stage, pose_prim, solution["joint_names"], solution["joint_positions"][0]
         )
         # Recorded before the creation's own change notice is handled, so that notice does not
-        # solve the new ghost a second time.
-        self._solved_poses[ghost_prim.GetPath()] = pose
-        if self.on_ghost_solved is not None:
-            self.on_ghost_solved(ghost_prim.GetPath())
-        return {"prim_path": ghost_path, "reachable": reachable}
+        # solve the new pose a second time.
+        self._solved_poses[pose_prim.GetPath()] = pose
+        if self.on_pose_solved is not None:
+            self.on_pose_solved(pose_prim.GetPath())
+        return {"prim_path": pose_path, "reachable": reachable}
 
-    async def list_ghost_objects(self, robot_prim_path: str | None = None) -> list[dict]:
-        """Return the ghost objects of the open stage, sorted by prim path.
+    async def list_poses(self, robot_prim_path: str | None = None) -> list[dict]:
+        """Return the poses of the open stage, sorted by prim path.
 
         Each entry is ``{"name", "prim_path", "robot_prim_path", "pose", "joint_names",
-        "joint_positions", "reachable"}``: ``pose`` is the ghost's ``[x, y, z, rx, ry, rz]`` in
+        "joint_positions", "reachable"}``: ``pose`` is the pose's ``[x, y, z, rx, ry, rz]`` in
         its robot's base frame, metres and extrinsic XYZ Euler degrees, the pose a program moves
         the robot's default TCP to; ``joint_positions`` is the stored solution in radians.
 
         Args:
-            robot_prim_path: Only the ghosts of this robot, or every ghost when ``None``.
+            robot_prim_path: Only the poses of this robot, or every pose when ``None``.
 
         Raises:
-            HTTPException: 422 if a listed ghost's robot stores no class name or is no longer
+            HTTPException: 422 if a listed pose's robot stores no class name or is no longer
                 known to the server, does not match its class, or the stage changes while the
-                ghosts are listed; 503 if the server cannot be reached.
+                poses are listed; 503 if the server cannot be reached.
         """
         stage = self._stage
         if stage is None:
             return []
-        ghost_objects = []
-        for ghost_path in sorted(self._ghost_paths):
+        poses = []
+        for pose_path in sorted(self._pose_paths):
             robot_targets = (
-                stage.GetPrimAtPath(ghost_path)
-                .GetRelationship(GHOST_ROBOT_RELATIONSHIP)
+                stage.GetPrimAtPath(pose_path)
+                .GetRelationship(POSE_ROBOT_RELATIONSHIP)
                 .GetTargets()
             )
             if not robot_targets:
                 continue
-            ghost_robot_path = robot_targets[0].pathString
-            if robot_prim_path is not None and ghost_robot_path != robot_prim_path:
+            pose_robot_path = robot_targets[0].pathString
+            if robot_prim_path is not None and pose_robot_path != robot_prim_path:
                 continue
-            base_world = await self._base_frame_world(stage, ghost_robot_path)
+            base_world = await self._base_frame_world(stage, pose_robot_path)
             if stage is not self._stage:
-                raise HTTPException(422, "The stage changed while the ghost objects were listed.")
-            ghost = stage.GetPrimAtPath(ghost_path)
-            ghost_objects.append(
+                raise HTTPException(422, "The stage changed while the poses were listed.")
+            pose_prim = stage.GetPrimAtPath(pose_path)
+            poses.append(
                 {
-                    "name": ghost_path.name,
-                    "prim_path": ghost_path.pathString,
-                    "robot_prim_path": ghost_robot_path,
-                    "pose": _pose_in_frame(omni.usd.get_world_transform_matrix(ghost), base_world),
+                    "name": pose_path.name,
+                    "prim_path": pose_path.pathString,
+                    "robot_prim_path": pose_robot_path,
+                    "pose": _pose_in_frame(
+                        omni.usd.get_world_transform_matrix(pose_prim), base_world
+                    ),
                     "joint_names": list(
-                        ghost.GetAttribute(GHOST_JOINT_NAMES_ATTRIBUTE).Get() or []
+                        pose_prim.GetAttribute(POSE_JOINT_NAMES_ATTRIBUTE).Get() or []
                     ),
                     "joint_positions": [
                         float(position)
-                        for position in ghost.GetAttribute(GHOST_JOINT_POSITIONS_ATTRIBUTE).Get()
+                        for position in pose_prim.GetAttribute(POSE_JOINT_POSITIONS_ATTRIBUTE).Get()
                         or []
                     ],
-                    "reachable": bool(ghost.GetAttribute(GHOST_REACHABLE_ATTRIBUTE).Get()),
+                    "reachable": bool(pose_prim.GetAttribute(POSE_REACHABLE_ATTRIBUTE).Get()),
                 }
             )
-        return ghost_objects
+        return poses
 
     async def link_world_transforms(
-        self, ghost_path: Sdf.Path
+        self, pose_path: Sdf.Path
     ) -> tuple[str, dict[str, Gf.Matrix4d]] | None:
-        """Return the ghost's robot and the world transform of each of its links in the ghost's
-        stored solution, by link name, or ``None`` when the ghost has no solution.
+        """Return the pose's robot and the world transform of each of its links in the pose's
+        stored solution, by link name, or ``None`` when the pose has no solution.
 
-        A ghost has no solution when it is unreachable or was never solved. The transforms place
-        the robot where its arm reaches the ghost, relative to where the robot stands now.
+        A pose has no solution when it is unreachable or was never solved. The transforms place
+        the robot where its arm reaches the pose, relative to where the robot stands now.
 
         Raises:
-            HTTPException: 422 if the ghost names no robot in the stage, the robot stores no
+            HTTPException: 422 if the pose names no robot in the stage, the robot stores no
                 class name or is no longer known to the server, does not match its class, or the
                 stage changes meanwhile; 503 if the server cannot be reached.
         """
         stage = self._stage
-        ghost = stage.GetPrimAtPath(ghost_path) if stage is not None else None
-        if not ghost or not ghost.GetAttribute(GHOST_REACHABLE_ATTRIBUTE).Get():
+        pose_prim = stage.GetPrimAtPath(pose_path) if stage is not None else None
+        if not pose_prim or not pose_prim.GetAttribute(POSE_REACHABLE_ATTRIBUTE).Get():
             return None
-        joint_positions = ghost.GetAttribute(GHOST_JOINT_POSITIONS_ATTRIBUTE).Get()
+        joint_positions = pose_prim.GetAttribute(POSE_JOINT_POSITIONS_ATTRIBUTE).Get()
         if not joint_positions:
             return None
-        robot_targets = ghost.GetRelationship(GHOST_ROBOT_RELATIONSHIP).GetTargets()
+        robot_targets = pose_prim.GetRelationship(POSE_ROBOT_RELATIONSHIP).GetTargets()
         if not robot_targets or not stage.GetPrimAtPath(robot_targets[0]):
-            raise HTTPException(422, f"The robot of {ghost_path} is not in the stage.")
+            raise HTTPException(422, f"The robot of {pose_path} is not in the stage.")
         robot_prim_path = robot_targets[0].pathString
         robot_id = await self._connected_robot_id(stage, robot_prim_path)
         joints = {
-            "joint_names": list(ghost.GetAttribute(GHOST_JOINT_NAMES_ATTRIBUTE).Get()),
+            "joint_names": list(pose_prim.GetAttribute(POSE_JOINT_NAMES_ATTRIBUTE).Get()),
             "joint_positions": [float(position) for position in joint_positions],
         }
         base_world = await self._base_frame_world(stage, robot_prim_path)
@@ -369,9 +370,9 @@ class PoseService:
         """Hand the prims a change to the followed stage moved or re-created to Isaac Sim's loop.
 
         USD calls this while it is still processing the change, on whichever thread made it, so
-        the ghosts are looked up and solved on the loop instead. A move is a change to an
+        the poses are looked up and solved on the loop instead. A move is a change to an
         ``xformOp`` property or to ``xformOpOrder``; a re-created prim, such as a new or
-        duplicated ghost or one whose transform ops were replaced, is a resync.
+        duplicated pose or one whose transform ops were replaced, is a resync.
         """
         moved_paths = [
             path.GetPrimPath()
@@ -388,84 +389,84 @@ class PoseService:
     def _on_prims_changed(
         self, stage: Usd.Stage, moved_paths: list[Sdf.Path], resynced_paths: list[Sdf.Path]
     ):
-        """Update the known ghosts under the re-created prims, then solve every ghost that is or
+        """Update the known poses under the re-created prims, then solve every pose that is or
         lies under a moved or re-created prim. Runs on Isaac Sim's loop."""
         if stage is not self._stage:
             return
         for resynced_path in resynced_paths:
-            self._ghost_paths = {
-                path for path in self._ghost_paths if not path.HasPrefix(resynced_path)
+            self._pose_paths = {
+                path for path in self._pose_paths if not path.HasPrefix(resynced_path)
             }
             resynced_prim = stage.GetPrimAtPath(resynced_path)
             if resynced_prim:
-                self._ghost_paths |= _find_ghosts(resynced_prim)
-        for path in [path for path in self._solved_poses if path not in self._ghost_paths]:
+                self._pose_paths |= _find_poses(resynced_prim)
+        for path in [path for path in self._solved_poses if path not in self._pose_paths]:
             del self._solved_poses[path]
         changed_paths = set(moved_paths) | set(resynced_paths)
-        for ghost_path in self._ghost_paths:
-            if any(ghost_path.HasPrefix(changed_path) for changed_path in changed_paths):
-                self._schedule_solve(ghost_path)
+        for pose_path in self._pose_paths:
+            if any(pose_path.HasPrefix(changed_path) for changed_path in changed_paths):
+                self._schedule_solve(pose_path)
 
-    def _schedule_solve(self, ghost_path: Sdf.Path):
-        """Solve the ghost at ``ghost_path`` again, or once more after its running solve."""
-        if ghost_path in self._solve_tasks:
-            self._moved_while_solving.add(ghost_path)
+    def _schedule_solve(self, pose_path: Sdf.Path):
+        """Solve the pose at ``pose_path`` again, or once more after its running solve."""
+        if pose_path in self._solve_tasks:
+            self._moved_while_solving.add(pose_path)
             return
-        self._solve_tasks[ghost_path] = asyncio.ensure_future(self._solve_until_unmoved(ghost_path))
+        self._solve_tasks[pose_path] = asyncio.ensure_future(self._solve_until_unmoved(pose_path))
 
-    async def _solve_until_unmoved(self, ghost_path: Sdf.Path):
-        """Solve the ghost at ``ghost_path`` until it was not moved during the last solve."""
+    async def _solve_until_unmoved(self, pose_path: Sdf.Path):
+        """Solve the pose at ``pose_path`` until it was not moved during the last solve."""
         task = asyncio.current_task()
         try:
             while True:
-                self._moved_while_solving.discard(ghost_path)
+                self._moved_while_solving.discard(pose_path)
                 try:
-                    await self._solve_moved_ghost(ghost_path)
+                    await self._solve_moved_pose(pose_path)
                 except HTTPException as error:
                     carb.log_warn(
-                        f"[bridge] could not solve ghost object {ghost_path}: {error.detail}"
+                        f"[bridge] could not solve pose {pose_path}: {error.detail}"
                     )
-                if ghost_path not in self._moved_while_solving:
+                if pose_path not in self._moved_while_solving:
                     return
         finally:
             # A stage change replaces the tasks, so only this task's own entry is removed.
-            if self._solve_tasks.get(ghost_path) is task:
-                del self._solve_tasks[ghost_path]
+            if self._solve_tasks.get(pose_path) is task:
+                del self._solve_tasks[pose_path]
 
-    async def _solve_moved_ghost(self, ghost_path: Sdf.Path):
-        """Solve the ghost at ``ghost_path`` for its current pose and store the solution.
+    async def _solve_moved_pose(self, pose_path: Sdf.Path):
+        """Solve the pose at ``pose_path`` for its current pose and store the solution.
 
-        Nothing happens when the ghost is gone or has moved less than the thresholds since it
-        was last solved. The solve is seeded with the ghost's stored solution, so it stays on the
+        Nothing happens when the pose is gone or has moved less than the thresholds since it
+        was last solved. The solve is seeded with the pose's stored solution, so it stays on the
         same arm configuration, or with the robot's current joints when it has none. The
-        solution is written only if the ghost is still on the followed stage.
+        solution is written only if the pose is still on the followed stage.
 
         Raises:
-            HTTPException: 422 if the ghost names no robot, the robot stores no class name or is
+            HTTPException: 422 if the pose names no robot, the robot stores no class name or is
                 no longer known to the server, or the robot does not match its class; 503 if the
                 server cannot be reached.
         """
         stage = self._stage
-        ghost = stage.GetPrimAtPath(ghost_path)
-        if not ghost:
+        pose_prim = stage.GetPrimAtPath(pose_path)
+        if not pose_prim:
             return
-        robot_targets = ghost.GetRelationship(GHOST_ROBOT_RELATIONSHIP).GetTargets()
+        robot_targets = pose_prim.GetRelationship(POSE_ROBOT_RELATIONSHIP).GetTargets()
         if not robot_targets or not stage.GetPrimAtPath(robot_targets[0]):
             raise HTTPException(422, "its robot is not in the stage.")
         robot_prim_path = robot_targets[0].pathString
         robot_id = await self._connected_robot_id(stage, robot_prim_path)
         base_world = await self._base_frame_world(stage, robot_prim_path)
-        if stage is not self._stage or not ghost.IsValid():
+        if stage is not self._stage or not pose_prim.IsValid():
             return
-        pose = _pose_in_frame(omni.usd.get_world_transform_matrix(ghost), base_world)
-        solved_pose = self._solved_poses.get(ghost_path)
+        pose = _pose_in_frame(omni.usd.get_world_transform_matrix(pose_prim), base_world)
+        solved_pose = self._solved_poses.get(pose_path)
         if solved_pose is not None and not _moved_enough(solved_pose, pose):
             return
 
-        stored_positions = ghost.GetAttribute(GHOST_JOINT_POSITIONS_ATTRIBUTE).Get()
+        stored_positions = pose_prim.GetAttribute(POSE_JOINT_POSITIONS_ATTRIBUTE).Get()
         if stored_positions:
             seed = {
-                "joint_names": list(ghost.GetAttribute(GHOST_JOINT_NAMES_ATTRIBUTE).Get()),
+                "joint_names": list(pose_prim.GetAttribute(POSE_JOINT_NAMES_ATTRIBUTE).Get()),
                 "joint_positions": list(stored_positions),
             }
         else:
@@ -474,12 +475,14 @@ class PoseService:
         solution = await _call_server(
             self._server_client.inverse_kinematics(robot_id, [pose], seed)
         )
-        if stage is not self._stage or not ghost.IsValid():
+        if stage is not self._stage or not pose_prim.IsValid():
             return
-        _write_ghost_solution(stage, ghost, solution["joint_names"], solution["joint_positions"][0])
-        self._solved_poses[ghost_path] = pose
-        if self.on_ghost_solved is not None:
-            self.on_ghost_solved(ghost_path)
+        _write_pose_solution(
+            stage, pose_prim, solution["joint_names"], solution["joint_positions"][0]
+        )
+        self._solved_poses[pose_path] = pose
+        if self.on_pose_solved is not None:
+            self.on_pose_solved(pose_path)
 
     async def _connected_robot_id(self, stage: Usd.Stage, robot_prim_path: str) -> str:
         """Return the server robot id stored on the robot prim, loading the robot on the server
@@ -620,40 +623,40 @@ def _moved_enough(previous_pose: list[float], pose: list[float]) -> bool:
     return translation_change > MIN_TRANSLATION_CHANGE or rotation_change > MIN_ROTATION_CHANGE
 
 
-def _find_ghosts(root: Usd.Prim) -> set[Sdf.Path]:
-    """Return the paths of the ghost objects at or under ``root``."""
+def _find_poses(root: Usd.Prim) -> set[Sdf.Path]:
+    """Return the paths of the poses at or under ``root``."""
     return {
         prim.GetPath()
         for prim in Usd.PrimRange(root)
-        if prim.HasAttribute(GHOST_REACHABLE_ATTRIBUTE)
+        if prim.HasAttribute(POSE_REACHABLE_ATTRIBUTE)
     }
 
 
-def _write_ghost_solution(
+def _write_pose_solution(
     stage: Usd.Stage,
-    ghost_prim: Usd.Prim,
+    pose_prim: Usd.Prim,
     joint_names: list[str],
     joint_positions: list[float] | None,
 ) -> bool:
-    """Store an inverse-kinematics solution on a ghost and tint it; return whether it is
+    """Store an inverse-kinematics solution on a pose and tint it; return whether it is
     reachable.
 
-    ``joint_positions`` is ``None`` when the ghost is out of reach: the ghost is then marked
-    unreachable and keeps the joint positions it stored before, empty for a new ghost.
+    ``joint_positions`` is ``None`` when the pose is out of reach: the pose is then marked
+    unreachable and keeps the joint positions it stored before, empty for a new pose.
     """
-    ghost_prim.CreateAttribute(GHOST_JOINT_NAMES_ATTRIBUTE, Sdf.ValueTypeNames.StringArray).Set(
+    pose_prim.CreateAttribute(POSE_JOINT_NAMES_ATTRIBUTE, Sdf.ValueTypeNames.StringArray).Set(
         joint_names
     )
-    positions_attribute = ghost_prim.CreateAttribute(
-        GHOST_JOINT_POSITIONS_ATTRIBUTE, Sdf.ValueTypeNames.DoubleArray
+    positions_attribute = pose_prim.CreateAttribute(
+        POSE_JOINT_POSITIONS_ATTRIBUTE, Sdf.ValueTypeNames.DoubleArray
     )
     if joint_positions is not None:
         positions_attribute.Set(joint_positions)
     elif positions_attribute.Get() is None:
         positions_attribute.Set([])
     reachable = joint_positions is not None
-    ghost_prim.CreateAttribute(GHOST_REACHABLE_ATTRIBUTE, Sdf.ValueTypeNames.Bool).Set(reachable)
-    _set_ghost_look(stage, ghost_prim, reachable)
+    pose_prim.CreateAttribute(POSE_REACHABLE_ATTRIBUTE, Sdf.ValueTypeNames.Bool).Set(reachable)
+    _set_ghost_look(stage, pose_prim, reachable)
     return reachable
 
 
@@ -679,7 +682,7 @@ async def _call_server(request):
 def define_ghost_material(
     stage: Usd.Stage, material_path: Sdf.Path, color: Gf.Vec3f
 ) -> UsdShade.Material:
-    """Define the see-through, glowing material ghost objects use, tinted ``color``, at
+    """Define the see-through, glowing material ghosts use, tinted ``color``, at
     ``material_path`` in the stage's current edit target.
 
     It is Kit's ``SimPBR_Translucent`` with ghost material settings (their
@@ -704,18 +707,18 @@ def define_ghost_material(
     return material
 
 
-def _set_ghost_look(stage: Usd.Stage, ghost_prim: Usd.Prim, reachable: bool):
-    """Give ``ghost_prim`` its own see-through material, green if ``reachable`` and red if not.
+def _set_ghost_look(stage: Usd.Stage, pose_prim: Usd.Prim, reachable: bool):
+    """Give ``pose_prim`` its own see-through material, green if ``reachable`` and red if not.
 
-    The material lives under the ghost, at ``<ghost>/Looks/GhostMaterial``, so a duplicated
-    ghost brings its own; it is bound again on every call, so a duplicate whose binding still
+    The material lives under the pose, at ``<pose>/Looks/GhostMaterial``, so a duplicated
+    pose brings its own; it is bound again on every call, so a duplicate whose binding still
     targets the original's material gets its own.
     """
     material = define_ghost_material(
         stage,
-        ghost_prim.GetPath().AppendPath("Looks/GhostMaterial"),
+        pose_prim.GetPath().AppendPath("Looks/GhostMaterial"),
         REACHABLE_COLOR if reachable else UNREACHABLE_COLOR,
     )
-    UsdShade.MaterialBindingAPI.Apply(ghost_prim).Bind(
+    UsdShade.MaterialBindingAPI.Apply(pose_prim).Bind(
         material, UsdShade.Tokens.strongerThanDescendants
     )

@@ -307,7 +307,7 @@ class Extension(omni.ext.IExt):
         self.ui_builder.on_physics_step(step)
 
     def _on_bridge_stage_event(self, event):
-        """Rebuild the bridge's device registry, follow the opened stage's ghost objects and
+        """Rebuild the bridge's device registry, follow the opened stage's poses and
         close the Add windows when the stage is opened or closed.
 
         The device handles held by the bridge belong to the stage that was active
@@ -349,14 +349,14 @@ class Extension(omni.ext.IExt):
         window.show(self._clicked_prim_path(objects))
 
     async def _create_pose_from_tool(self, objects: dict):
-        """Create a pose from the tool of the right-clicked robot, select the new ghost object, and
+        """Create a pose from the tool of the right-clicked robot, select the new pose, and
         notify the outcome, a failure as a warning that stays until dismissed.
 
         Args:
             objects: Kit context-menu payload, as for :meth:`_show_add_asset_window`.
         """
         try:
-            ghost = await self._pose_service.create_pose_from_tool(self._clicked_prim_path(objects))
+            pose = await self._pose_service.create_pose_from_tool(self._clicked_prim_path(objects))
         except HTTPException as error:
             notification_manager.post_notification(
                 f"Adding a pose failed: {error.detail}",
@@ -365,9 +365,9 @@ class Extension(omni.ext.IExt):
                 button_infos=[notification_manager.NotificationButtonInfo("OK", on_complete=None)],
             )
             return
-        omni.usd.get_context().get_selection().set_selected_prim_paths([ghost["prim_path"]], True)
-        reach = "reachable" if ghost["reachable"] else "not reachable by the robot"
-        notification_manager.post_notification(f"Added pose {ghost['prim_path']} ({reach}).")
+        omni.usd.get_context().get_selection().set_selected_prim_paths([pose["prim_path"]], True)
+        reach = "reachable" if pose["reachable"] else "not reachable by the robot"
+        notification_manager.post_notification(f"Added pose {pose['prim_path']} ({reach}).")
 
     @staticmethod
     def _clicked_prim_path(objects: dict) -> str:

@@ -9,8 +9,8 @@ Every asset comes from the Telekinesis asset library and is downloaded once into
 ``~/.cache/telekinesis/usd``. The output scene links to those cached files, so it opens
 on the machine that built it.
 
-The robot and the gripper carry the bridge's tags with an empty id: the bridge registers
-them under fresh ids when the scene is opened, and drives the Hand-E's left finger joint
+The robot and the gripper carry the bridge's tags with an empty id, and the robot its Synapse
+class name: the bridge registers them under fresh ids when the scene is opened, and drives the Hand-E's left finger joint
 only. The tags and the assembly follow the extension's Add Robot, Add Mesh and Add Tool,
 and must be kept in step with them.
 
@@ -48,6 +48,9 @@ ASSEMBLY_ROBOT_RELATIONSHIP = "telekinesis:assemblyRobot"
 ARTICULATION_ID_ATTRIBUTE = "telekinesis:articulation:id"
 DRIVEN_JOINTS_ATTRIBUTE = "telekinesis:articulation:driven_joints"
 MOUNT_LINK_ATTRIBUTE = "telekinesis:mountLink"
+# The Synapse class the Telekinesis Isaac Sim Server loads the robot as, for its poses.
+ROBOT_CLASS_NAME_ATTRIBUTE = "telekinesis:robot:class_name"
+ROBOT_CLASS_NAME = "universalrobotsur10e"
 
 
 def download_asset(key: str) -> pathlib.Path:
@@ -151,6 +154,9 @@ def main() -> None:
     robot.GetReferences().AddReference(robot_file.as_posix(), "/ur10e_robot")
     robot.CreateAttribute(ARTICULATION_ID_ATTRIBUTE, Sdf.ValueTypeNames.String).Set("")
     robot.CreateAttribute(MOUNT_LINK_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(MOUNT_LINK)
+    robot.CreateAttribute(ROBOT_CLASS_NAME_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(
+        ROBOT_CLASS_NAME
+    )
 
     mount_link_path = f"{ROBOT_PATH}/{MOUNT_LINK}"
     mount_link_world = UsdGeom.Xformable(

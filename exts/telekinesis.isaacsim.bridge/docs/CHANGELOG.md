@@ -5,10 +5,15 @@
   **Connect**, so a server stopped since the last Connect shows as disconnected. Its status is
   either a green **Connected** or a red **Disconnected**, without the error text; a robot that
   fails to load on Connect is reported in the Robots line.
-- `examples/ur10e_hande_ghost_pick_place.py` picks at the ghost objects named `pick_pose*` and
-  places the objects in a row from `start_place_pose`.
+- Poses are no longer called ghost objects. `GET /teaching/ghost-objects` is now
+  `GET /teaching/poses`, and likewise its `/sources`, `POST`, `DELETE` and `/export` routes. A
+  pose stores `telekinesis:pose:robot`, `telekinesis:pose:joint_names`,
+  `telekinesis:pose:joint_positions` and `telekinesis:pose:reachable` instead of the
+  `telekinesis:ghost:*` properties, so a stage saved with 0.11.0 poses needs them taught again.
+- `examples/ur10e_hande_ghost_pick_place.py` is now `examples/ur10e_hande_pose_pick_place.py`. It
+  picks at the poses named `pick_pose*` and places the objects in a row from `start_place_pose`.
 - `examples/scenes/pick_and_place_scene.py` stores the robot's Synapse class name, so the
-  scene's robot can be loaded on the Telekinesis Isaac Sim Server for ghost poses.
+  scene's robot can be loaded on the Telekinesis Isaac Sim Server for poses.
 
 ## [0.11.0] - 2026-11-19
 ### Added

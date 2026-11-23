@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The robot overlay: the robot drawn see-through in the solution of the selected ghost object."""
+"""The robot overlay: the robot drawn see-through in the solution of the selected pose."""
 
 import asyncio
 
@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
 
 from ..comm.services.poses import (
-    GHOST_REACHABLE_ATTRIBUTE,
+    POSE_REACHABLE_ATTRIBUTE,
     PoseService,
     define_ghost_material,
 )
@@ -24,12 +24,12 @@ OVERLAY_COLOR = Gf.Vec3f(0xA9, 0x36, 0xDA) / 255.0
 
 # It reacts to selection and solve events on its own, so destroy() is all a caller needs.
 class RobotOverlay:  # pylint: disable=too-few-public-methods
-    """A see-through copy of a robot, drawn in the solution of the selected ghost object.
+    """A see-through copy of a robot, drawn in the solution of the selected pose.
 
-    While exactly one ghost object is selected and the robot can reach it, the ghost's robot is
-    drawn with every link where the ghost's stored solution puts it, so the arm visibly reaches
-    the ghost; it follows the ghost when the ghost is solved again, e.g. while it is dragged. It
-    is hidden while the ghost is unreachable and whenever no single ghost is selected. Each link
+    While exactly one pose is selected and the robot can reach it, the pose's robot is
+    drawn with every link where the pose's stored solution puts it, so the arm visibly reaches
+    the pose; it follows the pose when the pose is solved again, e.g. while it is dragged. It
+    is hidden while the pose is unreachable and whenever no single pose is selected. Each link
     is the link's own visible meshes merged into one, in overlay colour.
 
     The overlay is authored only in the stage's session layer, under :data:`OVERLAY_ROOT_PATH`,
@@ -43,8 +43,8 @@ class RobotOverlay:  # pylint: disable=too-few-public-methods
 
     def __init__(self, pose_service: PoseService):
         self._pose_service = pose_service
-        # The selected ghost object, or None while not exactly one ghost is selected.
-        self._ghost_path: Sdf.Path | None = None
+        # The selected pose, or None while not exactly one pose is selected.
+        self._pose_path: Sdf.Path | None = None
         # The robot whose links are built in the overlay, None while none are.
         self._overlay_robot_path: str | None = None
         # The refresh running or last run, and whether a change arrived since it last read the
@@ -58,32 +58,34 @@ class RobotOverlay:  # pylint: disable=too-few-public-methods
                 self._on_stage_event, name="telekinesis robot overlay selection"
             )
         )
-        pose_service.on_ghost_solved = self._on_ghost_solved
+        pose_service.on_pose_solved = self._on_pose_solved
 
     def destroy(self):
         """Remove the overlay and stop following the selection."""
         self._stage_event_subscription = None
-        self._pose_service.on_ghost_solved = None
+        self._pose_service.on_pose_solved = None
         self._remove()
 
     def _on_stage_event(self, event):
         """Follow the selection; forget the overlay when another stage is opened or closed."""
         if event.type in (int(omni.usd.StageEventType.OPENED), int(omni.usd.StageEventType.CLOSED)):
             # The session layer and everything in it belong to the stage that was replaced.
-            self._ghost_path = None
+            self._pose_path = None
             self._overlay_robot_path = None
         elif event.type == int(omni.usd.StageEventType.SELECTION_CHANGED):
             stage = omni.usd.get_context().get_stage()
             selected = omni.usd.get_context().get_selection().get_selected_prim_paths()
-            ghost = stage.GetPrimAtPath(selected[0]) if len(selected) == 1 else None
-            self._ghost_path = (
-                ghost.GetPath() if ghost and ghost.HasAttribute(GHOST_REACHABLE_ATTRIBUTE) else None
+            pose_prim = stage.GetPrimAtPath(selected[0]) if len(selected) == 1 else None
+            self._pose_path = (
+                pose_prim.GetPath()
+                if pose_prim and pose_prim.HasAttribute(POSE_REACHABLE_ATTRIBUTE)
+                else None
             )
             self._schedule_refresh()
 
-    def _on_ghost_solved(self, ghost_path: Sdf.Path):
-        """Redraw the overlay when the selected ghost's solution was written."""
-        if ghost_path == self._ghost_path:
+    def _on_pose_solved(self, pose_path: Sdf.Path):
+        """Redraw the overlay when the selected pose's solution was written."""
+        if pose_path == self._pose_path:
             self._schedule_refresh()
 
     def _schedule_refresh(self):
@@ -93,18 +95,18 @@ class RobotOverlay:  # pylint: disable=too-few-public-methods
             self._refresh = asyncio.ensure_future(self._refresh_until_current())
 
     async def _refresh_until_current(self):
-        """Redraw the overlay until no change is left unapplied. A ghost whose links cannot be
+        """Redraw the overlay until no change is left unapplied. A pose whose links cannot be
         computed, e.g. because the server is not running, hides the overlay and logs why."""
         while self._refresh_outdated:
             self._refresh_outdated = False
-            ghost_path = self._ghost_path
-            if ghost_path is None:
+            pose_path = self._pose_path
+            if pose_path is None:
                 self._hide()
                 continue
             try:
-                result = await self._pose_service.link_world_transforms(ghost_path)
+                result = await self._pose_service.link_world_transforms(pose_path)
             except HTTPException as error:
-                carb.log_warn(f"[bridge] no robot overlay for {ghost_path}: {error.detail}")
+                carb.log_warn(f"[bridge] no robot overlay for {pose_path}: {error.detail}")
                 self._hide()
                 continue
             if self._refresh_outdated:
@@ -139,7 +141,9 @@ class RobotOverlay:  # pylint: disable=too-few-public-methods
         stage.RemovePrim(OVERLAY_ROOT_PATH)
         root = UsdGeom.Xform.Define(stage, OVERLAY_ROOT_PATH)
         omni.usd.editor.set_hide_in_stage_window(root.GetPrim(), True)
-        material = define_ghost_material(stage, Sdf.Path(OVERLAY_MATERIAL_PATH), OVERLAY_COLOR)
+        material = define_ghost_material(
+            stage, Sdf.Path(OVERLAY_MATERIAL_PATH), OVERLAY_COLOR
+        )
         UsdShade.MaterialBindingAPI.Apply(root.GetPrim()).Bind(
             material, UsdShade.Tokens.strongerThanDescendants
         )
@@ -167,7 +171,7 @@ class RobotOverlay:  # pylint: disable=too-few-public-methods
         self._overlay_robot_path = robot_prim_path
 
     def _hide(self):
-        """Hide the overlay, keeping its links for the next ghost of the same robot."""
+        """Hide the overlay, keeping its links for the next pose of the same robot."""
         stage = omni.usd.get_context().get_stage()
         if stage is None or not stage.GetSessionLayer().GetPrimAtPath(OVERLAY_ROOT_PATH):
             return

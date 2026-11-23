@@ -2289,8 +2289,8 @@ async def remove_trajectory_markers(name: str):
 teaching = APIRouter(prefix="/teaching", tags=["teaching"])
 
 
-@teaching.get("/ghost-objects/sources", summary="List Ghost Object Sources")
-async def list_ghost_object_sources():
+@teaching.get("/poses/sources", summary="List Pose Sources")
+async def list_pose_sources():
     """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
@@ -2301,37 +2301,37 @@ async def list_tcp_sources():
     not_implemented()
 
 
-@teaching.post("/ghost-objects", summary="Create Ghost Object")
-async def create_ghost_object():
+@teaching.post("/poses", summary="Create Pose")
+async def create_pose():
     """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
-@teaching.delete("/ghost-objects", summary="Clear Ghost Objects")
-async def clear_ghost_objects():
+@teaching.delete("/poses", summary="Clear Poses")
+async def clear_poses():
     """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
 
-@teaching.get("/ghost-objects", summary="List Ghost Objects")
-async def list_ghost_objects(
+@teaching.get("/poses", summary="List Poses")
+async def list_poses(
     robot_prim_path: str | None = None,
     pose_service=Depends(get_pose_service),
 ):
-    """The ghost objects of the open stage, optionally only those of one robot.
+    """The poses of the open stage, optionally only those of one robot.
 
-    Each ghost has its ``name``, ``prim_path``, ``robot_prim_path``, its ``pose``
+    Each pose has its ``name``, ``prim_path``, ``robot_prim_path``, its ``pose``
     ``[x, y, z, rx, ry, rz]`` in its robot's base frame (metres and extrinsic XYZ Euler
     degrees, the pose to move the robot's default TCP to), the stored solution
     ``joint_names`` and ``joint_positions`` (radians), and whether it is ``reachable``.
     Needs the Telekinesis Isaac Sim Server for the robots' base frames: 422 when a robot is
     not connected or the server no longer knows it, 503 when the server cannot be reached.
     """
-    return await pose_service.list_ghost_objects(robot_prim_path)
+    return await pose_service.list_poses(robot_prim_path)
 
 
-@teaching.get("/ghost-objects/export", summary="Export Ghost Objects")
-async def export_ghost_objects():
+@teaching.get("/poses/export", summary="Export Poses")
+async def export_poses():
     """Mirrored from the spec; not yet implemented."""
     not_implemented()
 
