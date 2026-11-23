@@ -25,11 +25,12 @@ class IsaacSimServerWindow:
     """A window that shows whether the Telekinesis Isaac Sim Server is reachable and connects the
     stage's robots to it.
 
-    The status light is red until Connect is pressed, then green when the server answered and
-    red with the reason beside it when it did not; nothing polls the server in between. Connect
-    also loads every robot of the stage on the server under a new id, from the Synapse class
-    name the robot stores, and lists the loaded robots. A robot that is not connected is loaded
-    the first time a pose needs it, so Connect is only needed after the server restarted.
+    The server is checked each time the window is opened and on Connect: the status is green
+    Connected when it answered and red Disconnected when it did not; nothing polls the server in
+    between. Connect also loads every robot of the stage on the server under a new id, from the
+    Synapse class name the robot stores, and lists the loaded robots. A robot that is not
+    connected is loaded the first time a pose needs it, so Connect is only needed after the
+    server restarted.
 
     Example:
         window = IsaacSimServerWindow(bridge_server.pose_service, IsaacSimServerClient())
@@ -57,7 +58,8 @@ class IsaacSimServerWindow:
                     "Status",
                     width=templates.LABEL_WIDTH,
                     alignment=ui.Alignment.LEFT_CENTER,
-                    tooltip="Whether the server answered the last Connect",
+                    tooltip="Whether the server answered when the window was opened or Connect "
+                    "was pressed",
                 )
                 with ui.VStack(width=STATUS_LIGHT_SIZE):
                     ui.Spacer()
@@ -68,7 +70,7 @@ class IsaacSimServerWindow:
                     )
                     ui.Spacer()
                 ui.Spacer(width=8)
-                self._status_label = ui.Label("Not connected", word_wrap=True)
+                self._status_label = ui.Label("Disconnected", word_wrap=True)
             with ui.HStack(height=0):
                 ui.Label(
                     "Robots",
@@ -86,8 +88,9 @@ class IsaacSimServerWindow:
                 ui.Spacer()
 
     def show(self):
-        """Open the window, showing the outcome of the last Connect."""
+        """Open the window and check the server in the background."""
         self._window.visible = True
+        asyncio.ensure_future(self._check_server())
 
     def destroy(self):
         """Release the window's widgets."""
@@ -100,21 +103,19 @@ class IsaacSimServerWindow:
     async def _connect(self):
         """Check the server, then load the stage's robots on it and list them.
 
-        A failure to load a robot leaves the light green, since the server answered, and says
-        why in the status line.
+        A failure to load a robot leaves the status Connected, since the server answered, and
+        says why in the robots line.
         """
         self._connect_button.enabled = False
         self._robots_label.text = ""
         try:
             if not await self._check_server():
                 return
-            self._status_label.text = "Connected. Loading the stage's robots..."
             try:
                 class_names = await self._pose_service.connect_stage_robots()
             except HTTPException as error:
-                self._status_label.text = f"Connected. Loading a robot failed: {error.detail}"
+                self._robots_label.text = f"Loading a robot failed: {error.detail}"
                 return
-            self._status_label.text = "Connected"
             self._robots_label.text = (
                 "\n".join(f"{path} ({class_name})" for path, class_name in class_names.items())
                 or "The stage has no robot added with Add Robot."
@@ -123,13 +124,13 @@ class IsaacSimServerWindow:
             self._connect_button.enabled = True
 
     async def _check_server(self) -> bool:
-        """Ask the server for its robots, set the status light and line from the outcome, and
-        return whether the server answered."""
+        """Ask the server for its robots, show Connected or Disconnected, and return whether the
+        server answered."""
         try:
             await self._server_client.list_robots()
-        except IsaacSimServerError as error:
+        except IsaacSimServerError:
             self._status_light.set_style({"background_color": NOT_CONNECTED_COLOR})
-            self._status_label.text = str(error)
+            self._status_label.text = "Disconnected"
             return False
         self._status_light.set_style({"background_color": CONNECTED_COLOR})
         self._status_label.text = "Connected"

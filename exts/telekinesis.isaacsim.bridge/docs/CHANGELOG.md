@@ -1,4 +1,15 @@
 # Changelog
+## [0.11.1] - 2026-11-23
+### Changed
+- The Telekinesis Isaac Sim Server window checks the server each time it is opened, not only on
+  **Connect**, so a server stopped since the last Connect shows as disconnected. Its status is
+  either a green **Connected** or a red **Disconnected**, without the error text; a robot that
+  fails to load on Connect is reported in the Robots line.
+- `examples/ur10e_hande_ghost_pick_place.py` picks at the ghost objects named `pick_pose*` and
+  places the objects in a row from `start_place_pose`.
+- `examples/scenes/pick_and_place_scene.py` stores the robot's Synapse class name, so the
+  scene's robot can be loaded on the Telekinesis Isaac Sim Server for ghost poses.
+
 ## [0.11.0] - 2026-11-19
 ### Added
 - **Telekinesis Isaac Sim Bridge ▸ Telekinesis Isaac Sim Server** in the menu bar opens a window
