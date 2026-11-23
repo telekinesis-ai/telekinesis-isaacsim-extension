@@ -26,17 +26,17 @@ GHOST_JOINT_POSITIONS_ATTRIBUTE = "telekinesis:ghost:joint_positions"
 GHOST_REACHABLE_ATTRIBUTE = "telekinesis:ghost:reachable"
 
 # Name of the Xform beside the robot that holds its ghost objects, and the suffix of a new
-# ghost's name after its tool's: Wandelbots' default ghost path is <tool parent>/poses/<tool>_Pose.
+# ghost's name after its tool's: default ghost path is <tool parent>/poses/<tool>_Pose.
 GHOSTS_GROUP_NAME = "poses"
 GHOST_NAME_SUFFIX = "_Pose"
-# Look of a ghost object: Wandelbots' reachability tints on Kit's SimPBR_Translucent material,
+# Look of a ghost object: ' reachability tints on Kit's SimPBR_Translucent material,
 # the material their ghosts use. It is in Kit's core MDL library, so a saved stage finds it by
 # name on any Isaac Sim install.
 REACHABLE_COLOR = Gf.Vec3f(0.15, 0.8, 0.25)
 UNREACHABLE_COLOR = Gf.Vec3f(0.9, 0.15, 0.15)
 GHOST_MDL = "SimPBR_Translucent.mdl"
 # A moved ghost is solved again only when it moved more than this since it was last solved,
-# as Wandelbots' PrimPoseWatcher does: metres of translation and radians of XYZ Euler rotation.
+# as PrimPoseWatcher does: metres of translation and radians of XYZ Euler rotation.
 MIN_TRANSLATION_CHANGE = 0.001
 MIN_ROTATION_CHANGE = 0.01
 
@@ -684,7 +684,7 @@ def define_ghost_material(
     """Define the see-through, glowing material ghost objects use, tinted ``color``, at
     ``material_path`` in the stage's current edit target.
 
-    It is Kit's ``SimPBR_Translucent`` with Wandelbots' ghost material settings (their
+    It is Kit's ``SimPBR_Translucent`` with ghost material settings (their
     ``wb_ghost.mdl``), ``color`` being both the see-through tint and the glow. Defining it again
     at the same path only updates its colour.
     """

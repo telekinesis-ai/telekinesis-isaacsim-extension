@@ -18,7 +18,7 @@ from ..core import meshes
 OVERLAY_ROOT_PATH = "/TelekinesisRobotOverlay"
 OVERLAY_MATERIAL_PATH = f"{OVERLAY_ROOT_PATH}/Material"
 OVERLAY_LINKS_PATH = f"{OVERLAY_ROOT_PATH}/Links"
-# Wandelbots' robot overlay colour (#A936DA).
+# robot overlay colour (#A936DA).
 OVERLAY_COLOR = Gf.Vec3f(0xA9, 0x36, 0xDA) / 255.0
 
 
@@ -30,7 +30,7 @@ class RobotOverlay:  # pylint: disable=too-few-public-methods
     drawn with every link where the ghost's stored solution puts it, so the arm visibly reaches
     the ghost; it follows the ghost when the ghost is solved again, e.g. while it is dragged. It
     is hidden while the ghost is unreachable and whenever no single ghost is selected. Each link
-    is the link's own visible meshes merged into one, in Wandelbots' overlay colour.
+    is the link's own visible meshes merged into one, in overlay colour.
 
     The overlay is authored only in the stage's session layer, under :data:`OVERLAY_ROOT_PATH`,
     so it is never saved and never marks the stage modified; the Stage window does not list it,

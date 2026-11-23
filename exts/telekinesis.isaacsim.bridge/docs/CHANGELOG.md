@@ -36,7 +36,7 @@
   class name or the server no longer knows it, and 503 when the Telekinesis Isaac Sim Server
   cannot be reached.
 - While one ghost object is selected and its robot can reach it, the robot is drawn see-through
-  in Wandelbots' overlay colour with every link where the ghost's solution puts it, so the arm
+  in overlay colour with every link where the ghost's solution puts it, so the arm
   visibly reaches the ghost; the overlay follows the ghost while it is dragged and disappears
   when the ghost is out of reach or no single ghost is selected. It lives in the session layer:
   never saved, not selectable, not listed in the Stage window. It needs the Telekinesis Isaac Sim
