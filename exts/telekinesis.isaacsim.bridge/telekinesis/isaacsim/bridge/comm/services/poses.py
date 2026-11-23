@@ -15,7 +15,12 @@ from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics, UsdShade
 from ...core import asset_loader, meshes, robot_assembler
 from .. import models
 from ..isaacsim_server_client import IsaacSimServerClient, IsaacSimServerError
-from .articulations import ROBOT_CLASS_NAME_ATTRIBUTE, ROBOT_ID_ATTRIBUTE, ArticulationService
+from .articulations import (
+    ROBOT_BASE_FRAME_ATTRIBUTE,
+    ROBOT_CLASS_NAME_ATTRIBUTE,
+    ROBOT_ID_ATTRIBUTE,
+    ArticulationService,
+)
 
 # Properties of a pose prim. The relationship targets the robot prim whose default TCP
 # the pose places; the joint attributes hold the robot's inverse-kinematics solution for the
@@ -31,7 +36,8 @@ POSES_GROUP_NAME = "poses"
 POSE_NAME_SUFFIX = "_Pose"
 # Look of a pose's ghost: reachability tints on Kit's SimPBR_Translucent material. It is in
 # Kit's core MDL library, so a saved stage finds it by name on any Isaac Sim install.
-REACHABLE_COLOR = Gf.Vec3f(0.15, 0.8, 0.25)
+# Reachable is the #41d1ff of the Add Tool preview; MDL reads colours as linear, the hex is sRGB.
+REACHABLE_COLOR = Gf.ConvertDisplayToLinear(Gf.Vec3f(0x41, 0xD1, 0xFF) / 255.0)
 UNREACHABLE_COLOR = Gf.Vec3f(0.9, 0.15, 0.15)
 GHOST_MDL = "SimPBR_Translucent.mdl"
 # A moved pose is solved again only when it moved more than this since it was last solved,
@@ -51,7 +57,7 @@ class PoseService:
     to cover the pose. Poses live in a ``poses`` Xform beside the robot, in its assembly when
     it has one, carry no physics, and are saved with the stage. Each pose stores the robot's
     inverse-kinematics solution for it, solved by the Telekinesis Isaac Sim Server, and is tinted
-    green when the robot can reach it and red when it cannot.
+    blue when the robot can reach it and red when it cannot.
 
     While the service follows a stage, a pose that is moved, directly or with one of its parent
     prims, is solved again once it has moved more than :data:`MIN_TRANSLATION_CHANGE` or
@@ -266,10 +272,15 @@ class PoseService:
         Args:
             robot_prim_path: Only the poses of this robot, or every pose when ``None``.
 
+        The poses are read from the stage. The Telekinesis Isaac Sim Server is needed only for a
+        robot that stores no base frame yet, one never loaded on the server since the bridge
+        started storing it.
+
         Raises:
-            HTTPException: 422 if a listed pose's robot stores no class name or is no longer
-                known to the server, does not match its class, or the stage changes while the
-                poses are listed; 503 if the server cannot be reached.
+            HTTPException: 422 if a listed pose's robot stores neither a base frame nor a class
+                name, the server does not know its class, the robot does not match its class, or
+                the stage changes while the poses are listed; 503 if the server is needed and
+                cannot be reached.
         """
         stage = self._stage
         if stage is None:
@@ -356,14 +367,23 @@ class PoseService:
     async def _base_frame_world(self, stage: Usd.Stage, robot_prim_path: str) -> Gf.Matrix4d:
         """Return the world transform of the base frame of the robot at ``robot_prim_path``.
 
+        The base frame's name is read from the robot prim, so the server is contacted only for
+        a robot that stores none yet, which is then loaded on the server to store it.
+
         Raises:
-            HTTPException: 422 if the robot stores no class name or is no longer known to the
-                server, or does not match its class; 503 if the server cannot be reached.
+            HTTPException: 422 if the robot stores neither a base frame nor a class name, the
+                server does not know its class, or the robot does not match its class; 503 if
+                the server cannot be reached.
         """
-        robot_id = await self._connected_robot_id(stage, robot_prim_path)
-        robot = await self._describe_robot(robot_id)
+        robot_prim = stage.GetPrimAtPath(robot_prim_path)
+        async with self._connect_lock:
+            if not robot_prim.GetAttribute(ROBOT_BASE_FRAME_ATTRIBUTE).Get():
+                await self._load_robot_on_server(stage, robot_prim_path)
         return _world_transform_of_robot_frame(
-            stage, robot_prim_path, robot["base_frame"], robot["class_name"]
+            stage,
+            robot_prim_path,
+            robot_prim.GetAttribute(ROBOT_BASE_FRAME_ATTRIBUTE).Get(),
+            robot_prim.GetAttribute(ROBOT_CLASS_NAME_ATTRIBUTE).Get(),
         )
 
     def _on_objects_changed(self, notice, sender):
@@ -498,7 +518,7 @@ class PoseService:
 
     async def _load_robot_on_server(self, stage: Usd.Stage, robot_prim_path: str) -> str:
         """Load the robot at ``robot_prim_path`` on the server from its stored class name, store
-        the new id and the exact class name on the prim, and return the id.
+        the new id, the exact class name and the base frame on the prim, and return the id.
 
         The server robot of the id the prim stored before is deleted. Failing to delete it only
         logs a warning: the robot is loaded either way, and a server that restarted no longer
@@ -520,6 +540,9 @@ class PoseService:
         robot_prim.CreateAttribute(ROBOT_ID_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(robot["id"])
         robot_prim.CreateAttribute(ROBOT_CLASS_NAME_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(
             robot["class_name"]
+        )
+        robot_prim.CreateAttribute(ROBOT_BASE_FRAME_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(
+            robot["base_frame"]
         )
         self._robot_descriptions[robot["id"]] = robot
         if previous_robot_id:
@@ -708,7 +731,7 @@ def define_ghost_material(
 
 
 def _set_ghost_look(stage: Usd.Stage, pose_prim: Usd.Prim, reachable: bool):
-    """Give ``pose_prim`` its own see-through material, green if ``reachable`` and red if not.
+    """Give ``pose_prim`` its own see-through material, blue if ``reachable`` and red if not.
 
     The material lives under the pose, at ``<pose>/Looks/GhostMaterial``, so a duplicated
     pose brings its own; it is bound again on every call, so a duplicate whose binding still

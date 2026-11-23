@@ -51,11 +51,13 @@ MOUNT_LINK_ATTRIBUTE = "telekinesis:mountLink"
 # create_articulation when it loads a catalogue robot into a parent that does not exist.
 ASSEMBLY_ROBOT_RELATIONSHIP = "telekinesis:assemblyRobot"
 # String attributes on a robot prim for the Telekinesis Isaac Sim Server: the id of the robot
-# loaded for it there, and the Synapse class name it is loaded from. A catalogue robot gets its
-# class name in lowercase when it is loaded; connecting it stores the id and the exact class
-# name the server answers with.
+# loaded for it there, the Synapse class name it is loaded from, and the name of the link that
+# class measures poses from. A catalogue robot gets its class name in lowercase when it is
+# loaded; connecting it stores the id, the exact class name and the base frame the server
+# answers with.
 ROBOT_ID_ATTRIBUTE = "telekinesis:robot:id"
 ROBOT_CLASS_NAME_ATTRIBUTE = "telekinesis:robot:class_name"
+ROBOT_BASE_FRAME_ATTRIBUTE = "telekinesis:robot:base_frame"
 # Catalogue category of robot arms.
 ROBOT_CATEGORY = "robots/manipulators"
 

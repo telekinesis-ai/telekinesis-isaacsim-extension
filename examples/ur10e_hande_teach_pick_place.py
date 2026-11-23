@@ -5,7 +5,7 @@ right-click the gripper and choose Telekinesis Isaac Sim Bridge > Add Pose > Fro
 poses pick_pose, pick_pose_01, pick_pose_02, ... and place each one on an object, and name one
 more start_place_pose and place it where the first object goes. Then, with Isaac Sim and the
 Telekinesis Isaac Sim Server running, run:
-    python examples/ur10e_hande_pose_pick_place.py
+    python examples/ur10e_hande_teach_pick_place.py
 
 The objects are picked in name order of the pick poses, and each is placed at start_place_pose
 shifted by PLACE_STEP_Y metres in y for every object already placed.

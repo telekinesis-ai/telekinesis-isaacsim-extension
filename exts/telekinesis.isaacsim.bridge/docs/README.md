@@ -222,14 +222,15 @@ running at `http://127.0.0.1:8770`.
    answers and red with the reason beside it when it does not. **Connect** loads every robot of the stage on the server and lists them. A
    robot added with Add Robot stores its Synapse class name as `telekinesis:robot:class_name`,
    and the server loads it as that class; no model has to be picked. The robot prim stores the
-   id the server gave it as `telekinesis:robot:id`. A robot that is not loaded yet is loaded the
+   id the server gave it as `telekinesis:robot:id`, and the link the class measures poses from
+   as `telekinesis:robot:base_frame`. A robot that is not loaded yet is loaded the
    first time a pose needs it, so Connect is only needed after the server restarted, since the
    server keeps robots only while it runs.
 2. **Add a pose.** Right-click the robot, any part of it, or its tool, and choose **Telekinesis
    Isaac Sim Bridge ▸ Add Pose ▸ From Tool**. The robot needs a tool attached with Add Tool. A
    ghost of the whole tool appears where the tool stands, as `<tool>_Pose` in a `poses` Xform
-   beside the robot, and is selected. It is green when the robot can reach it and red when it
-   cannot.
+   beside the robot, and is selected. It is blue (`#41d1ff`, as the Add Tool preview) when the
+   robot can reach it and red when it cannot.
 3. **Place it.** Rename the pose, move it with the viewport gizmo or the Transform fields, or
    duplicate it. While one pose is selected and reachable, the robot is drawn see-through in
    the pose's solution, reaching it; the drawing is never saved and disappears when the pose
@@ -240,8 +241,9 @@ running at `http://127.0.0.1:8770`.
    `name`, `pose` and stored `joint_positions`. The pose is `[x, y, z, rx, ry, rz]` of the robot's
    default TCP (`tool0` on a Universal Robots arm) in the robot's base frame, in metres and
    extrinsic XYZ Euler degrees, so it can be passed to a Synapse robot's `pick` and `place`
-   unchanged. `examples/ur10e_hande_pose_pick_place.py` picks at poses named `pick_pose*` and
-   places in a row from the pose named `start_place_pose`.
+   unchanged. Reading the poses needs no server once the robot stores its base frame.
+   `examples/ur10e_hande_teach_pick_place.py` picks at poses named `pick_pose*` and places in a
+   row from the pose named `start_place_pose`.
 
 A pose is a single `Mesh` with no physics, saved with the stage. Its origin is the robot's default
 TCP, and it stores `telekinesis:pose:robot` (its robot), `telekinesis:pose:joint_names`,

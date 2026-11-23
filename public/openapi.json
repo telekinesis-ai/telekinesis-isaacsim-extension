@@ -8724,7 +8724,7 @@
           "teaching"
         ],
         "summary": "List Poses",
-        "description": "The poses of the open stage, optionally only those of one robot.\n\nEach pose has its ``name``, ``prim_path``, ``robot_prim_path``, its ``pose``\n``[x, y, z, rx, ry, rz]`` in its robot's base frame (metres and extrinsic XYZ Euler\ndegrees, the pose to move the robot's default TCP to), the stored solution\n``joint_names`` and ``joint_positions`` (radians), and whether it is ``reachable``.\nNeeds the Telekinesis Isaac Sim Server for the robots' base frames: 422 when a robot is\nnot connected or the server no longer knows it, 503 when the server cannot be reached.",
+        "description": "The poses of the open stage, optionally only those of one robot.\n\nEach pose has its ``name``, ``prim_path``, ``robot_prim_path``, its ``pose``\n``[x, y, z, rx, ry, rz]`` in its robot's base frame (metres and extrinsic XYZ Euler\ndegrees, the pose to move the robot's default TCP to), the stored solution\n``joint_names`` and ``joint_positions`` (radians), and whether it is ``reachable``.\nThe poses are read from the stage, using the base frame each robot prim stores. The\nTelekinesis Isaac Sim Server is needed only for a robot that stores none yet: 422 when\nthe server does not know its class, 503 when the server cannot be reached.",
         "operationId": "list_poses_teaching_poses_get",
         "parameters": [
           {

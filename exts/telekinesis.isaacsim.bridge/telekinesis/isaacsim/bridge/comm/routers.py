@@ -2324,8 +2324,9 @@ async def list_poses(
     ``[x, y, z, rx, ry, rz]`` in its robot's base frame (metres and extrinsic XYZ Euler
     degrees, the pose to move the robot's default TCP to), the stored solution
     ``joint_names`` and ``joint_positions`` (radians), and whether it is ``reachable``.
-    Needs the Telekinesis Isaac Sim Server for the robots' base frames: 422 when a robot is
-    not connected or the server no longer knows it, 503 when the server cannot be reached.
+    The poses are read from the stage, using the base frame each robot prim stores. The
+    Telekinesis Isaac Sim Server is needed only for a robot that stores none yet: 422 when
+    the server does not know its class, 503 when the server cannot be reached.
     """
     return await pose_service.list_poses(robot_prim_path)
 
