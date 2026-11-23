@@ -141,9 +141,7 @@ class RobotOverlay:  # pylint: disable=too-few-public-methods
         stage.RemovePrim(OVERLAY_ROOT_PATH)
         root = UsdGeom.Xform.Define(stage, OVERLAY_ROOT_PATH)
         omni.usd.editor.set_hide_in_stage_window(root.GetPrim(), True)
-        material = define_ghost_material(
-            stage, Sdf.Path(OVERLAY_MATERIAL_PATH), OVERLAY_COLOR
-        )
+        material = define_ghost_material(stage, Sdf.Path(OVERLAY_MATERIAL_PATH), OVERLAY_COLOR)
         UsdShade.MaterialBindingAPI.Apply(root.GetPrim()).Bind(
             material, UsdShade.Tokens.strongerThanDescendants
         )

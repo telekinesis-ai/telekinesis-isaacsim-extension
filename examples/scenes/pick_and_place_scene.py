@@ -10,9 +10,9 @@ Every asset comes from the Telekinesis asset library and is downloaded once into
 on the machine that built it.
 
 The robot and the gripper carry the bridge's tags with an empty id, and the robot its Synapse
-class name: the bridge registers them under fresh ids when the scene is opened, and drives the Hand-E's left finger joint
-only. The tags and the assembly follow the extension's Add Robot, Add Mesh and Add Tool,
-and must be kept in step with them.
+class name: the bridge registers them under fresh ids when the scene is opened, and drives the
+Hand-E's left finger joint only. The tags and the assembly follow the extension's Add Robot,
+Add Mesh and Add Tool, and must be kept in step with them.
 
 Example:
     In the SDK environment::

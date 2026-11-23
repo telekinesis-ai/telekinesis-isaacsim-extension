@@ -288,9 +288,7 @@ class PoseService:
         poses = []
         for pose_path in sorted(self._pose_paths):
             robot_targets = (
-                stage.GetPrimAtPath(pose_path)
-                .GetRelationship(POSE_ROBOT_RELATIONSHIP)
-                .GetTargets()
+                stage.GetPrimAtPath(pose_path).GetRelationship(POSE_ROBOT_RELATIONSHIP).GetTargets()
             )
             if not robot_targets:
                 continue
@@ -443,9 +441,7 @@ class PoseService:
                 try:
                     await self._solve_moved_pose(pose_path)
                 except HTTPException as error:
-                    carb.log_warn(
-                        f"[bridge] could not solve pose {pose_path}: {error.detail}"
-                    )
+                    carb.log_warn(f"[bridge] could not solve pose {pose_path}: {error.detail}")
                 if pose_path not in self._moved_while_solving:
                     return
         finally:
