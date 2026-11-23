@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Merging a prim's meshes into one mesh, as ghost objects and the robot overlay draw them."""
+"""Merging a prim's meshes into one mesh, as poses and the robot overlay draw them."""
 
 from collections.abc import Collection
 

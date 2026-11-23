@@ -1,4 +1,25 @@
 # Changelog
+## [0.11.1] - 2026-11-23
+### Changed
+- The Telekinesis Isaac Sim Server window checks the server each time it is opened, not only on
+  **Connect**, so a server stopped since the last Connect shows as disconnected. Its status is
+  either a green **Connected** or a red **Disconnected**, without the error text; a robot that
+  fails to load on Connect is reported in the Robots line.
+- Poses are no longer called ghost objects. `GET /teaching/ghost-objects` is now
+  `GET /teaching/poses`, and likewise its `/sources`, `POST`, `DELETE` and `/export` routes. A
+  pose stores `telekinesis:pose:robot`, `telekinesis:pose:joint_names`,
+  `telekinesis:pose:joint_positions` and `telekinesis:pose:reachable` instead of the
+  `telekinesis:ghost:*` properties, so a stage saved with 0.11.0 poses needs them taught again.
+- `examples/ur10e_hande_ghost_pick_place.py` is now `examples/ur10e_hande_teach_pick_place.py`. It
+  picks at the poses named `pick_pose*` and places the objects in a row from `start_place_pose`.
+- A reachable pose's ghost is tinted the Add Tool preview's blue (`#41d1ff`) instead of green;
+  an unreachable one stays red. A pose saved before turns blue when it is next solved.
+- Loading a robot on the Telekinesis Isaac Sim Server also stores the link its Synapse class
+  measures poses from as `telekinesis:robot:base_frame` on the robot prim. `GET /teaching/poses`
+  reads it from there, so listing poses no longer needs the server once the robot stores it.
+- `examples/scenes/pick_and_place_scene.py` stores the robot's Synapse class name, so the
+  scene's robot can be loaded on the Telekinesis Isaac Sim Server for poses.
+
 ## [0.11.0] - 2026-11-19
 ### Added
 - **Telekinesis Isaac Sim Bridge ▸ Telekinesis Isaac Sim Server** in the menu bar opens a window
