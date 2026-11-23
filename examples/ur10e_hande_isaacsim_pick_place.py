@@ -8,7 +8,6 @@ Each object is picked at one of PICK_POSES and placed at PLACE_START shifted by
 PLACE_STEP_Y metres in y for every object already placed.
 """
 
-from telekinesis.synapse import skills
 from telekinesis.synapse.robots.manipulators import universal_robots
 from telekinesis.synapse.tools.parallel_grippers import robotiq
 
@@ -25,6 +24,11 @@ PLACE_START = [-0.6, -0.1, 0.15, 180, 0, 90]
 PLACE_STEP_Y = 0.04
 APPROACH_OFFSET_Z = 0.1  # m, pre-pick and pre-place distance above the poses
 
+# Motion limits of every move: joint in deg/s and deg/s^2, Cartesian in m/s and m/s^2.
+JOINT_SPEED = 30.0
+JOINT_ACCELERATION = 40.0
+CARTESIAN_SPEED = 0.5
+CARTESIAN_ACCELERATION = 0.7
 
 # Joint angles in degrees.
 HOME_JOINTS = [-90, -90, 90, -90, -90, 0]
@@ -51,10 +55,10 @@ def main() -> None:
         for index, pick_pose in enumerate(PICK_POSES):
             print(f"Object {index + 1}: picking")
             robot.set_joint_positions(HOME_JOINTS)
-            skills.pick(robot, gripper, pick_pose, APPROACH_OFFSET_Z)
+            robot.pick(pick_pose, APPROACH_OFFSET_Z)
 
             robot.set_joint_positions(INTERMEDIATE_JOINTS)
-            skills.place(robot, gripper, place_pose(index), APPROACH_OFFSET_Z)
+            robot.place(place_pose(index), APPROACH_OFFSET_Z)
         robot.set_joint_positions(HOME_JOINTS)
     finally:
         gripper.disconnect()

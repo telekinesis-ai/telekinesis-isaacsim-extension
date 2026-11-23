@@ -16,6 +16,7 @@ from .add_asset_window import BUTTON_WIDTH, AddAssetWindow
 
 PARALLEL_GRIPPER_CATEGORY = "tools/parallel_grippers"
 SUCTION_GRIPPER_CATEGORY = "tools/suction_grippers"
+WELDING_GUN_CATEGORY = "tools/welding_guns"
 
 
 class AddToolWindow(AddAssetWindow):
@@ -59,8 +60,8 @@ class AddToolWindow(AddAssetWindow):
         super().__init__("Add Tool", asset_library_service, articulation_service)
 
     def asset_categories(self) -> list[str]:
-        """Offer the parallel and suction grippers of the catalogue."""
-        return [PARALLEL_GRIPPER_CATEGORY, SUCTION_GRIPPER_CATEGORY]
+        """Offer the parallel grippers, suction grippers and welding guns of the catalogue."""
+        return [PARALLEL_GRIPPER_CATEGORY, SUCTION_GRIPPER_CATEGORY, WELDING_GUN_CATEGORY]
 
     def build_extra_buttons(self):
         """Add Auto-calculate Placement, left of Add."""

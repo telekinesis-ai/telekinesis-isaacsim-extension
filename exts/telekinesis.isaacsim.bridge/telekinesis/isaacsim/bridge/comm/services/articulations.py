@@ -47,8 +47,17 @@ from .device_registry import DeviceRegistry
 # onto. Stored in USD so it survives saving the stage and is shared by every client.
 MOUNT_LINK_ATTRIBUTE = "telekinesis:mountLink"
 # Relationship on a robot's assembly Xform targeting the robot prim, so the assembly and
-# everything attached in it count as part of that robot. Authored by Add Robot.
+# everything attached in it count as part of that robot. Authored by Add Robot, and by
+# create_articulation when it loads a catalogue robot into a parent that does not exist.
 ASSEMBLY_ROBOT_RELATIONSHIP = "telekinesis:assemblyRobot"
+# String attributes on a robot prim for the Telekinesis Isaac Sim Server: the id of the robot
+# loaded for it there, and the Synapse class name it is loaded from. A catalogue robot gets its
+# class name in lowercase when it is loaded; connecting it stores the id and the exact class
+# name the server answers with.
+ROBOT_ID_ATTRIBUTE = "telekinesis:robot:id"
+ROBOT_CLASS_NAME_ATTRIBUTE = "telekinesis:robot:class_name"
+# Catalogue category of robot arms.
+ROBOT_CATEGORY = "robots/manipulators"
 
 
 class ArticulationService(DeviceRegistry):
@@ -171,7 +180,11 @@ class ArticulationService(DeviceRegistry):
 
         ``asset_info`` (``{"category", "manufacturer", "model"}``) names a catalogue
         asset to load when no prim is at ``prim_path``: it is downloaded into the
-        cache once, then imported (a URDF) or referenced (a USD). At most one of
+        cache once, then imported (a URDF) or referenced (a USD). A robot arm from
+        the catalogue whose parent prim does not exist yet, such as
+        ``/World/cr10_assembly/cr10``, is loaded into an assembly Xform at that parent
+        targeting the robot, as Add Robot builds it, so tools and meshes loaded into
+        the assembly move and delete with the robot. At most one of
         ``urdf_path``, ``usd_path`` and ``asset_info`` is given (see
         :meth:`_resolve_prim`).
 
@@ -180,7 +193,10 @@ class ArticulationService(DeviceRegistry):
         :data:`MOUNT_LINK_ATTRIBUTE`, replacing any stored before; without it, a
         catalogue asset this request loads stores the catalogue's
         ``simulation_mount_link``, when it has one, and any other prim is left as it is
-        (see :meth:`resolve_arm_mount_link`).
+        (see :meth:`resolve_arm_mount_link`). A catalogue robot arm this request loads
+        also stores its Synapse class name, in lowercase, as
+        :data:`ROBOT_CLASS_NAME_ATTRIBUTE`, the class the Telekinesis Isaac Sim Server
+        loads it as.
 
         A gripper merged onto an arm -- by ``assemble_robot`` or the Add Tool window,
         in this session or one saved before -- has no articulation of its own; the
@@ -216,6 +232,8 @@ class ArticulationService(DeviceRegistry):
             )
             if catalogue_entry is not None and mount_link is None:
                 mount_link = catalogue_entry.get("simulation_mount_link")
+            # Before the bind: pinning recomposes the prim, which a bound handle does not survive.
+            self._pin_asset_physics_variant(resolved)
 
             merge = await self._find_arm_merged_into(resolved)
 
@@ -242,12 +260,19 @@ class ArticulationService(DeviceRegistry):
                     "arm_mount_link": merge["arm_link"].name,
                     "gripper_mount_link": merge["mounted_link"].name,
                 }
-            if mount_link is not None:
-                from pxr import Sdf
+            from pxr import Sdf
 
+            if mount_link is not None:
                 self._stage().GetPrimAtPath(device.prim_path).CreateAttribute(
                     MOUNT_LINK_ATTRIBUTE, Sdf.ValueTypeNames.String
                 ).Set(mount_link)
+            if catalogue_entry is not None and asset_info["category"] == ROBOT_CATEGORY:
+                # Synapse names a robot class after its catalogue identifier without the
+                # separators (universal_robots/ur10e -> UniversalRobotsUR10E), and the server
+                # matches class names in any case.
+                self._stage().GetPrimAtPath(device.prim_path).CreateAttribute(
+                    ROBOT_CLASS_NAME_ATTRIBUTE, Sdf.ValueTypeNames.String
+                ).Set(catalogue_entry["identifier"].replace("/", "").replace("_", ""))
             await self.rebind_stale_devices()
             return {
                 "articulation_id": articulation_id,
@@ -255,6 +280,44 @@ class ArticulationService(DeviceRegistry):
                 "prim_source": prim_source,
                 **device.info(),
             }
+
+    def _pin_asset_physics_variant(self, prim_path):
+        """Pin the ``Physics`` variant the asset at ``prim_path`` selects into the stage's
+        edit-target layer, when Isaac Sim's SimReady variant switcher has overridden it.
+
+        The switcher (``omni.physics.isaacsimready``) selects, on the session layer, the
+        first ``Physics`` variant whose name contains the active simulator's (``physx``),
+        whatever the asset selects. It re-applies that override whenever a property is
+        added to the prim, as the bridge does when it stores a device's id or driven
+        joints, and each re-application recomposes the asset: PhysX reads its links as
+        deleted and invalidates the physics view every articulation reads through. The
+        switcher leaves alone a prim whose edit-target layer selects a variant, so the
+        asset's own selection is written there and the override removed. Prims the
+        switcher has not overridden are left untouched, so a bound articulation is never
+        recomposed for nothing. The pin is saved with the stage.
+
+        Must run before the device is bound. Does nothing when the prim has no
+        ``Physics`` variant set, the switcher holds no override for it, or the asset
+        selects no ``Physics`` variant of its own.
+        """
+        stage = self._stage()
+        prim = stage.GetPrimAtPath(prim_path)
+        session_layer = stage.GetSessionLayer()
+        session_spec = session_layer.GetPrimAtPath(prim.GetPath())
+        if not session_spec or "Physics" not in session_spec.variantSelections:
+            return
+        asset_selection = next(
+            (
+                spec.variantSelections["Physics"]
+                for spec in prim.GetPrimStack()
+                if spec.layer != session_layer and "Physics" in spec.variantSelections
+            ),
+            None,
+        )
+        if asset_selection is None:
+            return
+        prim.GetVariantSets().GetVariantSet("Physics").SetVariantSelection(asset_selection)
+        del session_spec.variantSelections["Physics"]
 
     async def rebind_stale_devices(self):
         """Rebind every device whose physics handle a timeline stop invalidated.
@@ -659,8 +722,10 @@ class ArticulationService(DeviceRegistry):
         A USD/PhysX schema walk (mimic vs DriveAPI) the client cannot do itself.
         The index is into the device's current ``dof_names`` (so it is valid both
         standalone and after assembly).
-        Speed is rad/s or m/s; effort is Nm or N. The URDF speed is used when
-        recorded, because solver velocity limits can be lifted for mimic joints.
+        Speed is rad/s or m/s; effort is Nm or N. The speed is the one PhysX
+        enforces, unless a recorded URDF speed is lower: solver velocity limits
+        can be lifted for mimic joints, while a solver limit below the URDF's,
+        such as a gripper's firmware speed, is the fastest the joint can move.
         """
         device = self.get_device(articulation_id)
         try:
@@ -670,11 +735,14 @@ class ArticulationService(DeviceRegistry):
         index = device.dof_names.index(name)
         properties = device.dof_properties()[index]
         prim = joint_prims(self._stage(), device.prim_path)[name]
-        velocity = prim.GetAttribute("urdf:limit:velocity").Get()
+        max_velocity = properties["max_velocity"]
+        urdf_velocity = prim.GetAttribute("urdf:limit:velocity").Get()
+        if urdf_velocity is not None:
+            max_velocity = min(urdf_velocity, max_velocity)
         return {
             "name": name,
             "index": index,
-            "max_velocity": velocity if velocity is not None else properties["max_velocity"],
+            "max_velocity": max_velocity,
             "max_effort": properties["max_effort"],
         }
 
@@ -1032,6 +1100,20 @@ class ArticulationService(DeviceRegistry):
                 return articulation["articulation_id"]
         return None
 
+    def find_tool_on_robot(self, robot_id) -> str | None:
+        """Return the prim path of the tool assembled onto robot ``robot_id``, or ``None``.
+
+        The tool is the gripper or welding gun that Add Tool or ``assemble_robot`` assembled
+        onto the robot, in this session or one saved before.
+        """
+        record = self._assemblies.get(robot_id)
+        if record is None:
+            return None
+        tool_registry = (
+            self._surface_gripper_service if record["gripper_kind"] == "surface" else self
+        )
+        return tool_registry.get_device(record["gripper_id"]).prim_path
+
     def resolve_arm_mount_link(self, arm_id, arm_mount_link=None):
         """Return ``arm_mount_link``, or the arm's stored mount link when it is ``None``.
 
@@ -1181,12 +1263,18 @@ class ArticulationService(DeviceRegistry):
         ``catalogue_entry`` is the entry :meth:`AssetLibraryService.fetch_asset`
         returned when ``asset_info`` was loaded, else ``None``.
 
+        A catalogue robot arm loaded into a parent that does not exist yet gets that
+        parent as its assembly, as Add Robot builds it: an Xform defined before the
+        load (so parking moves only the robot), targeting the robot through
+        :data:`ASSEMBLY_ROBOT_RELATIONSHIP`, and removed again if the load fails.
+
         Raises:
             HTTPException: 400 if more than one source is given, or none while the
                 prim is missing; 404/502 from the catalogue download; 422 if loading
                 fails.
         """
         import omni.usd
+        from pxr import Sdf, UsdGeom
 
         if sum(1 for source in (urdf_path, usd_path, asset_info) if source) > 1:
             raise HTTPException(
@@ -1215,6 +1303,14 @@ class ArticulationService(DeviceRegistry):
                 urdf_path = catalogue_entry["local_path"]
             else:
                 usd_path = catalogue_entry["local_path"]
+        assembly_path = Sdf.Path(requested_prim_path).GetParentPath()
+        builds_assembly = (
+            asset_info is not None
+            and asset_info["category"] == ROBOT_CATEGORY
+            and not stage.GetPrimAtPath(assembly_path)
+        )
+        if builds_assembly:
+            UsdGeom.Xform.Define(stage, assembly_path)
         try:
             if urdf_path:
                 resolved = await import_urdf_at(stage, urdf_path, requested_prim_path)
@@ -1222,7 +1318,13 @@ class ArticulationService(DeviceRegistry):
             else:
                 resolved = await reference_usd_at(stage, usd_path, requested_prim_path)
                 prim_source = "referenced_usd"
-            return resolved, prim_source, catalogue_entry
         except RuntimeError as exc:
+            if builds_assembly and not stage.GetPrimAtPath(assembly_path).GetChildren():
+                stage.RemovePrim(assembly_path)
             # 422: well-formed request, but loading the file itself failed.
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if builds_assembly:
+            stage.GetPrimAtPath(assembly_path).CreateRelationship(
+                ASSEMBLY_ROBOT_RELATIONSHIP
+            ).SetTargets([resolved])
+        return resolved, prim_source, catalogue_entry

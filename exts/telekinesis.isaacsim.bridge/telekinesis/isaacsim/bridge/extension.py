@@ -30,20 +30,25 @@ import omni.kit.context_menu
 import omni.physx as _physx
 import omni.timeline
 import omni.usd
+from fastapi import HTTPException
 from isaacsim.gui.components.element_wrappers import ScrollingWindow
 from isaacsim.gui.components.menu import MenuItemDescription
 from omni import ui
+from omni.kit import notification_manager
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 from omni.usd import StageEventType
-from pxr import Usd
+from pxr import Sdf, Usd
 
 from .comm.server import BridgeServer
+from .comm.services.articulations import ASSEMBLY_ROBOT_RELATIONSHIP, ROBOT_CLASS_NAME_ATTRIBUTE
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_TITLE
 from .ui.add_asset_window import AddAssetWindow
 from .ui.add_camera_window import AddCameraWindow
 from .ui.add_mesh_window import AddMeshWindow
 from .ui.add_robot_window import AddRobotWindow
 from .ui.add_tool_window import AddToolWindow
+from .ui.isaacsim_server_window import IsaacSimServerWindow
+from .ui.robot_overlay import RobotOverlay
 from .ui_builder import UIBuilder
 
 
@@ -86,7 +91,11 @@ class Extension(omni.ext.IExt):
             MenuItemDescription(
                 name=EXTENSION_TITLE,
                 onclick_action=(ext_id, f"CreateUIExtension:{EXTENSION_TITLE}"),
-            )
+            ),
+            MenuItemDescription(
+                name="Telekinesis Isaac Sim Server",
+                onclick_action=(ext_id, "ShowIsaacSimServerWindow"),
+            ),
         ]
 
         add_menu_items(self._menu_items, EXTENSION_TITLE)
@@ -142,8 +151,20 @@ class Extension(omni.ext.IExt):
             self._bridge_server.articulation_service,
             self._bridge_server.stage_service,
         )
+        self._pose_service = self._bridge_server.pose_service
+        self._isaacsim_server_window = IsaacSimServerWindow(
+            self._pose_service, self._bridge_server.isaacsim_server_client
+        )
+        # Opened by the menu item of the same action id, added above.
+        action_registry.register_action(
+            ext_id,
+            "ShowIsaacSimServerWindow",
+            self._isaacsim_server_window.show,
+            description="Show the Telekinesis Isaac Sim Server window",
+        )
+        self._robot_overlay = RobotOverlay(self._pose_service)
 
-        # Shown under right-click -> Create in the Stage panel and viewport. The returned
+        # Shown at the top of the right-click menu in the Stage panel and viewport. The returned
         # subscription keeps the entry alive; dropping it in on_shutdown removes it.
         extension_path = omni.kit.app.get_app().get_extension_manager().get_extension_path(ext_id)
         self._create_context_menu = omni.kit.context_menu.add_menu(
@@ -152,6 +173,10 @@ class Extension(omni.ext.IExt):
                     "Telekinesis Isaac Sim Bridge": [
                         {
                             "name": "Add Robot",
+                            # A robot cannot be loaded inside another robot.
+                            "show_fn": lambda objects: (
+                                not self._clicked_prim_is_robot_part(objects)
+                            ),
                             "onclick_fn": lambda objects: self._show_add_asset_window(
                                 self._add_robot_window, objects
                             ),
@@ -174,11 +199,24 @@ class Extension(omni.ext.IExt):
                                 self._add_camera_window, objects
                             ),
                         },
+                        {
+                            "show_fn": self._clicked_prim_is_robot_part,
+                            "name": {
+                                "Add Pose": [
+                                    {
+                                        "name": "From Tool",
+                                        "onclick_fn": lambda objects: asyncio.ensure_future(
+                                            self._create_pose_from_tool(objects)
+                                        ),
+                                    },
+                                ],
+                            },
+                        },
                     ],
                 },
                 "glyph": f"{extension_path}/data/icon.png",
             },
-            "CREATE",
+            "MENU",
         )
 
     def on_shutdown(self):
@@ -188,6 +226,9 @@ class Extension(omni.ext.IExt):
         self._add_tool_window.destroy()
         self._add_mesh_window.destroy()
         self._add_camera_window.destroy()
+        self._isaacsim_server_window.destroy()
+        self._robot_overlay.destroy()
+        self._pose_service.follow_stage(None)
         self._bridge_stage_event_sub = None
         if getattr(self, "_bridge_server", None) is not None:
             self._bridge_server.stop()
@@ -196,6 +237,7 @@ class Extension(omni.ext.IExt):
 
         action_registry = omni.kit.actions.core.get_action_registry()
         action_registry.deregister_action(self.ext_id, f"CreateUIExtension:{EXTENSION_TITLE}")
+        action_registry.deregister_action(self.ext_id, "ShowIsaacSimServerWindow")
 
         if self._window:
             self._window = None
@@ -265,8 +307,8 @@ class Extension(omni.ext.IExt):
         self.ui_builder.on_physics_step(step)
 
     def _on_bridge_stage_event(self, event):
-        """Rebuild the bridge's device registry and close the Add windows when the stage
-        is opened or closed.
+        """Rebuild the bridge's device registry, follow the opened stage's ghost objects and
+        close the Add windows when the stage is opened or closed.
 
         The device handles held by the bridge belong to the stage that was active
         when they were created; replacing the stage strands them. The registry is
@@ -281,6 +323,11 @@ class Extension(omni.ext.IExt):
                     self._bridge_server.restore_devices()
                 else:
                     self._bridge_server.reset_devices()
+            self._pose_service.follow_stage(
+                omni.usd.get_context().get_stage()
+                if event.type == int(StageEventType.OPENED)
+                else None
+            )
             for window in (
                 self._add_robot_window,
                 self._add_tool_window,
@@ -299,15 +346,59 @@ class Extension(omni.ext.IExt):
                 was on empty space; the stage's default prim is then the Attaching Prim, or the
                 stage root when the stage has none.
         """
+        window.show(self._clicked_prim_path(objects))
+
+    async def _create_pose_from_tool(self, objects: dict):
+        """Create a pose from the tool of the right-clicked robot, select the new ghost object, and
+        notify the outcome, a failure as a warning that stays until dismissed.
+
+        Args:
+            objects: Kit context-menu payload, as for :meth:`_show_add_asset_window`.
+        """
+        try:
+            ghost = await self._pose_service.create_pose_from_tool(self._clicked_prim_path(objects))
+        except HTTPException as error:
+            notification_manager.post_notification(
+                f"Adding a pose failed: {error.detail}",
+                hide_after_timeout=False,
+                status=notification_manager.NotificationStatus.WARNING,
+                button_infos=[notification_manager.NotificationButtonInfo("OK", on_complete=None)],
+            )
+            return
+        omni.usd.get_context().get_selection().set_selected_prim_paths([ghost["prim_path"]], True)
+        reach = "reachable" if ghost["reachable"] else "not reachable by the robot"
+        notification_manager.post_notification(f"Added pose {ghost['prim_path']} ({reach}).")
+
+    @staticmethod
+    def _clicked_prim_path(objects: dict) -> str:
+        """Return the path of the right-clicked prim in a Kit context-menu payload.
+
+        ``prim_list`` holds the right-clicked prims, as ``Usd.Prim`` or ``Sdf.Path``, and is
+        empty when the click was on empty space; the stage's default prim is then returned, or
+        the stage root when the stage has none.
+        """
         prim_list = objects.get("prim_list") or []
         if not prim_list:
             default_prim = omni.usd.get_context().get_stage().GetDefaultPrim()
-            attaching_prim_path = str(default_prim.GetPath()) if default_prim else "/"
-        elif isinstance(prim_list[0], Usd.Prim):
-            attaching_prim_path = str(prim_list[0].GetPath())
-        else:
-            attaching_prim_path = str(prim_list[0])
-        window.show(attaching_prim_path)
+            return str(default_prim.GetPath()) if default_prim else "/"
+        if isinstance(prim_list[0], Usd.Prim):
+            return str(prim_list[0].GetPath())
+        return str(prim_list[0])
+
+    @staticmethod
+    def _clicked_prim_is_robot_part(objects: dict) -> bool:
+        """Return whether the right-clicked prim in a Kit context-menu payload is part of a robot.
+
+        That is the robot prim, which stores its Synapse class name, or a prim under it, or a
+        robot's assembly Xform from Add Robot and anything in it, such as the robot's tool. Read
+        from the stage only, since Kit asks this synchronously every time the menu opens.
+        """
+        stage = omni.usd.get_context().get_stage()
+        return any(
+            stage.GetPrimAtPath(ancestor_path).HasAttribute(ROBOT_CLASS_NAME_ATTRIBUTE)
+            or stage.GetPrimAtPath(ancestor_path).HasRelationship(ASSEMBLY_ROBOT_RELATIONSHIP)
+            for ancestor_path in Sdf.Path(Extension._clicked_prim_path(objects)).GetAncestorsRange()
+        )
 
     def _on_stage_event(self, event):
         """Clean up physics subscription on stage open/close; forward event to UIBuilder."""

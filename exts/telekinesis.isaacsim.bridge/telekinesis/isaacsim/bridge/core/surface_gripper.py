@@ -555,10 +555,14 @@ class SurfaceGripper:
                         return {"done": True, "timed_out": False, **state}
                     continue
 
-                # Closed: gripped on every point. Open: found nothing in reach and
-                # gave up (the component drops back to Open once the retry
-                # interval runs out). Either way the close is over.
-                if state["status"] in ("Closed", "Open"):
+                # Open: found nothing in reach and gave up (the component drops
+                # back to Open once the retry interval runs out). Closed: gripped
+                # on every point -- but the component flips the status a physics
+                # step before its gripped-object list catches up, so Closed only
+                # counts once that list is filled.
+                if state["status"] == "Open" or (
+                    state["status"] == "Closed" and state["gripped_objects"]
+                ):
                     return {"done": True, "timed_out": False, **state}
                 if state["gripped_objects"]:
                     settled_frames = (

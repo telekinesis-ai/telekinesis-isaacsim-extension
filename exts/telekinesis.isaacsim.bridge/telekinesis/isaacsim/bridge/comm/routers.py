@@ -41,6 +41,7 @@ from .dependencies import (
     get_general_service,
     get_lidar_service,
     get_lightbeam_service,
+    get_pose_service,
     get_prim_service,
     get_stage_service,
     get_surface_gripper_service,
@@ -326,6 +327,12 @@ async def stream_articulation_state(websocket: WebSocket, articulation_id: str):
     """State push stream: the client opens one connection bound to this articulation and
     the server sends one frame per simulator update, shaped exactly like the
     ``articulation_state`` getter's response (radians). The client sends nothing.
+
+    Each frame carries ``simulation_time``, the simulated seconds since the timeline
+    last started playing. A client that plays a trajectory against this stream
+    advances it by the change in ``simulation_time`` rather than by wall-clock time,
+    so the motion keeps its planned path and accelerations when the simulator runs
+    slower than real time.
 
     Nothing is sent while the timeline is stopped or the articulation's handle is
     otherwise unreadable; the connection stays open and frames resume on play. A
@@ -877,6 +884,17 @@ async def set_solve_articulation_contact_last(
     on the next play and are not saved to disk. Returns 409 when no stage is open.
     """
     await stage_service.set_solve_articulation_contact_last(req.enabled)
+
+
+@stage.put("/physics/cpu_simulation", summary="Set CPU Simulation")
+async def set_cpu_simulation(stage_service=Depends(get_stage_service)):
+    """Stop simulation and switch physics to the CPU on all physics scenes.
+
+    Selects the CPU device, disables GPU dynamics and uses the MBP broadphase.
+    Creates /physicsScene if needed; leaves the timeline stopped. Changes apply
+    on the next play and are not saved to disk. Returns 409 when no stage is open.
+    """
+    await stage_service.set_cpu_simulation()
 
 
 @stage.put("/viewport/guides", summary="Set Guides Visible")
@@ -2296,9 +2314,20 @@ async def clear_ghost_objects():
 
 
 @teaching.get("/ghost-objects", summary="List Ghost Objects")
-async def list_ghost_objects():
-    """Mirrored from the spec; not yet implemented."""
-    not_implemented()
+async def list_ghost_objects(
+    robot_prim_path: str | None = None,
+    pose_service=Depends(get_pose_service),
+):
+    """The ghost objects of the open stage, optionally only those of one robot.
+
+    Each ghost has its ``name``, ``prim_path``, ``robot_prim_path``, its ``pose``
+    ``[x, y, z, rx, ry, rz]`` in its robot's base frame (metres and extrinsic XYZ Euler
+    degrees, the pose to move the robot's default TCP to), the stored solution
+    ``joint_names`` and ``joint_positions`` (radians), and whether it is ``reachable``.
+    Needs the Telekinesis Isaac Sim Server for the robots' base frames: 422 when a robot is
+    not connected or the server no longer knows it, 503 when the server cannot be reached.
+    """
+    return await pose_service.list_ghost_objects(robot_prim_path)
 
 
 @teaching.get("/ghost-objects/export", summary="Export Ghost Objects")

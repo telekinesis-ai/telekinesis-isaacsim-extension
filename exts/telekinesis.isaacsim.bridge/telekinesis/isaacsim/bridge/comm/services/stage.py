@@ -178,6 +178,33 @@ class StageService:
                     custom=True,
                 ).Set(enabled)
 
+    async def set_cpu_simulation(self) -> None:
+        """Stop simulation and switch physics to the CPU on every physics scene.
+
+        Selects the CPU simulation device, disables GPU dynamics and uses the MBP
+        broadphase on every physics scene. Creates ``/physicsScene`` if none
+        exists. The timeline remains stopped; its next play creates the solver
+        with these settings. Scene changes are authored in the current edit layer
+        without saving it. Raises 409 if no stage is open.
+        """
+        import omni.kit.app
+        import omni.timeline
+        from isaacsim.core.simulation_manager import SimulationManager
+        from pxr import PhysxSchema, UsdPhysics
+
+        stage = self.stage()
+        # PhysX reads these scene settings when simulation is initialized.
+        omni.timeline.get_timeline_interface().stop()
+        await omni.kit.app.get_app().next_update_async()
+        scenes = [prim for prim in stage.Traverse() if prim.IsA(UsdPhysics.Scene)]
+        if not scenes:
+            scenes = [UsdPhysics.Scene.Define(stage, "/physicsScene").GetPrim()]
+        SimulationManager.set_device("cpu")
+        for prim in scenes:
+            scene_api = PhysxSchema.PhysxSceneAPI.Apply(prim)
+            scene_api.CreateEnableGPUDynamicsAttr().Set(False)
+            scene_api.CreateBroadphaseTypeAttr().Set("MBP")
+
     def set_guides_visible(self, visible: bool) -> None:
         """Show or hide guide-purpose prims, such as the TCP marker axes, in the viewport.
 

@@ -816,6 +816,18 @@
   "urdf/tools/parallel_grippers": [
     {
       "manufacturer": "OnRobot",
+      "model": "onrobot2fg14",
+      "identifier": "onrobot/onrobot2fg14",
+      "bundle": "urdf/tools/parallel_grippers/onrobot/onrobot2fg14.zip"
+    },
+    {
+      "manufacturer": "OnRobot",
+      "model": "onrobot2fg7",
+      "identifier": "onrobot/onrobot2fg7",
+      "bundle": "urdf/tools/parallel_grippers/onrobot/onrobot2fg7.zip"
+    },
+    {
+      "manufacturer": "OnRobot",
       "model": "RG2",
       "identifier": "onrobot/onrobotrg2",
       "bundle": "urdf/tools/parallel_grippers/onrobot/onrobotrg2.zip"
@@ -843,6 +855,12 @@
       "model": "Hand-E",
       "identifier": "robotiq/robotiqhande",
       "bundle": "urdf/tools/parallel_grippers/robotiq/robotiqhande.zip"
+    },
+    {
+      "manufacturer": "Robotiq",
+      "model": "robotiqhandec10",
+      "identifier": "robotiq/robotiqhandec10",
+      "bundle": "urdf/tools/parallel_grippers/robotiq/robotiqhandec10.zip"
     },
     {
       "manufacturer": "SCHUNK",
@@ -875,14 +893,6 @@
       "model": "piCOBOT Electric",
       "identifier": "piab/piabpicobotelectric",
       "bundle": "urdf/tools/suction_grippers/piab/piabpicobotelectric.zip"
-    }
-  ],
-  "usd/attachments": [
-    {
-      "manufacturer": null,
-      "model": "realsense regular mount",
-      "identifier": "realsense_regular_mount",
-      "bundle": "usd/attachments/realsense_regular_mount.zip"
     }
   ],
   "usd/cameras/RealSense": [
@@ -1784,6 +1794,18 @@
   "usd/tools/parallel_grippers": [
     {
       "manufacturer": "OnRobot",
+      "model": "onrobot2fg14",
+      "identifier": "onrobot/onrobot2fg14",
+      "bundle": "usd/tools/parallel_grippers/onrobot/onrobot2fg14.zip"
+    },
+    {
+      "manufacturer": "OnRobot",
+      "model": "onrobot2fg7",
+      "identifier": "onrobot/onrobot2fg7",
+      "bundle": "usd/tools/parallel_grippers/onrobot/onrobot2fg7.zip"
+    },
+    {
+      "manufacturer": "OnRobot",
       "model": "RG2",
       "identifier": "onrobot/onrobotrg2",
       "bundle": "usd/tools/parallel_grippers/onrobot/onrobotrg2.zip"
@@ -1811,6 +1833,12 @@
       "model": "Hand-E",
       "identifier": "robotiq/robotiqhande",
       "bundle": "usd/tools/parallel_grippers/robotiq/robotiqhande.zip"
+    },
+    {
+      "manufacturer": "Robotiq",
+      "model": "robotiqhandec10",
+      "identifier": "robotiq/robotiqhandec10",
+      "bundle": "usd/tools/parallel_grippers/robotiq/robotiqhandec10.zip"
     },
     {
       "manufacturer": "SCHUNK",

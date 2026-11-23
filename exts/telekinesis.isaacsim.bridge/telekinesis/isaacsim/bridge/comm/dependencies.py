@@ -63,3 +63,8 @@ def get_conveyor_service(request: Request):
 def get_lightbeam_service(request: Request):
     """The shared :class:`..services.lightbeams.LightBeamService`."""
     return request.app.state.lightbeam_service
+
+
+def get_pose_service(request: Request):
+    """The shared :class:`..services.poses.PoseService`."""
+    return request.app.state.pose_service
