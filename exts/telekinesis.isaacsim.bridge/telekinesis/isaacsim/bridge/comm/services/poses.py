@@ -322,17 +322,13 @@ class PoseService:
                 solution["joint_positions"][0],
             )
         else:
-            link_world_transforms = await self.robot_link_world_transforms(
-                robot_prim_path, joints
-            )
+            link_world_transforms = await self.robot_link_world_transforms(robot_prim_path, joints)
             pose_world = link_world_transforms[robot["default_tcp"]]
             pose = _pose_in_frame(pose_world, base_world)
             joint_names, joint_positions = joints["joint_names"], joints["joint_positions"]
             link_paths = meshes.find_link_paths(stage, robot_prim_path, link_world_transforms)
             for link_name, link_path in link_paths.items():
-                link_world_now = omni.usd.get_world_transform_matrix(
-                    stage.GetPrimAtPath(link_path)
-                )
+                link_world_now = omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(link_path))
                 # Merged in this frame, the link's meshes land where the link stands at
                 # ``joints``, expressed in the pose's frame.
                 merge_frame_world = (

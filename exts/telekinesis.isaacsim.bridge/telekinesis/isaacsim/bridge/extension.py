@@ -443,8 +443,7 @@ class Extension(omni.ext.IExt):
         articulation_service = self._bridge_server.articulation_service
         robot_id = articulation_service.find_device_id(robot_prim_path)
         return (
-            robot_id is not None
-            and articulation_service.find_tool_on_robot(robot_id) is not None
+            robot_id is not None and articulation_service.find_tool_on_robot(robot_id) is not None
         )
 
     def _on_stage_event(self, event):

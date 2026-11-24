@@ -270,9 +270,9 @@ def create_taught_poses(stage: Usd.Stage) -> None:
 
         pose_prim = pose_mesh.GetPrim()
         pose_prim.CreateRelationship(POSE_ROBOT_RELATIONSHIP).SetTargets([Sdf.Path(ROBOT_PATH)])
-        pose_prim.CreateAttribute(
-            POSE_IN_BASE_FRAME_ATTRIBUTE, Sdf.ValueTypeNames.DoubleArray
-        ).Set(taught_pose["pose"])
+        pose_prim.CreateAttribute(POSE_IN_BASE_FRAME_ATTRIBUTE, Sdf.ValueTypeNames.DoubleArray).Set(
+            taught_pose["pose"]
+        )
         pose_prim.CreateAttribute(POSE_JOINT_NAMES_ATTRIBUTE, Sdf.ValueTypeNames.StringArray).Set(
             POSE_JOINT_NAMES
         )

@@ -72,9 +72,7 @@ class RobotOverlay:
         self._pose_service.on_pose_solved = None
         self._remove()
 
-    def show_joint_positions(
-        self, robot_prim_path: str, tool_prim_path: str | None, joints: dict
-    ):
+    def show_joint_positions(self, robot_prim_path: str, tool_prim_path: str | None, joints: dict):
         """Draw the robot at ``robot_prim_path`` and its tool at ``joints`` instead of the
         selected pose's solution; returns at once.
 
@@ -135,8 +133,11 @@ class RobotOverlay:
             try:
                 if shown_joint_positions is not None:
                     robot_prim_path, tool_prim_path, joints = shown_joint_positions
-                    result = robot_prim_path, await self._pose_service.robot_link_world_transforms(
-                        robot_prim_path, joints
+                    result = (
+                        robot_prim_path,
+                        await self._pose_service.robot_link_world_transforms(
+                            robot_prim_path, joints
+                        ),
                     )
                 elif pose_path is not None:
                     result = await self._pose_service.link_world_transforms(pose_path)
