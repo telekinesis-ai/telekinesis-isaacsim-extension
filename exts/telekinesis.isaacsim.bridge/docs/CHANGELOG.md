@@ -14,6 +14,8 @@
   picks at the poses named `pick_pose*` and places the objects in a row from `start_place_pose`.
 - A reachable pose's ghost is tinted the Add Tool preview's blue (`#41d1ff`) instead of green;
   an unreachable one stays red. A pose saved before turns blue when it is next solved.
+- The robot drawn reaching the selected pose is the see-through blue of the Add window previews
+  instead of purple.
 - Loading a robot on the Telekinesis Isaac Sim Server also stores the link its Synapse class
   measures poses from as `telekinesis:robot:base_frame` on the robot prim. `GET /teaching/poses`
   reads it from there, so listing poses no longer needs the server once the robot stores it.

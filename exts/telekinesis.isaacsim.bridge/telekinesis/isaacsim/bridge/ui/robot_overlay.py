@@ -8,18 +8,13 @@ import omni.usd
 from fastapi import HTTPException
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
 
-from ..comm.services.poses import (
-    POSE_REACHABLE_ATTRIBUTE,
-    PoseService,
-    define_ghost_material,
-)
+from ..comm.services.poses import POSE_REACHABLE_ATTRIBUTE, PoseService
 from ..core import meshes
+from . import asset_ghost
 
 OVERLAY_ROOT_PATH = "/TelekinesisRobotOverlay"
 OVERLAY_MATERIAL_PATH = f"{OVERLAY_ROOT_PATH}/Material"
 OVERLAY_LINKS_PATH = f"{OVERLAY_ROOT_PATH}/Links"
-# robot overlay colour (#A936DA).
-OVERLAY_COLOR = Gf.Vec3f(0xA9, 0x36, 0xDA) / 255.0
 
 
 # It reacts to selection and solve events on its own, so destroy() is all a caller needs.
@@ -30,7 +25,8 @@ class RobotOverlay:  # pylint: disable=too-few-public-methods
     drawn with every link where the pose's stored solution puts it, so the arm visibly reaches
     the pose; it follows the pose when the pose is solved again, e.g. while it is dragged. It
     is hidden while the pose is unreachable and whenever no single pose is selected. Each link
-    is the link's own visible meshes merged into one, in overlay colour.
+    is the link's own visible meshes merged into one, in the see-through blue of the Add window
+    previews.
 
     The overlay is authored only in the stage's session layer, under :data:`OVERLAY_ROOT_PATH`,
     so it is never saved and never marks the stage modified; the Stage window does not list it,
@@ -141,7 +137,7 @@ class RobotOverlay:  # pylint: disable=too-few-public-methods
         stage.RemovePrim(OVERLAY_ROOT_PATH)
         root = UsdGeom.Xform.Define(stage, OVERLAY_ROOT_PATH)
         omni.usd.editor.set_hide_in_stage_window(root.GetPrim(), True)
-        material = define_ghost_material(stage, Sdf.Path(OVERLAY_MATERIAL_PATH), OVERLAY_COLOR)
+        material = asset_ghost.define_preview_material(stage, OVERLAY_MATERIAL_PATH)
         UsdShade.MaterialBindingAPI.Apply(root.GetPrim()).Bind(
             material, UsdShade.Tokens.strongerThanDescendants
         )

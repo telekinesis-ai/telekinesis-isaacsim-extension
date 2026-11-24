@@ -14,6 +14,39 @@ GHOST_ASSET_PATH = f"{GHOST_ROOT_PATH}/Asset"
 GHOST_MATERIAL_PATH = f"{GHOST_ROOT_PATH}/Material"
 
 
+def define_preview_material(stage: Usd.Stage, material_path: str) -> UsdShade.Material:
+    """Define the see-through, glowing #41d1ff material of the bridge's previews at
+    ``material_path`` in the stage's current edit target, and return it.
+
+    It is the extension's own ``ghost.mdl``, found by its path in the installed extension, so it
+    is meant for the session layer only: a saved stage would not find it on another install.
+    Authored with UsdShade rather than the CreateMdlMaterialPrim command, which would record the
+    material in the undo history.
+    """
+    extension_path = (
+        omni.kit.app.get_app()
+        .get_extension_manager()
+        .get_extension_path_by_module("telekinesis.isaacsim.bridge")
+    )
+    material_url = Path(
+        extension_path, "telekinesis", "isaacsim", "bridge", "assets", "ghost.mdl"
+    ).as_posix()
+    material = UsdShade.Material.Define(stage, material_path)
+    shader = UsdShade.Shader.Define(stage, f"{material_path}/Shader")
+    shader.SetSourceAsset(Sdf.AssetPath(material_url), "mdl")
+    shader.SetSourceAssetSubIdentifier("voltest_02", "mdl")
+    # MDL reads colours as linear, the hex is sRGB. The glow strength is the one Isaac Sim's
+    # conveyor builder gives its preview.
+    preview_color = Gf.ConvertDisplayToLinear(Gf.Vec3f(0x41, 0xD1, 0xFF) / 255.0)
+    shader.CreateInput("transmission_color", Sdf.ValueTypeNames.Color3f).Set(preview_color)
+    shader.CreateInput("emission_color", Sdf.ValueTypeNames.Color3f).Set(preview_color)
+    shader.CreateInput("emissive_scale", Sdf.ValueTypeNames.Float).Set(300.0)
+    shader_output = shader.CreateOutput("out", Sdf.ValueTypeNames.Token)
+    material.CreateSurfaceOutput("mdl").ConnectToSource(shader_output)
+    material.CreateVolumeOutput("mdl").ConnectToSource(shader_output)
+    return material
+
+
 class AssetGhost:
     """A see-through copy of one asset that shows where it would land,
     without being part of the scene.
@@ -32,16 +65,6 @@ class AssetGhost:
         ghost.remove()
     """
 
-    def __init__(self):
-        extension_path = (
-            omni.kit.app.get_app()
-            .get_extension_manager()
-            .get_extension_path_by_module("telekinesis.isaacsim.bridge")
-        )
-        self._material_url = Path(
-            extension_path, "telekinesis", "isaacsim", "bridge", "assets", "ghost.mdl"
-        ).as_posix()
-
     def show(self, usd_path: Path):
         """Show the USD asset at ``usd_path`` as the ghost, replacing the one shown.
 
@@ -53,21 +76,7 @@ class AssetGhost:
             root = UsdGeom.Xform.Define(stage, GHOST_ROOT_PATH)
             omni.usd.editor.set_hide_in_stage_window(root.GetPrim(), True)
 
-            # Authored with UsdShade rather than the CreateMdlMaterialPrim command, which
-            # would record the material in the undo history.
-            material = UsdShade.Material.Define(stage, GHOST_MATERIAL_PATH)
-            shader = UsdShade.Shader.Define(stage, f"{GHOST_MATERIAL_PATH}/Shader")
-            shader.SetSourceAsset(Sdf.AssetPath(self._material_url), "mdl")
-            shader.SetSourceAssetSubIdentifier("voltest_02", "mdl")
-            # Tinted and glowing #41d1ff; MDL reads colours as linear, the hex is sRGB.
-            # The glow strength is the one Isaac Sim's conveyor builder gives its preview.
-            ghost_color = Gf.ConvertDisplayToLinear(Gf.Vec3f(0x41, 0xD1, 0xFF) / 255.0)
-            shader.CreateInput("transmission_color", Sdf.ValueTypeNames.Color3f).Set(ghost_color)
-            shader.CreateInput("emission_color", Sdf.ValueTypeNames.Color3f).Set(ghost_color)
-            shader.CreateInput("emissive_scale", Sdf.ValueTypeNames.Float).Set(300.0)
-            shader_output = shader.CreateOutput("out", Sdf.ValueTypeNames.Token)
-            material.CreateSurfaceOutput("mdl").ConnectToSource(shader_output)
-            material.CreateVolumeOutput("mdl").ConnectToSource(shader_output)
+            material = define_preview_material(stage, GHOST_MATERIAL_PATH)
             UsdShade.MaterialBindingAPI.Apply(root.GetPrim()).Bind(
                 material, UsdShade.Tokens.strongerThanDescendants
             )
