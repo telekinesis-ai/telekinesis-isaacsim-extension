@@ -50,7 +50,8 @@ class PoseService:
     """Creates the poses a robot is taught, and solves them again when they are moved.
 
     A pose is shown as a ghost of the tool. Add Pose ▸ From Tool creates one from a tool mounted on
-    a robot, where the tool stands now.
+    a robot, where the tool stands now; Add Pose ▸ From Joint Positions creates one where the tool
+    is when the robot stands at given joint positions.
 
     A pose is a single ``Mesh`` prim: the tool's visible meshes merged into the frame of
     the robot's default TCP, so the pose's origin is where that TCP has to go for the real tool
@@ -165,6 +166,32 @@ class PoseService:
                 )
         return class_names
 
+    async def find_robot_and_tool(self, robot_part_prim_path: str) -> tuple[str, str]:
+        """Return the prim paths of the robot ``robot_part_prim_path`` is part of and of its
+        tool, as ``(robot_prim_path, tool_prim_path)``.
+
+        Args:
+            robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
+
+        Raises:
+            HTTPException: 422 if the prim is part of no robot added with Add Robot, or the
+                robot carries no tool added with Add Tool.
+        """
+        articulation_id = await self._articulation_service.find_robot_for_prim(robot_part_prim_path)
+        if articulation_id is None:
+            raise HTTPException(
+                422,
+                f"'{robot_part_prim_path}' is part of no robot. Right-click a robot added with "
+                "Add Robot, or its tool.",
+            )
+        robot_prim_path = self._articulation_service.get_device(articulation_id).prim_path
+        tool_prim_path = self._articulation_service.find_tool_on_robot(articulation_id)
+        if tool_prim_path is None:
+            raise HTTPException(
+                422, f"'{robot_prim_path}' has no tool. Attach one with Add Tool first."
+            )
+        return robot_prim_path, tool_prim_path
+
     async def create_pose_from_tool(self, robot_part_prim_path: str) -> dict:
         """Create a pose from the tool mounted on a robot: a pose of the whole tool,
         where the tool stands now.
@@ -186,25 +213,46 @@ class PoseService:
                 server, the robot does not match its class, or the tool has no meshes; 503 if
                 the server cannot be reached.
         """
+        return await self._create_pose(robot_part_prim_path, None)
+
+    async def create_pose_from_joint_positions(
+        self, robot_part_prim_path: str, joints: dict
+    ) -> dict:
+        """Create a pose of the whole tool mounted on a robot, where the tool is when the robot
+        stands at ``joints``.
+
+        The pose is placed at the robot's default TCP in the forward kinematics of ``joints``,
+        computed by the Telekinesis Isaac Sim Server, and stores ``joints`` as its solution, so
+        it is reachable. The forward kinematics is computed before anything is written, so a
+        failure leaves the stage unchanged.
+
+        Args:
+            robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
+            joints: ``{"joint_names": [...], "joint_positions": [...]}`` in radians, naming
+                every joint of the robot.
+
+        Returns:
+            ``{"prim_path": ..., "reachable": True}`` of the new pose.
+
+        Raises:
+            HTTPException: 422 if the stage is not in metres, the prim is part of no robot, the
+                robot has no tool, the robot stores no class name or is no longer known to the
+                server, the robot does not match its class, the tool has no meshes, or the server
+                rejects ``joints``, e.g. for a joint missing or outside its limits; 503 if the
+                server cannot be reached.
+        """
+        return await self._create_pose(robot_part_prim_path, joints)
+
+    async def _create_pose(self, robot_part_prim_path: str, joints: dict | None) -> dict:
+        """Create a pose of the tool mounted on a robot, as :meth:`create_pose_from_tool` when
+        ``joints`` is ``None`` and as :meth:`create_pose_from_joint_positions` otherwise."""
         stage = omni.usd.get_context().get_stage()
         if UsdGeom.GetStageMetersPerUnit(stage) != 1.0:
             # The bridge loads robots at metre scale whatever the stage unit, so a pose read in
             # another unit would not match the robot.
             raise HTTPException(422, "Poses need a stage in metres (metersPerUnit = 1).")
 
-        articulation_id = await self._articulation_service.find_robot_for_prim(robot_part_prim_path)
-        if articulation_id is None:
-            raise HTTPException(
-                422,
-                f"'{robot_part_prim_path}' is part of no robot. Right-click a robot added with "
-                "Add Robot, or its tool.",
-            )
-        robot_prim_path = self._articulation_service.get_device(articulation_id).prim_path
-        tool_prim_path = self._articulation_service.find_tool_on_robot(articulation_id)
-        if tool_prim_path is None:
-            raise HTTPException(
-                422, f"'{robot_prim_path}' has no tool. Attach one with Add Tool first."
-            )
+        robot_prim_path, tool_prim_path = await self.find_robot_and_tool(robot_part_prim_path)
         robot_id = await self._connected_robot_id(stage, robot_prim_path)
         robot = await self._describe_robot(robot_id)
 
@@ -214,6 +262,8 @@ class PoseService:
         base_world = _world_transform_of_robot_frame(
             stage, robot_prim_path, robot["base_frame"], robot["class_name"]
         )
+        # The tool is fixed to the robot, so its meshes in the current default TCP's frame are
+        # also its meshes in the default TCP's frame at any joint positions.
         points, face_vertex_counts, face_vertex_indices = meshes.merge_meshes_in_frame(
             stage, tool_prim_path, default_tcp_world
         )
@@ -222,12 +272,25 @@ class PoseService:
                 422, f"'{tool_prim_path}' has no visible meshes to show as a ghost."
             )
 
-        pose = _pose_in_frame(default_tcp_world, base_world)
-        solution = await _call_server(
-            self._server_client.inverse_kinematics(
-                robot_id, [pose], self._current_joints(stage, articulation_id, robot_prim_path)
+        if joints is None:
+            pose_world = default_tcp_world
+            pose = _pose_in_frame(pose_world, base_world)
+            solution = await _call_server(
+                self._server_client.inverse_kinematics(
+                    robot_id, [pose], await self.current_joint_positions(robot_prim_path)
+                )
             )
-        )
+            joint_names, joint_positions = (
+                solution["joint_names"],
+                solution["joint_positions"][0],
+            )
+        else:
+            link_world_transforms = await self.robot_link_world_transforms(
+                robot_prim_path, joints
+            )
+            pose_world = link_world_transforms[robot["default_tcp"]]
+            pose = _pose_in_frame(pose_world, base_world)
+            joint_names, joint_positions = joints["joint_names"], joints["joint_positions"]
 
         poses_path = asset_loader.path_beside_clear_of_rigid_bodies(
             stage, robot_prim_path, POSES_GROUP_NAME
@@ -240,7 +303,7 @@ class PoseService:
         pose_mesh.CreateFaceVertexCountsAttr(face_vertex_counts)
         pose_mesh.CreateFaceVertexIndicesAttr(face_vertex_indices)
         local_transform = Gf.Transform(
-            default_tcp_world
+            pose_world
             * omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(poses_path)).GetInverse()
         )
         pose_mesh.AddTranslateOp().Set(local_transform.GetTranslation())
@@ -251,9 +314,7 @@ class PoseService:
 
         pose_prim = pose_mesh.GetPrim()
         pose_prim.CreateRelationship(POSE_ROBOT_RELATIONSHIP).SetTargets([robot_prim_path])
-        reachable = _write_pose_solution(
-            stage, pose_prim, solution["joint_names"], solution["joint_positions"][0]
-        )
+        reachable = _write_pose_solution(stage, pose_prim, joint_names, joint_positions)
         # Recorded before the creation's own change notice is handled, so that notice does not
         # solve the new pose a second time.
         self._solved_poses[pose_prim.GetPath()] = pose
@@ -345,16 +406,35 @@ class PoseService:
         if not robot_targets or not stage.GetPrimAtPath(robot_targets[0]):
             raise HTTPException(422, f"The robot of {pose_path} is not in the stage.")
         robot_prim_path = robot_targets[0].pathString
-        robot_id = await self._connected_robot_id(stage, robot_prim_path)
         joints = {
             "joint_names": list(pose_prim.GetAttribute(POSE_JOINT_NAMES_ATTRIBUTE).Get()),
             "joint_positions": [float(position) for position in joint_positions],
         }
+        return robot_prim_path, await self.robot_link_world_transforms(robot_prim_path, joints)
+
+    async def robot_link_world_transforms(
+        self, robot_prim_path: str, joints: dict
+    ) -> dict[str, Gf.Matrix4d]:
+        """Return the world transform of each link of the robot at ``robot_prim_path`` when it
+        stands at ``joints``, by link name, relative to where the robot stands now.
+
+        Args:
+            robot_prim_path: The robot prim, which stores its Synapse class name.
+            joints: ``{"joint_names": [...], "joint_positions": [...]}`` in radians, naming
+                every joint of the robot.
+
+        Raises:
+            HTTPException: 422 if the robot stores no class name or is no longer known to the
+                server, does not match its class, the server rejects ``joints``, or the stage
+                changes meanwhile; 503 if the server cannot be reached.
+        """
+        stage = self._stage
+        robot_id = await self._connected_robot_id(stage, robot_prim_path)
         base_world = await self._base_frame_world(stage, robot_prim_path)
         link_poses = await _call_server(self._server_client.link_poses(robot_id, joints))
         if stage is not self._stage:
-            raise HTTPException(422, "The stage changed while the robot overlay was computed.")
-        return robot_prim_path, {
+            raise HTTPException(422, "The stage changed while the robot's links were computed.")
+        return {
             link_name: robot_assembler.offset_matrix(
                 models.Transformation(translation=pose[:3], rotation=pose[3:])
             )
@@ -486,8 +566,7 @@ class PoseService:
                 "joint_positions": list(stored_positions),
             }
         else:
-            articulation_id = await self._articulation_service.find_robot_for_prim(robot_prim_path)
-            seed = self._current_joints(stage, articulation_id, robot_prim_path)
+            seed = await self.current_joint_positions(robot_prim_path)
         solution = await _call_server(
             self._server_client.inverse_kinematics(robot_id, [pose], seed)
         )
@@ -565,20 +644,22 @@ class PoseService:
             )
         return self._robot_descriptions[robot_id]
 
-    def _current_joints(
-        self, stage: Usd.Stage, articulation_id: str | None, robot_prim_path: str
-    ) -> dict:
-        """Return the robot's current joints in radians, as an IK seed.
+    async def current_joint_positions(self, robot_prim_path: str) -> dict:
+        """Return the current joints of the robot at ``robot_prim_path`` as
+        ``{"joint_names": [...], "joint_positions": [...]}``, in radians and metres.
 
-        The seed keeps the solution on the robot's current arm configuration; without it the
-        solver may return another configuration reaching the same pose. While the simulation
-        runs, the joints of the robot's registered articulation are read from it. Otherwise they
+        Used as an IK seed, which keeps the solution on the robot's current arm configuration;
+        without it the solver may return another configuration reaching the same pose. While
+        the simulation runs, the joints of the robot's registered articulation are read from it,
+        which include those of a gripper merged into it. Otherwise they
         are the joint states stored in the stage, which is where the robot stands while the
         simulation is stopped: PhysX's ``state:<axis>:physics:position`` on every joint under the
         robot, in degrees for a revolute joint (USD physics' angular unit) and metres for a
         prismatic one, and 0, the schema's fallback, where none is stored. The server ignores
         names that are not joints of its robot.
         """
+        stage = self._stage
+        articulation_id = await self._articulation_service.find_robot_for_prim(robot_prim_path)
         state = (
             None
             if articulation_id is None

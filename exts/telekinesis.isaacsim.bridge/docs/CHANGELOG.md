@@ -1,5 +1,11 @@
 # Changelog
 ## [0.11.1] - 2026-11-23
+### Added
+- Right-click a robot → **Telekinesis Isaac Sim Bridge ▸ Add Pose ▸ From Joint Positions** opens a
+  window with one slider per robot joint. The robot and its tool are drawn see-through at the
+  sliders' joints, and **Add** creates a pose where the tool is at those joints, storing them as
+  its solution. The new pose is hidden unless **Pose Visible After Add** is checked.
+
 ### Changed
 - The Telekinesis Isaac Sim Server window checks the server each time it is opened, not only on
   **Connect**, so a server stopped since the last Connect shows as disconnected. Its status is

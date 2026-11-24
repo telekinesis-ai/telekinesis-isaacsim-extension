@@ -231,6 +231,13 @@ running at `http://127.0.0.1:8770`.
    ghost of the whole tool appears where the tool stands, as `<tool>_Pose` in a `poses` Xform
    beside the robot, and is selected. It is blue (`#41d1ff`, as the Add Tool preview) when the
    robot can reach it and red when it cannot.
+
+   To teach a pose by joint positions instead, choose **Add Pose ▸ From Joint Positions**. A
+   window opens with one slider per joint (degrees, or metres for a prismatic joint), bounded by
+   the joint limits and starting at the robot's current joints. Moving a slider draws the robot
+   and its tool see-through at those joints. **Add** creates the `<tool>_Pose` where the tool is
+   at those joints and stores them as its solution; the new pose is hidden (its eye icon off)
+   unless **Pose Visible After Add** is checked. The window stays open for the next pose.
 3. **Place it.** Rename the pose, move it with the viewport gizmo or the Transform fields, or
    duplicate it. While one pose is selected and reachable, the robot is drawn see-through in
    the pose's solution, reaching it; the drawing is never saved and disappears when the pose
