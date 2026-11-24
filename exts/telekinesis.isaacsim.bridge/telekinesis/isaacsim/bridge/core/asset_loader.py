@@ -234,7 +234,8 @@ async def _reference_asset_at(stage, asset_path, dest_prim_path):
     What is parked is the outermost prim this call creates: the asset's prim, or the
     new parent it is loaded into, so the parent arrives clear of the robots beside it
     and the asset sits at its origin. A parent that already exists, such as the
-    ``<model>_assembly`` Xform Add Robot places first, keeps its placement.
+    ``<model>_assembly`` Xform Add Robot places first, keeps its placement, and the
+    asset is parked inside it.
     """
     app = omni.kit.app.get_app()
     omni.timeline.get_timeline_interface().stop()
@@ -363,28 +364,32 @@ def parking_shift(stage, bounds, dest_prim_path):
     colliders around the world origin are not a prop it was put on.
 
     Overlap is measured between axis-aligned world bounds, so a collider that only
-    meets the bounds of a robot's arm lifts the whole robot. Only robots beside the new
-    asset are parked against.
+    meets the bounds of a robot's arm lifts the whole robot. The robots parked against
+    are those beside the new asset or beside any prim it lies in, each measured with
+    the prim beside it that holds it, such as its whole assembly with its tool.
     """
     gap_metres = 0.1
 
     dest_path = Sdf.Path(dest_prim_path)
-    parent = stage.GetPrimAtPath(dest_path.GetParentPath())
     cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
     xform_cache = UsdGeom.XformCache()
 
     occupied_by_robots = Gf.Range3d()
-    for sibling in parent.GetChildren():
-        # Measured whole rather than from the articulation root down: which prim of a
-        # robot carries the root API is up to whoever authored it, and on an asset
-        # that puts it on the root joint that prim bounds nothing.
-        if sibling.GetPath() == dest_path or not any(
-            p.HasAPI(UsdPhysics.ArticulationRootAPI) for p in Usd.PrimRange(sibling)
-        ):
-            continue
-        occupied_by_robots = Gf.Range3d.GetUnion(
-            occupied_by_robots, cache.ComputeWorldBound(sibling).ComputeAlignedRange()
-        )
+    # Beside every prim the asset lies in too: a robot loaded into an assembly Xform placed
+    # beforehand, as Add Robot does, has no robot beside it, while the robots of the other
+    # assemblies stand beside that Xform.
+    for path in dest_path.GetAncestorsRange():
+        for sibling in stage.GetPrimAtPath(path.GetParentPath()).GetChildren():
+            # Measured whole rather than from the articulation root down: which prim of a
+            # robot carries the root API is up to whoever authored it, and on an asset
+            # that puts it on the root joint that prim bounds nothing.
+            if sibling.GetPath() == path or not any(
+                p.HasAPI(UsdPhysics.ArticulationRootAPI) for p in Usd.PrimRange(sibling)
+            ):
+                continue
+            occupied_by_robots = Gf.Range3d.GetUnion(
+                occupied_by_robots, cache.ComputeWorldBound(sibling).ComputeAlignedRange()
+            )
 
     # The prop is searched whole rather than below the parent: an asset authors its
     # colliders wherever it likes, such as a table whose tabletop collider sits in a

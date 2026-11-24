@@ -30,7 +30,9 @@ class AddRobotWindow(AddAssetWindow):
     along +X clear of the robots beside it and lifted onto the colliders of the prop
     it stands in. It enters the result in the fields, which stay editable. Add puts
     the robot where the ghost stands, except that a robot that would stand inside a
-    collider of the prop is still lifted onto it. The assembly holds everything Add
+    collider of the prop is still lifted onto it, and one that would overlap another
+    robot is still moved along +X clear of it; either move shifts the robot inside its
+    assembly, away from the assembly's origin. The assembly holds everything Add
     Tool and Add Mesh later attach to the robot, so moving or deleting it takes them
     along. It targets the robot through ``telekinesis:assemblyRobot``, so Add Tool
     and Add Mesh on the assembly or on anything in it attach to the robot. The
