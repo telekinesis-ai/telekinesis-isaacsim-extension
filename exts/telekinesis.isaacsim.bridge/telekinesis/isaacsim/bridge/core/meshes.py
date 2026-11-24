@@ -1,10 +1,47 @@
 # SPDX-License-Identifier: Apache-2.0
 """Merging a prim's meshes into one mesh, as poses and the robot overlay draw them."""
 
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 
 import numpy as np
 from pxr import Gf, Sdf, Usd, UsdGeom, Vt
+
+
+def find_link_paths(
+    stage: Usd.Stage, robot_prim_path: str, link_names: Collection[str]
+) -> dict[str, Sdf.Path]:
+    """Return the prim of each link of the robot at ``robot_prim_path`` named in
+    ``link_names``, by link name; names without a prim under the robot are left out.
+
+    A link may hold a child of its own name, such as an ABB link_1's visual "link_1"; the
+    traversal reaches the link before its children, so the first prim of a name is the link.
+    """
+    link_paths = {}
+    for prim in Usd.PrimRange(stage.GetPrimAtPath(robot_prim_path)):
+        if prim.GetName() in link_names and prim.GetName() not in link_paths:
+            link_paths[prim.GetName()] = prim.GetPath()
+    return link_paths
+
+
+def concatenate_meshes(
+    meshes: Iterable[tuple[Vt.Vec3fArray, Vt.IntArray, Vt.IntArray]],
+) -> tuple[Vt.Vec3fArray, Vt.IntArray, Vt.IntArray]:
+    """Join meshes given as (points, face vertex counts, face vertex indices), all in the same
+    frame, into one mesh of that form; all empty when there are none."""
+    points, face_vertex_counts, face_vertex_indices = [], [], []
+    point_count = 0
+    for mesh_points, counts, indices in meshes:
+        points.append(np.array(mesh_points, dtype=np.float32).reshape(-1, 3))
+        face_vertex_counts.append(np.array(counts, dtype=np.int32))
+        face_vertex_indices.append(np.array(indices, dtype=np.int32) + point_count)
+        point_count += len(mesh_points)
+    if not points:
+        return Vt.Vec3fArray(), Vt.IntArray(), Vt.IntArray()
+    return (
+        Vt.Vec3fArray.FromNumpy(np.concatenate(points)),
+        Vt.IntArray.FromNumpy(np.concatenate(face_vertex_counts)),
+        Vt.IntArray.FromNumpy(np.concatenate(face_vertex_indices)),
+    )
 
 
 def merge_meshes_in_frame(

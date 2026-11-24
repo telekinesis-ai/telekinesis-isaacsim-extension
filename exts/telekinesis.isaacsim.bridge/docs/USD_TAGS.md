@@ -62,7 +62,7 @@ Positions**, and rewritten by `PoseService` whenever the pose moves.
 | Property | Type | Purpose |
 |---|---|---|
 | `telekinesis:pose:robot` | relationship to the robot prim | The robot whose default TCP the pose places |
-| `telekinesis:pose:pose_in_base_frame` | `double[6]`: metres, then extrinsic XYZ Euler degrees | `[x, y, z, rx, ry, rz]` of the pose in the robot's base frame, the `pose` `GET /teaching/poses` returns. Written on creation and on every move, including moves too small to solve again. A mirror for reading: `GET /teaching/poses` still computes the pose from the prim's transform. Missing on poses taught before 0.11.2 until they move |
+| `telekinesis:pose:pose_in_base_frame` | `double[6]`: metres, then extrinsic XYZ Euler degrees | `[x, y, z, rx, ry, rz]` of the pose in the robot's base frame, the `pose` `GET /teaching/poses` returns. Written on creation, on every move (including moves too small to solve again), and when the stage is opened wherever it is missing or differs, e.g. on poses taught before 0.11.2; not for a robot that stores no `telekinesis:robot:base_frame` yet. A mirror for reading: `GET /teaching/poses` still computes the pose from the prim's transform |
 | `telekinesis:pose:joint_names` | `string[]` | The robot's joint names, in the order of `joint_positions` |
 | `telekinesis:pose:joint_positions` | `double[]`, radians | The robot's inverse-kinematics solution for the pose; empty when unreachable |
 | `telekinesis:pose:reachable` | `bool` | Whether the robot can reach the pose; also marks the prim as a pose |

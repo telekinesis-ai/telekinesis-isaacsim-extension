@@ -209,12 +209,7 @@ class RobotOverlay:
             material, UsdShade.Tokens.strongerThanDescendants
         )
         UsdGeom.Xform.Define(stage, OVERLAY_LINKS_PATH)
-        # A link may hold a child of its own name, such as an ABB link_1's visual "link_1"; the
-        # traversal reaches the link before its children, so the first prim of a name is the link.
-        link_paths = {}
-        for prim in Usd.PrimRange(stage.GetPrimAtPath(robot_prim_path)):
-            if prim.GetName() in link_names and prim.GetName() not in link_paths:
-                link_paths[prim.GetName()] = prim.GetPath()
+        link_paths = meshes.find_link_paths(stage, robot_prim_path, link_names)
         for link_name, link_path in link_paths.items():
             points, face_vertex_counts, face_vertex_indices = meshes.merge_meshes_in_frame(
                 stage,

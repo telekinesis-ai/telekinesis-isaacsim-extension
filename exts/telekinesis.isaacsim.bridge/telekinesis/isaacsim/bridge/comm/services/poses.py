@@ -29,6 +29,7 @@ POSE_ROBOT_RELATIONSHIP = "telekinesis:pose:robot"
 POSE_JOINT_NAMES_ATTRIBUTE = "telekinesis:pose:joint_names"
 POSE_JOINT_POSITIONS_ATTRIBUTE = "telekinesis:pose:joint_positions"
 POSE_REACHABLE_ATTRIBUTE = "telekinesis:pose:reachable"
+POSE_IN_BASE_FRAME_ATTRIBUTE = "telekinesis:pose:pose_in_base_frame"
 
 # Name of the Xform beside the robot that holds its poses, and the suffix of a new
 # pose's name after its tool's: the default pose path is <tool parent>/poses/<tool>_Pose.
@@ -49,23 +50,27 @@ MIN_ROTATION_CHANGE = 0.01
 class PoseService:
     """Creates the poses a robot is taught, and solves them again when they are moved.
 
-    A pose is shown as a ghost of the tool. Add Pose ▸ From Tool creates one from a tool mounted on
-    a robot, where the tool stands now; Add Pose ▸ From Joint Positions creates one where the
-    robot's default TCP is when the robot stands at given joint positions.
+    Add Pose ▸ From Tool creates a pose from a tool mounted on a robot, where the tool stands
+    now, shown as a ghost of the tool; Add Pose ▸ From Joint Positions creates one where the
+    robot's default TCP is when the robot stands at given joint positions, shown as a ghost of
+    the whole robot at those joints and its tool, if it has one.
 
-    A pose is a single ``Mesh`` prim: the tool's visible meshes merged into the frame of
-    the robot's default TCP, so the pose's origin is where that TCP has to go for the real tool
-    to cover the pose. A pose of a robot without a tool, which only Add Pose ▸ From Joint
-    Positions creates, is a bare ``Xform`` at the default TCP instead. Poses live in a ``poses`` Xform beside the robot, in its assembly when
+    A pose is a single ``Mesh`` prim: the ghost's visible meshes merged into the frame of the
+    robot's default TCP, so the pose's origin is where that TCP has to go for the real tool to
+    cover the pose. Moving a pose moves its ghost rigidly; the robot reaching the pose is drawn
+    by the robot overlay. Poses live in a ``poses`` Xform beside the robot, in its assembly when
     it has one, carry no physics, and are saved with the stage. Each pose stores the robot's
     inverse-kinematics solution for it, solved by the Telekinesis Isaac Sim Server, and is tinted
-    blue when the robot can reach it and red when it cannot.
+    blue when the robot can reach it and red when it cannot. Each pose also stores itself in its
+    robot's base frame, the ``pose`` :meth:`list_poses` returns, so a program can be written
+    from the values the Property window shows.
 
     While the service follows a stage, a pose that is moved, directly or with one of its parent
-    prims, is solved again once it has moved more than :data:`MIN_TRANSLATION_CHANGE` or
-    :data:`MIN_ROTATION_CHANGE` since it was last solved; so is a pose that appears, such as a
-    duplicate. One solve runs per pose at a time, and a move during a solve leads to one more
-    solve, so the stored solution always ends at the pose's latest placement. A pose moved out of
+    prims, stores its new pose in the base frame at once, and is solved again once it has moved
+    more than :data:`MIN_TRANSLATION_CHANGE` or :data:`MIN_ROTATION_CHANGE` since it was last
+    solved; so is a pose that appears, such as a duplicate. One solve runs per pose at a time,
+    and a move during a solve leads to one more solve, so the stored solution always ends at the
+    pose's latest placement. A pose moved out of
     reach keeps its last solution, which seeds the next solve. A solve that fails, e.g. because
     the server is not running, logs a warning and leaves the pose as it was.
 
@@ -116,7 +121,9 @@ class PoseService:
         stop following any stage.
 
         Called when the extension starts, with the open stage, and whenever a stage is opened or
-        closed. Solves still running for the previously followed stage are cancelled.
+        closed. Solves still running for the previously followed stage are cancelled. Each pose
+        whose stored pose in the base frame is missing or does not match its place, such as a
+        pose taught before it was stored, is given the right one.
         """
         if self._objects_changed_listener is not None:
             self._objects_changed_listener.Revoke()
@@ -129,9 +136,38 @@ class PoseService:
         self._stage = stage
         self._pose_paths = set() if stage is None else _find_poses(stage.GetPseudoRoot())
         if stage is not None:
+            self._store_poses_in_base_frame(stage)
             self._objects_changed_listener = Tf.Notice.Register(
                 Usd.Notice.ObjectsChanged, self._on_objects_changed, stage
             )
+
+    def _store_poses_in_base_frame(self, stage: Usd.Stage):
+        """Store each pose of ``stage`` in its robot's base frame where the stored one is missing
+        or differs, leaving matching ones untouched so an unchanged stage is not marked modified.
+
+        Needs no server: a pose whose robot stores no base frame yet is skipped and gets it with
+        its next solve, and one whose robot does not match its class is skipped with a warning.
+        """
+        for pose_path in self._pose_paths:
+            pose_prim = stage.GetPrimAtPath(pose_path)
+            robot_targets = pose_prim.GetRelationship(POSE_ROBOT_RELATIONSHIP).GetTargets()
+            robot_prim = stage.GetPrimAtPath(robot_targets[0]) if robot_targets else None
+            if not robot_prim or not robot_prim.GetAttribute(ROBOT_BASE_FRAME_ATTRIBUTE).Get():
+                continue
+            try:
+                base_world = _world_transform_of_robot_frame(
+                    stage,
+                    robot_prim.GetPath().pathString,
+                    robot_prim.GetAttribute(ROBOT_BASE_FRAME_ATTRIBUTE).Get(),
+                    robot_prim.GetAttribute(ROBOT_CLASS_NAME_ATTRIBUTE).Get(),
+                )
+            except HTTPException as error:
+                carb.log_warn(f"[bridge] could not store pose {pose_path}: {error.detail}")
+                continue
+            pose = _pose_in_frame(omni.usd.get_world_transform_matrix(pose_prim), base_world)
+            stored_pose = pose_prim.GetAttribute(POSE_IN_BASE_FRAME_ATTRIBUTE).Get()
+            if stored_pose is None or list(stored_pose) != pose:
+                _write_pose_in_base_frame(pose_prim, pose)
 
     async def connect_stage_robots(self) -> dict[str, str]:
         """Load every robot of the followed stage on the server under a new id.
@@ -220,10 +256,10 @@ class PoseService:
 
         The pose is placed at the robot's default TCP in the forward kinematics of ``joints``,
         computed by the Telekinesis Isaac Sim Server, and stores ``joints`` as its solution, so
-        it is reachable. A robot carrying a tool added with Add Tool gets a pose of the whole
-        tool, as :meth:`create_pose_from_tool`; a robot without one gets a pose that is a bare
-        ``Xform`` named after the robot, which draws nothing itself. The forward kinematics is
-        computed before anything is written, so a failure leaves the stage unchanged.
+        it is reachable. Its ghost is the whole robot standing at ``joints`` together with its
+        tool, when it carries one added with Add Tool; the pose is named after the tool, or
+        after the robot when it has none. The forward kinematics is computed before anything is
+        written, so a failure leaves the stage unchanged.
 
         Args:
             robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
@@ -236,7 +272,7 @@ class PoseService:
         Raises:
             HTTPException: 422 if the stage is not in metres, the prim is part of no robot, the
                 robot stores no class name or is no longer known to the server, the robot does
-                not match its class, the robot's tool has no meshes, or the server
+                not match its class, the robot and its tool have no meshes, or the server
                 rejects ``joints``, e.g. for a joint missing or outside its limits; 503 if the
                 server cannot be reached.
         """
@@ -265,16 +301,13 @@ class PoseService:
         base_world = _world_transform_of_robot_frame(
             stage, robot_prim_path, robot["base_frame"], robot["class_name"]
         )
+        ghost_meshes = []
         if tool_prim_path is not None:
             # The tool is fixed to the robot, so its meshes in the current default TCP's frame
             # are also its meshes in the default TCP's frame at any joint positions.
-            points, face_vertex_counts, face_vertex_indices = meshes.merge_meshes_in_frame(
-                stage, tool_prim_path, default_tcp_world
+            ghost_meshes.append(
+                meshes.merge_meshes_in_frame(stage, tool_prim_path, default_tcp_world)
             )
-            if not face_vertex_counts:
-                raise HTTPException(
-                    422, f"'{tool_prim_path}' has no visible meshes to show as a ghost."
-                )
 
         if joints is None:
             pose_world = default_tcp_world
@@ -295,6 +328,30 @@ class PoseService:
             pose_world = link_world_transforms[robot["default_tcp"]]
             pose = _pose_in_frame(pose_world, base_world)
             joint_names, joint_positions = joints["joint_names"], joints["joint_positions"]
+            link_paths = meshes.find_link_paths(stage, robot_prim_path, link_world_transforms)
+            for link_name, link_path in link_paths.items():
+                link_world_now = omni.usd.get_world_transform_matrix(
+                    stage.GetPrimAtPath(link_path)
+                )
+                # Merged in this frame, the link's meshes land where the link stands at
+                # ``joints``, expressed in the pose's frame.
+                merge_frame_world = (
+                    pose_world * link_world_transforms[link_name].GetInverse() * link_world_now
+                )
+                ghost_meshes.append(
+                    meshes.merge_meshes_in_frame(
+                        stage,
+                        link_path.pathString,
+                        merge_frame_world,
+                        excluded_paths=set(link_paths.values()) - {link_path},
+                    )
+                )
+        points, face_vertex_counts, face_vertex_indices = meshes.concatenate_meshes(ghost_meshes)
+        if not face_vertex_counts:
+            raise HTTPException(
+                422,
+                f"'{tool_prim_path or robot_prim_path}' has no visible meshes to show as a ghost.",
+            )
 
         poses_path = asset_loader.path_beside_clear_of_rigid_bodies(
             stage, robot_prim_path, POSES_GROUP_NAME
@@ -305,25 +362,23 @@ class PoseService:
             + POSE_NAME_SUFFIX
         )
         pose_path = omni.usd.get_stage_next_free_path(stage, f"{poses_path}/{pose_name}", False)
-        if tool_prim_path is None:
-            pose_xformable = UsdGeom.Xform.Define(stage, pose_path)
-        else:
-            pose_xformable = UsdGeom.Mesh.Define(stage, pose_path)
-            pose_xformable.CreatePointsAttr(points)
-            pose_xformable.CreateFaceVertexCountsAttr(face_vertex_counts)
-            pose_xformable.CreateFaceVertexIndicesAttr(face_vertex_indices)
+        pose_mesh = UsdGeom.Mesh.Define(stage, pose_path)
+        pose_mesh.CreatePointsAttr(points)
+        pose_mesh.CreateFaceVertexCountsAttr(face_vertex_counts)
+        pose_mesh.CreateFaceVertexIndicesAttr(face_vertex_indices)
         local_transform = Gf.Transform(
             pose_world
             * omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(poses_path)).GetInverse()
         )
-        pose_xformable.AddTranslateOp().Set(local_transform.GetTranslation())
-        pose_xformable.AddOrientOp(UsdGeom.XformOp.PrecisionDouble).Set(
+        pose_mesh.AddTranslateOp().Set(local_transform.GetTranslation())
+        pose_mesh.AddOrientOp(UsdGeom.XformOp.PrecisionDouble).Set(
             Gf.Quatd(local_transform.GetRotation().GetQuat())
         )
-        pose_xformable.AddScaleOp(UsdGeom.XformOp.PrecisionDouble).Set(local_transform.GetScale())
+        pose_mesh.AddScaleOp(UsdGeom.XformOp.PrecisionDouble).Set(local_transform.GetScale())
 
-        pose_prim = pose_xformable.GetPrim()
+        pose_prim = pose_mesh.GetPrim()
         pose_prim.CreateRelationship(POSE_ROBOT_RELATIONSHIP).SetTargets([robot_prim_path])
+        _write_pose_in_base_frame(pose_prim, pose)
         reachable = _write_pose_solution(stage, pose_prim, joint_names, joint_positions)
         # Recorded before the creation's own change notice is handled, so that notice does not
         # solve the new pose a second time.
@@ -540,12 +595,14 @@ class PoseService:
                 del self._solve_tasks[pose_path]
 
     async def _solve_moved_pose(self, pose_path: Sdf.Path):
-        """Solve the pose at ``pose_path`` for its current pose and store the solution.
+        """Store the pose at ``pose_path`` in its robot's base frame, then solve it for that pose
+        and store the solution.
 
-        Nothing happens when the pose is gone or has moved less than the thresholds since it
-        was last solved. The solve is seeded with the pose's stored solution, so it stays on the
-        same arm configuration, or with the robot's current joints when it has none. The
-        solution is written only if the pose is still on the followed stage.
+        Nothing happens when the pose is gone, and only the pose in the base frame is stored when
+        it has moved less than the thresholds since it was last solved. The solve is seeded
+        with the pose's stored solution, so it stays on the same arm configuration, or with the
+        robot's current joints when it has none. The solution is written only if the pose is
+        still on the followed stage.
 
         Raises:
             HTTPException: 422 if the pose names no robot, the robot stores no class name or is
@@ -560,15 +617,18 @@ class PoseService:
         if not robot_targets or not stage.GetPrimAtPath(robot_targets[0]):
             raise HTTPException(422, "its robot is not in the stage.")
         robot_prim_path = robot_targets[0].pathString
-        robot_id = await self._connected_robot_id(stage, robot_prim_path)
         base_world = await self._base_frame_world(stage, robot_prim_path)
         if stage is not self._stage or not pose_prim.IsValid():
             return
         pose = _pose_in_frame(omni.usd.get_world_transform_matrix(pose_prim), base_world)
+        # Stored on every move, also one too small to solve again, so it always matches the
+        # pose's place.
+        _write_pose_in_base_frame(pose_prim, pose)
         solved_pose = self._solved_poses.get(pose_path)
         if solved_pose is not None and not _moved_enough(solved_pose, pose):
             return
 
+        robot_id = await self._connected_robot_id(stage, robot_prim_path)
         stored_positions = pose_prim.GetAttribute(POSE_JOINT_POSITIONS_ATTRIBUTE).Get()
         if stored_positions:
             seed = {
@@ -740,6 +800,14 @@ def _find_poses(root: Usd.Prim) -> set[Sdf.Path]:
         for prim in Usd.PrimRange(root)
         if prim.HasAttribute(POSE_REACHABLE_ATTRIBUTE)
     }
+
+
+def _write_pose_in_base_frame(pose_prim: Usd.Prim, pose: list[float]):
+    """Store ``pose``, the pose's ``[x, y, z, rx, ry, rz]`` in its robot's base frame in metres
+    and extrinsic XYZ Euler degrees, on the pose, where the Property window shows it."""
+    pose_prim.CreateAttribute(POSE_IN_BASE_FRAME_ATTRIBUTE, Sdf.ValueTypeNames.DoubleArray).Set(
+        pose
+    )
 
 
 def _write_pose_solution(

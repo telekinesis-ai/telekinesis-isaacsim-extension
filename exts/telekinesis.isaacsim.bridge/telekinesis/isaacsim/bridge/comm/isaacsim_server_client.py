@@ -5,6 +5,7 @@ import asyncio
 import json
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 
 from ..global_variables import ISAACSIM_SERVER_URL
 
@@ -32,6 +33,10 @@ class IsaacSimServerClient:
     background. Requests are sent with the standard library on a worker thread, so they never
     block Isaac Sim's event loop.
 
+    The client remembers whether the server answered its latest request in :attr:`reachable`,
+    and calls :attr:`on_reachability_changed` whenever that changes. An error answer counts as
+    reachable; only a server that cannot be reached counts as unreachable.
+
     Example:
         client = IsaacSimServerClient()
         robot = await client.create_robot("UniversalRobotsUR10E")
@@ -40,6 +45,11 @@ class IsaacSimServerClient:
 
     def __init__(self, base_url: str = ISAACSIM_SERVER_URL):
         self._base_url = base_url
+        # Whether the server answered the latest request; None before the first one.
+        self.reachable: bool | None = None
+        # Called on Isaac Sim's loop with the new value of reachable whenever it changes, so a
+        # window can lock the controls that need the server.
+        self.on_reachability_changed: Callable[[bool], None] | None = None
 
     async def list_robots(self) -> list[dict]:
         """Return the description of every robot loaded on the server.
@@ -123,14 +133,29 @@ class IsaacSimServerClient:
 
     async def _request(self, method: str, path: str, body: dict | None = None):
         """Send one request on a worker thread and return the decoded JSON answer, or ``None``
-        for an empty one.
+        for an empty one. Records whether the server answered in :attr:`reachable`.
 
         Raises:
             IsaacSimServerError: If the server is not reachable or answers with an error.
         """
-        return await asyncio.get_running_loop().run_in_executor(
-            None, self._send_request, method, path, body
-        )
+        try:
+            answer = await asyncio.get_running_loop().run_in_executor(
+                None, self._send_request, method, path, body
+            )
+        except IsaacSimServerError as error:
+            self._record_reachability(error.status_code is not None)
+            raise
+        self._record_reachability(True)
+        return answer
+
+    def _record_reachability(self, reachable: bool):
+        """Store whether the server answered, and call :attr:`on_reachability_changed` when that
+        differs from before. Runs on Isaac Sim's loop."""
+        if reachable == self.reachable:
+            return
+        self.reachable = reachable
+        if self.on_reachability_changed is not None:
+            self.on_reachability_changed(reachable)
 
     def _send_request(self, method: str, path: str, body: dict | None):
         """Send one request and wait for the answer. Runs on a worker thread.
@@ -154,7 +179,7 @@ class IsaacSimServerClient:
         except (urllib.error.URLError, TimeoutError) as error:
             raise IsaacSimServerError(
                 f"Telekinesis Isaac Sim Server is not reachable at {self._base_url}. Start it "
-                "with: fastapi run --host 127.0.0.1 --port 8770"
+                "with the command telekinesis-isaacsim-server."
             ) from error
         return json.loads(content) if content else None
 

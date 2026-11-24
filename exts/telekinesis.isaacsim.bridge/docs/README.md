@@ -233,12 +233,16 @@ running at `http://127.0.0.1:8770`.
    robot can reach it and red when it cannot.
 
    To teach a pose by joint positions instead, choose **Add Pose ▸ From Joint Positions**. A
-   window opens with one slider per joint (degrees, or metres for a prismatic joint), bounded by
-   the joint limits and starting at the robot's current joints. Moving a slider draws the robot
-   and its tool see-through at those joints. **Add** creates the `<tool>_Pose` where the tool is
-   at those joints and stores them as its solution; the new pose is hidden (its eye icon off)
-   unless **Pose Visible After Add** is checked. The window stays open for the next pose. It
-   works without a tool too: the pose is then a bare `<robot>_Pose` Xform at the default TCP.
+   window opens with a slider and a value field per joint (degrees, or metres for a prismatic
+   joint), starting at the robot's current joints; a typed value outside the joint limits is
+   clamped to the nearest limit. Changing a joint draws the robot and its tool see-through at
+   those joints. The joints and **Add** stay locked, with a notice saying how to connect, while
+   the Telekinesis Isaac Sim Server cannot be reached, and unlock once **Connect** reaches it.
+   **Add** creates a pose at the default TCP for those joints and stores them as its solution.
+   Its ghost is the whole robot at those joints together with its tool, named `<tool>_Pose`, or
+   `<robot>_Pose` for a robot without a tool. The new pose is hidden (its eye icon off) unless
+   **Pose Visible After Add** is checked. The window stays open for the next pose. Moving the
+   pose later moves its ghost as one piece; select it to see the robot reaching it.
    **From Tool** is offered only for a robot carrying a tool.
 3. **Place it.** Rename the pose, move it with the viewport gizmo or the Transform fields, or
    duplicate it. While one pose is selected and reachable, the robot is drawn see-through in
@@ -250,13 +254,17 @@ running at `http://127.0.0.1:8770`.
    `name`, `pose` and stored `joint_positions`. The pose is `[x, y, z, rx, ry, rz]` of the robot's
    default TCP (`tool0` on a Universal Robots arm) in the robot's base frame, in metres and
    extrinsic XYZ Euler degrees, so it can be passed to a Synapse robot's `pick` and `place`
-   unchanged. Reading the poses needs no server once the robot stores its base frame.
+   unchanged. Reading the poses needs no server once the robot stores its base frame. The same
+   pose is stored on the pose as `telekinesis:pose:pose_in_base_frame`, so it can also be read
+   in the Property window and written into a program that runs without Isaac Sim.
    `examples/ur10e_hande_teach_pick_place.py` picks at poses named `pick_pose*` and places in a
-   row from the pose named `start_place_pose`.
+   row from the pose named `start_place_pose`, reading them from Isaac Sim or, on the real robot,
+   from values written into the script.
 
 A pose is a single `Mesh` with no physics, saved with the stage. Its origin is the robot's default
-TCP, and it stores `telekinesis:pose:robot` (its robot), `telekinesis:pose:joint_names`,
-`telekinesis:pose:joint_positions` (radians) and `telekinesis:pose:reachable`. Poses need a
+TCP, and it stores `telekinesis:pose:robot` (its robot), `telekinesis:pose:pose_in_base_frame`
+(the `pose` above), `telekinesis:pose:joint_names`, `telekinesis:pose:joint_positions` (radians)
+and `telekinesis:pose:reachable`. Poses need a
 stage in metres. When the server is not running, adding a pose reports it and a moved pose keeps
 its last solution, with a warning in the console. A robot added before the bridge stored class
 names, and never connected, has no class name; add it again with Add Robot.

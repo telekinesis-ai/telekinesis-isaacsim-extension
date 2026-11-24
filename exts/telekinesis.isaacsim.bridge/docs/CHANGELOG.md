@@ -1,16 +1,31 @@
 # Changelog
-## [0.11.1] - 2026-11-23
+## [0.11.2] - 2026-11-24
 ### Added
 - Right-click a robot → **Telekinesis Isaac Sim Bridge ▸ Add Pose ▸ From Joint Positions** opens a
-  window with one slider per robot joint. The robot and its tool are drawn see-through at the
-  sliders' joints, and **Add** creates a pose where the tool is at those joints, storing them as
-  its solution. The new pose is hidden unless **Pose Visible After Add** is checked. A robot
-  without a tool gets a pose that is a bare `<robot>_Pose` Xform at its default TCP.
+  window with a slider and a value field per robot joint, clamped to the joint limits. The robot
+  and its tool are drawn see-through at those joints, and **Add** creates a pose at the default
+  TCP for those joints, storing them as its solution. The pose's ghost is the whole robot at
+  those joints together with its tool, if it has one. The new pose is hidden unless **Pose
+  Visible After Add** is checked. While the Telekinesis Isaac Sim Server cannot be reached, the
+  joints and **Add** are locked and a yellow notice says how to start and connect it; they
+  unlock once a request reaches the server, e.g. **Connect**.
+- Every pose stores itself in its robot's base frame as `telekinesis:pose:pose_in_base_frame`
+  (`[x, y, z, rx, ry, rz]`, metres and extrinsic XYZ Euler degrees, the `pose` of
+  `GET /teaching/poses`), written when it is created and whenever it moves, so the values can be
+  read in the Property window. Poses taught with an earlier version get it when their stage is
+  opened.
+
+### Changed
+- The robot drawn reaching the selected pose is the see-through blue of the Add window previews
+  instead of purple.
+- The bridge's message for an unreachable Telekinesis Isaac Sim Server names the
+  `telekinesis-isaacsim-server` command instead of a `fastapi run` command line.
 
 ### Fixed
 - **Add Pose** no longer appears in the right-click menu of a prim that is part of no robot;
   **Add Pose ▸ From Tool** appears only for a robot carrying a tool.
 
+## [0.11.1] - 2026-11-23
 ### Changed
 - The Telekinesis Isaac Sim Server window checks the server each time it is opened, not only on
   **Connect**, so a server stopped since the last Connect shows as disconnected. Its status is
@@ -25,8 +40,6 @@
   picks at the poses named `pick_pose*` and places the objects in a row from `start_place_pose`.
 - A reachable pose's ghost is tinted the Add Tool preview's blue (`#41d1ff`) instead of green;
   an unreachable one stays red. A pose saved before turns blue when it is next solved.
-- The robot drawn reaching the selected pose is the see-through blue of the Add window previews
-  instead of purple.
 - Loading a robot on the Telekinesis Isaac Sim Server also stores the link its Synapse class
   measures poses from as `telekinesis:robot:base_frame` on the robot prim. `GET /teaching/poses`
   reads it from there, so listing poses no longer needs the server once the robot stores it.

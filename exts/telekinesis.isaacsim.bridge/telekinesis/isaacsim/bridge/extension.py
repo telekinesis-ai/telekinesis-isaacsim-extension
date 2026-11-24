@@ -165,7 +165,7 @@ class Extension(omni.ext.IExt):
         )
         self._robot_overlay = RobotOverlay(self._pose_service)
         self._add_pose_from_joint_positions_window = AddPoseFromJointPositionsWindow(
-            self._pose_service, self._robot_overlay
+            self._pose_service, self._robot_overlay, self._bridge_server.isaacsim_server_client
         )
 
         # Shown at the top of the right-click menu in the Stage panel and viewport. The returned
@@ -442,7 +442,10 @@ class Extension(omni.ext.IExt):
             return False
         articulation_service = self._bridge_server.articulation_service
         robot_id = articulation_service.find_device_id(robot_prim_path)
-        return robot_id is not None and articulation_service.find_tool_on_robot(robot_id) is not None
+        return (
+            robot_id is not None
+            and articulation_service.find_tool_on_robot(robot_id) is not None
+        )
 
     def _on_stage_event(self, event):
         """Clean up physics subscription on stage open/close; forward event to UIBuilder."""
