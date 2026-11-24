@@ -50,12 +50,13 @@ class PoseService:
     """Creates the poses a robot is taught, and solves them again when they are moved.
 
     A pose is shown as a ghost of the tool. Add Pose ▸ From Tool creates one from a tool mounted on
-    a robot, where the tool stands now; Add Pose ▸ From Joint Positions creates one where the tool
-    is when the robot stands at given joint positions.
+    a robot, where the tool stands now; Add Pose ▸ From Joint Positions creates one where the
+    robot's default TCP is when the robot stands at given joint positions.
 
     A pose is a single ``Mesh`` prim: the tool's visible meshes merged into the frame of
     the robot's default TCP, so the pose's origin is where that TCP has to go for the real tool
-    to cover the pose. Poses live in a ``poses`` Xform beside the robot, in its assembly when
+    to cover the pose. A pose of a robot without a tool, which only Add Pose ▸ From Joint
+    Positions creates, is a bare ``Xform`` at the default TCP instead. Poses live in a ``poses`` Xform beside the robot, in its assembly when
     it has one, carry no physics, and are saved with the stage. Each pose stores the robot's
     inverse-kinematics solution for it, solved by the Telekinesis Isaac Sim Server, and is tinted
     blue when the robot can reach it and red when it cannot.
@@ -166,16 +167,16 @@ class PoseService:
                 )
         return class_names
 
-    async def find_robot_and_tool(self, robot_part_prim_path: str) -> tuple[str, str]:
+    async def find_robot_and_tool(self, robot_part_prim_path: str) -> tuple[str, str | None]:
         """Return the prim paths of the robot ``robot_part_prim_path`` is part of and of its
-        tool, as ``(robot_prim_path, tool_prim_path)``.
+        tool, as ``(robot_prim_path, tool_prim_path)``; ``tool_prim_path`` is ``None`` when the
+        robot carries no tool added with Add Tool.
 
         Args:
             robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
 
         Raises:
-            HTTPException: 422 if the prim is part of no robot added with Add Robot, or the
-                robot carries no tool added with Add Tool.
+            HTTPException: 422 if the prim is part of no robot added with Add Robot.
         """
         articulation_id = await self._articulation_service.find_robot_for_prim(robot_part_prim_path)
         if articulation_id is None:
@@ -184,13 +185,10 @@ class PoseService:
                 f"'{robot_part_prim_path}' is part of no robot. Right-click a robot added with "
                 "Add Robot, or its tool.",
             )
-        robot_prim_path = self._articulation_service.get_device(articulation_id).prim_path
-        tool_prim_path = self._articulation_service.find_tool_on_robot(articulation_id)
-        if tool_prim_path is None:
-            raise HTTPException(
-                422, f"'{robot_prim_path}' has no tool. Attach one with Add Tool first."
-            )
-        return robot_prim_path, tool_prim_path
+        return (
+            self._articulation_service.get_device(articulation_id).prim_path,
+            self._articulation_service.find_tool_on_robot(articulation_id),
+        )
 
     async def create_pose_from_tool(self, robot_part_prim_path: str) -> dict:
         """Create a pose from the tool mounted on a robot: a pose of the whole tool,
@@ -218,13 +216,14 @@ class PoseService:
     async def create_pose_from_joint_positions(
         self, robot_part_prim_path: str, joints: dict
     ) -> dict:
-        """Create a pose of the whole tool mounted on a robot, where the tool is when the robot
-        stands at ``joints``.
+        """Create a pose where the robot's default TCP is when the robot stands at ``joints``.
 
         The pose is placed at the robot's default TCP in the forward kinematics of ``joints``,
         computed by the Telekinesis Isaac Sim Server, and stores ``joints`` as its solution, so
-        it is reachable. The forward kinematics is computed before anything is written, so a
-        failure leaves the stage unchanged.
+        it is reachable. A robot carrying a tool added with Add Tool gets a pose of the whole
+        tool, as :meth:`create_pose_from_tool`; a robot without one gets a pose that is a bare
+        ``Xform`` named after the robot, which draws nothing itself. The forward kinematics is
+        computed before anything is written, so a failure leaves the stage unchanged.
 
         Args:
             robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
@@ -236,15 +235,15 @@ class PoseService:
 
         Raises:
             HTTPException: 422 if the stage is not in metres, the prim is part of no robot, the
-                robot has no tool, the robot stores no class name or is no longer known to the
-                server, the robot does not match its class, the tool has no meshes, or the server
+                robot stores no class name or is no longer known to the server, the robot does
+                not match its class, the robot's tool has no meshes, or the server
                 rejects ``joints``, e.g. for a joint missing or outside its limits; 503 if the
                 server cannot be reached.
         """
         return await self._create_pose(robot_part_prim_path, joints)
 
     async def _create_pose(self, robot_part_prim_path: str, joints: dict | None) -> dict:
-        """Create a pose of the tool mounted on a robot, as :meth:`create_pose_from_tool` when
+        """Create a pose of a robot's default TCP, as :meth:`create_pose_from_tool` when
         ``joints`` is ``None`` and as :meth:`create_pose_from_joint_positions` otherwise."""
         stage = omni.usd.get_context().get_stage()
         if UsdGeom.GetStageMetersPerUnit(stage) != 1.0:
@@ -253,6 +252,10 @@ class PoseService:
             raise HTTPException(422, "Poses need a stage in metres (metersPerUnit = 1).")
 
         robot_prim_path, tool_prim_path = await self.find_robot_and_tool(robot_part_prim_path)
+        if tool_prim_path is None and joints is None:
+            raise HTTPException(
+                422, f"'{robot_prim_path}' has no tool. Attach one with Add Tool first."
+            )
         robot_id = await self._connected_robot_id(stage, robot_prim_path)
         robot = await self._describe_robot(robot_id)
 
@@ -262,15 +265,16 @@ class PoseService:
         base_world = _world_transform_of_robot_frame(
             stage, robot_prim_path, robot["base_frame"], robot["class_name"]
         )
-        # The tool is fixed to the robot, so its meshes in the current default TCP's frame are
-        # also its meshes in the default TCP's frame at any joint positions.
-        points, face_vertex_counts, face_vertex_indices = meshes.merge_meshes_in_frame(
-            stage, tool_prim_path, default_tcp_world
-        )
-        if not face_vertex_counts:
-            raise HTTPException(
-                422, f"'{tool_prim_path}' has no visible meshes to show as a ghost."
+        if tool_prim_path is not None:
+            # The tool is fixed to the robot, so its meshes in the current default TCP's frame
+            # are also its meshes in the default TCP's frame at any joint positions.
+            points, face_vertex_counts, face_vertex_indices = meshes.merge_meshes_in_frame(
+                stage, tool_prim_path, default_tcp_world
             )
+            if not face_vertex_counts:
+                raise HTTPException(
+                    422, f"'{tool_prim_path}' has no visible meshes to show as a ghost."
+                )
 
         if joints is None:
             pose_world = default_tcp_world
@@ -296,23 +300,29 @@ class PoseService:
             stage, robot_prim_path, POSES_GROUP_NAME
         )
         UsdGeom.Xform.Define(stage, poses_path)
-        pose_name = Tf.MakeValidIdentifier(Sdf.Path(tool_prim_path).name) + POSE_NAME_SUFFIX
+        pose_name = (
+            Tf.MakeValidIdentifier(Sdf.Path(tool_prim_path or robot_prim_path).name)
+            + POSE_NAME_SUFFIX
+        )
         pose_path = omni.usd.get_stage_next_free_path(stage, f"{poses_path}/{pose_name}", False)
-        pose_mesh = UsdGeom.Mesh.Define(stage, pose_path)
-        pose_mesh.CreatePointsAttr(points)
-        pose_mesh.CreateFaceVertexCountsAttr(face_vertex_counts)
-        pose_mesh.CreateFaceVertexIndicesAttr(face_vertex_indices)
+        if tool_prim_path is None:
+            pose_xformable = UsdGeom.Xform.Define(stage, pose_path)
+        else:
+            pose_xformable = UsdGeom.Mesh.Define(stage, pose_path)
+            pose_xformable.CreatePointsAttr(points)
+            pose_xformable.CreateFaceVertexCountsAttr(face_vertex_counts)
+            pose_xformable.CreateFaceVertexIndicesAttr(face_vertex_indices)
         local_transform = Gf.Transform(
             pose_world
             * omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(poses_path)).GetInverse()
         )
-        pose_mesh.AddTranslateOp().Set(local_transform.GetTranslation())
-        pose_mesh.AddOrientOp(UsdGeom.XformOp.PrecisionDouble).Set(
+        pose_xformable.AddTranslateOp().Set(local_transform.GetTranslation())
+        pose_xformable.AddOrientOp(UsdGeom.XformOp.PrecisionDouble).Set(
             Gf.Quatd(local_transform.GetRotation().GetQuat())
         )
-        pose_mesh.AddScaleOp(UsdGeom.XformOp.PrecisionDouble).Set(local_transform.GetScale())
+        pose_xformable.AddScaleOp(UsdGeom.XformOp.PrecisionDouble).Set(local_transform.GetScale())
 
-        pose_prim = pose_mesh.GetPrim()
+        pose_prim = pose_xformable.GetPrim()
         pose_prim.CreateRelationship(POSE_ROBOT_RELATIONSHIP).SetTargets([robot_prim_path])
         reachable = _write_pose_solution(stage, pose_prim, joint_names, joint_positions)
         # Recorded before the creation's own change notice is handled, so that notice does not

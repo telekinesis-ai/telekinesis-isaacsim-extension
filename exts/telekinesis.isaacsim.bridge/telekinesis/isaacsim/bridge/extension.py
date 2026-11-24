@@ -204,17 +204,20 @@ class Extension(omni.ext.IExt):
                             ),
                         },
                         {
-                            "show_fn": self._clicked_prim_is_robot_part,
+                            # Kit ignores a submenu's show_fn and hides the submenu when none
+                            # of its entries is shown, so each entry decides for itself.
                             "name": {
                                 "Add Pose": [
                                     {
                                         "name": "From Tool",
+                                        "show_fn": self._clicked_robot_has_tool,
                                         "onclick_fn": lambda objects: asyncio.ensure_future(
                                             self._create_pose_from_tool(objects)
                                         ),
                                     },
                                     {
                                         "name": "From Joint Positions",
+                                        "show_fn": self._clicked_prim_is_robot_part,
                                         "onclick_fn": lambda objects: (
                                             self._add_pose_from_joint_positions_window.show(
                                                 self._clicked_prim_path(objects)
@@ -400,19 +403,46 @@ class Extension(omni.ext.IExt):
         return str(prim_list[0])
 
     @staticmethod
-    def _clicked_prim_is_robot_part(objects: dict) -> bool:
-        """Return whether the right-clicked prim in a Kit context-menu payload is part of a robot.
+    def _clicked_robot_prim_path(objects: dict) -> str | None:
+        """Return the path of the robot the right-clicked prim in a Kit context-menu payload is
+        part of, or ``None`` when it is part of no robot.
 
-        That is the robot prim, which stores its Synapse class name, or a prim under it, or a
-        robot's assembly Xform from Add Robot and anything in it, such as the robot's tool. Read
-        from the stage only, since Kit asks this synchronously every time the menu opens.
+        A robot part is the robot prim, which stores its Synapse class name, or a prim under it,
+        or a robot's assembly Xform from Add Robot and anything in it, such as the robot's tool;
+        the nearest of them decides. Read from the stage only, since Kit asks this synchronously
+        every time the menu opens.
         """
         stage = omni.usd.get_context().get_stage()
-        return any(
-            stage.GetPrimAtPath(ancestor_path).HasAttribute(ROBOT_CLASS_NAME_ATTRIBUTE)
-            or stage.GetPrimAtPath(ancestor_path).HasRelationship(ASSEMBLY_ROBOT_RELATIONSHIP)
-            for ancestor_path in Sdf.Path(Extension._clicked_prim_path(objects)).GetAncestorsRange()
-        )
+        for ancestor_path in Sdf.Path(Extension._clicked_prim_path(objects)).GetAncestorsRange():
+            ancestor = stage.GetPrimAtPath(ancestor_path)
+            if ancestor.HasAttribute(ROBOT_CLASS_NAME_ATTRIBUTE):
+                return ancestor_path.pathString
+            if ancestor.HasRelationship(ASSEMBLY_ROBOT_RELATIONSHIP):
+                robot_targets = ancestor.GetRelationship(ASSEMBLY_ROBOT_RELATIONSHIP).GetTargets()
+                if robot_targets:
+                    return robot_targets[0].pathString
+        return None
+
+    @staticmethod
+    def _clicked_prim_is_robot_part(objects: dict) -> bool:
+        """Return whether the right-clicked prim in a Kit context-menu payload is part of a
+        robot, as :meth:`_clicked_robot_prim_path` defines it."""
+        return Extension._clicked_robot_prim_path(objects) is not None
+
+    def _clicked_robot_has_tool(self, objects: dict) -> bool:
+        """Return whether the right-clicked prim in a Kit context-menu payload is part of a robot
+        carrying a tool added with Add Tool.
+
+        Read without awaiting, since Kit asks this synchronously every time the menu opens: a
+        robot the bridge has not registered yet, such as one of a stage saved before the bridge
+        stored device ids, counts as carrying none until it is first used.
+        """
+        robot_prim_path = self._clicked_robot_prim_path(objects)
+        if robot_prim_path is None:
+            return False
+        articulation_service = self._bridge_server.articulation_service
+        robot_id = articulation_service.find_device_id(robot_prim_path)
+        return robot_id is not None and articulation_service.find_tool_on_robot(robot_id) is not None
 
     def _on_stage_event(self, event):
         """Clean up physics subscription on stage open/close; forward event to UIBuilder."""

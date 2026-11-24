@@ -113,6 +113,10 @@ class DeviceRegistry(abc.ABC):
             )
         return device
 
+    def find_device_id(self, prim_path):
+        """Return the id of the device registered for ``prim_path``, or ``None``."""
+        return self._id_by_prim.get(prim_path)
+
     def list_devices(self):
         """Return a ``{device_id: prim_path}`` map of every registered device."""
         return {device_id: device.prim_path for device_id, device in self._devices.items()}

@@ -26,10 +26,11 @@ class AddPoseFromJointPositionsWindow:
 
     It has one slider per joint of the robot, in degrees for a revolute joint and metres for a
     prismatic one, bounded by the joint's limits and starting at the robot's current joint
-    positions. While the window is open, the robot and its tool are drawn see-through at the
-    sliders' positions instead of the selected pose's solution. **Add** creates a pose of the
-    tool where it is at those positions, storing them as the pose's solution, and leaves the
-    window open for the next pose. The new pose is hidden, as with the Stage window's eye icon,
+    positions. While the window is open, the robot and its tool, if it has one, are drawn
+    see-through at the sliders' positions instead of the selected pose's solution. **Add** creates
+    a pose where the robot's default TCP is at those positions, storing them as the pose's
+    solution, and leaves the window open for the next pose. The pose is a ghost of the tool, or a
+    bare ``Xform`` for a robot without a tool. The new pose is hidden, as with the Stage window's eye icon,
     unless **Pose Visible After Add** is checked. Failures are notified as warnings that stay
     until dismissed.
 
@@ -41,9 +42,10 @@ class AddPoseFromJointPositionsWindow:
     def __init__(self, pose_service: PoseService, robot_overlay: RobotOverlay):
         self._pose_service = pose_service
         self._robot_overlay = robot_overlay
-        # The robot the window teaches and its tool, set each time the window is opened.
+        # The robot the window teaches and its tool, None for a robot without one; set each time
+        # the window is opened.
         self._robot_prim_path = ""
-        self._tool_prim_path = ""
+        self._tool_prim_path: str | None = None
         # One entry per joint slider: the joint's name, the slider's model, and whether the
         # joint is revolute, so its slider is in degrees.
         self._joint_sliders: list[tuple[str, ui.AbstractValueModel, bool]] = []
@@ -87,7 +89,7 @@ class AddPoseFromJointPositionsWindow:
 
         The window opens once the robot, its tool and its current joint positions are found,
         with the sliders at those positions. It stays closed when the prim is part of no robot
-        added with Add Robot or the robot has no tool, which is notified.
+        added with Add Robot, which is notified.
 
         Args:
             robot_part_prim_path: Any prim of the robot, its assembly, or its tool.

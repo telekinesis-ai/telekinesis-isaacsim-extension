@@ -4,7 +4,12 @@
 - Right-click a robot → **Telekinesis Isaac Sim Bridge ▸ Add Pose ▸ From Joint Positions** opens a
   window with one slider per robot joint. The robot and its tool are drawn see-through at the
   sliders' joints, and **Add** creates a pose where the tool is at those joints, storing them as
-  its solution. The new pose is hidden unless **Pose Visible After Add** is checked.
+  its solution. The new pose is hidden unless **Pose Visible After Add** is checked. A robot
+  without a tool gets a pose that is a bare `<robot>_Pose` Xform at its default TCP.
+
+### Fixed
+- **Add Pose** no longer appears in the right-click menu of a prim that is part of no robot;
+  **Add Pose ▸ From Tool** appears only for a robot carrying a tool.
 
 ### Changed
 - The Telekinesis Isaac Sim Server window checks the server each time it is opened, not only on

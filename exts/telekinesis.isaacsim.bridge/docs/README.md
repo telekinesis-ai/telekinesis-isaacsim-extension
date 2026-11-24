@@ -237,7 +237,9 @@ running at `http://127.0.0.1:8770`.
    the joint limits and starting at the robot's current joints. Moving a slider draws the robot
    and its tool see-through at those joints. **Add** creates the `<tool>_Pose` where the tool is
    at those joints and stores them as its solution; the new pose is hidden (its eye icon off)
-   unless **Pose Visible After Add** is checked. The window stays open for the next pose.
+   unless **Pose Visible After Add** is checked. The window stays open for the next pose. It
+   works without a tool too: the pose is then a bare `<robot>_Pose` Xform at the default TCP.
+   **From Tool** is offered only for a robot carrying a tool.
 3. **Place it.** Rename the pose, move it with the viewport gizmo or the Transform fields, or
    duplicate it. While one pose is selected and reachable, the robot is drawn see-through in
    the pose's solution, reaching it; the drawing is never saved and disappears when the pose

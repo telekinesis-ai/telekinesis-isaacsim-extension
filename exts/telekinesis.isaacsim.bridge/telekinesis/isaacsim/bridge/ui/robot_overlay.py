@@ -49,7 +49,7 @@ class RobotOverlay:
         self._pose_path: Sdf.Path | None = None
         # The joint positions shown, as (robot prim path, tool prim path, joints), or None while
         # the overlay follows the selected pose.
-        self._shown_joint_positions: tuple[str, str, dict] | None = None
+        self._shown_joint_positions: tuple[str, str | None, dict] | None = None
         # The robot and tool whose meshes are built in the overlay, as (robot prim path, tool
         # prim path or None), None while none are.
         self._overlay_parts: tuple[str, str | None] | None = None
@@ -72,13 +72,16 @@ class RobotOverlay:
         self._pose_service.on_pose_solved = None
         self._remove()
 
-    def show_joint_positions(self, robot_prim_path: str, tool_prim_path: str, joints: dict):
+    def show_joint_positions(
+        self, robot_prim_path: str, tool_prim_path: str | None, joints: dict
+    ):
         """Draw the robot at ``robot_prim_path`` and its tool at ``joints`` instead of the
         selected pose's solution; returns at once.
 
         Args:
             robot_prim_path: The robot prim, which stores its Synapse class name.
-            tool_prim_path: The tool mounted on the robot's mount link, drawn with it.
+            tool_prim_path: The tool mounted on the robot's mount link, drawn with it, or
+                ``None`` for a robot without a tool.
             joints: ``{"joint_names": [...], "joint_positions": [...]}`` in radians, naming
                 every joint of the robot. Positions the server rejects hide the overlay and log
                 why.
