@@ -36,13 +36,16 @@ PLACE_START_POSE_NAME = "start_place_pose"
 
 # The real robot's controller; the Hand-E is reached through its URCap on the same controller.
 ROBOT_IP = "192.168.1.100"
+GRIPPER_IP = "192.168.1.100"
 # The taught poses for the real robot, copied from each pose's
 # telekinesis:pose:pose_in_base_frame in Isaac Sim, in pick order. Left empty on purpose: the
 # script refuses to move the real robot until they are filled in.
 PICK_POSES: list[list[float]] = [
-    # [x, y, z, rx, ry, rz],  # pick_pose
+    [0.0884, 0.4983, 0.1429, 180, 0, 0],
+    [-0.0164, 0.4983, 0.1429, 180, 0, 0],
+    [-0.1349, 0.4983, 0.1429, 180, 0, 0],
 ]
-PLACE_START_POSE: list[float] = []  # [x, y, z, rx, ry, rz] of start_place_pose
+PLACE_START_POSE: list[float] = [-0.6837, -0.0609, 0.1429, 180, 0, 0]
 
 PLACE_STEP_Y = 0.04  # m, shift in y of each further object's place pose
 APPROACH_OFFSET_Z = 0.1  # m, pre-pick and pre-place distance above the poses
@@ -98,7 +101,7 @@ def main() -> None:
 
     if RUN_ON_REAL_ROBOT:
         robot.connect(ip=ROBOT_IP)
-        gripper.connect(ip=ROBOT_IP)
+        gripper.connect(ip=GRIPPER_IP)
     else:
         robot.connect(simulation_prim_path=ROBOT_PRIM_PATH)
         gripper.connect(simulation_prim_path=GRIPPER_PRIM_PATH)

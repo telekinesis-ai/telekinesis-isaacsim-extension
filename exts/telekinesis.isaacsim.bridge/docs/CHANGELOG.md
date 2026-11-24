@@ -14,6 +14,10 @@
   `GET /teaching/poses`), written when it is created and whenever it moves, so the values can be
   read in the Property window. Poses taught with an earlier version get it when their stage is
   opened.
+- `examples/scenes/pick_and_place_scene.py` also creates the quickstart scene's taught poses
+  (`pick_pose`, `pick_pose_01`, `pick_pose_02`, `start_place_pose`) as Add Pose ▸ From Tool
+  leaves them, and stores the robot's `telekinesis:robot:base_frame`, so
+  `examples/ur10e_hande_teach_pick_place.py` runs on the generated scene.
 
 ### Changed
 - The robot drawn reaching the selected pose is the see-through blue of the Add window previews
@@ -22,6 +26,9 @@
   `telekinesis-isaacsim-server` command instead of a `fastapi run` command line.
 
 ### Fixed
+- `examples/scenes/pick_and_place_scene.py` stands the UR10e on the table's base plate instead of
+  7 mm above it, and mounts the Hand-E 9.8 mm above the flange instead of 14 mm, as in the
+  quickstart scene assembled in the GUI.
 - **Add Pose** no longer appears in the right-click menu of a prim that is part of no robot;
   **Add Pose ▸ From Tool** appears only for a robot carrying a tool.
 

@@ -2,8 +2,9 @@
 
 `pick_and_place_scene.py` builds the quickstart's pick-and-place scene without the GUI:
 the sample scene with a UR10e on the Vention table, a Robotiq UR coupler and a Robotiq
-Hand-E, assembled and tagged as Add Robot, Add Mesh and Add Tool leave them. The
-quickstart example runs on it unchanged.
+Hand-E, assembled and tagged as Add Robot, Add Mesh and Add Tool leave them, and the
+poses taught in the quickstart scene with Add Pose ▸ From Tool. The quickstart example and
+the teach pick-and-place example run on it unchanged.
 
 ## Setup
 
@@ -24,7 +25,8 @@ into `~/.cache/telekinesis/usd`; later runs reuse them. The scene is written to
 
 1. Open `pick_and_place_scene.usda` in Isaac Sim with the bridge enabled. The bridge
    registers the robot and the gripper.
-2. Run `python examples/ur10e_hande_isaacsim_pick_place.py`.
+2. Run `python examples/ur10e_hande_isaacsim_pick_place.py`, or
+   `python examples/ur10e_hande_teach_pick_place.py` to pick at the taught poses.
 
 The scene can be saved under another name and reopened; the example runs on the reopened
 scene too.
@@ -33,13 +35,20 @@ scene too.
 
 ```
 /World/vention_table/robot_mount/UR10e_assembly    telekinesis:assemblyRobot -> UR10e
-├─ UR10e                telekinesis:articulation:id = "", telekinesis:mountLink = wrist_3_link
+│                       7 mm below robot_mount, standing the robot on the base plate
+├─ UR10e                telekinesis:articulation:id = "", telekinesis:mountLink = wrist_3_link,
+│                       telekinesis:robot:class_name, telekinesis:robot:base_frame = base_link
 ├─ Robotiq_UR_Coupler   rigid body fixed to wrist_3_link
-└─ Hand_E               telekinesis:articulation:id = "", driven_joints = [left_finger_joint]
-                        merged into the UR10e's articulation, 14 mm above wrist_3_link
+├─ Hand_E               telekinesis:articulation:id = "", driven_joints = [left_finger_joint]
+│                       merged into the UR10e's articulation, 9.8 mm above wrist_3_link
+└─ poses                pick_pose, pick_pose_01, pick_pose_02, start_place_pose
+                        Hand-E ghosts with the telekinesis:pose:* tags
 ```
 
-The bridge assigns the empty ids when the scene is opened.
+The bridge assigns the empty ids when the scene is opened. The poses and their joint
+solutions are written in `TAUGHT_POSES` in the script; edit them there to change the
+poses. Moving a pose in Isaac Sim solves it again, which needs the Telekinesis Isaac Sim
+Server.
 
 ## Known limitations
 

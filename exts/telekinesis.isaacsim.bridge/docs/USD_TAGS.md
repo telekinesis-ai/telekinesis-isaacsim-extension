@@ -45,7 +45,8 @@ Not under a device namespace.
 Written on the robot prim (the articulation) by Add Robot and by loading the robot on the
 Telekinesis Isaac Sim Server (`PoseService`, `comm/services/poses.py`). Not a device kind: they
 store no device id, so the device restore never reads them, and `DELETE` of an articulation does
-not remove them.
+not remove them. `examples/scenes/pick_and_place_scene.py` writes `telekinesis:robot:class_name`
+(lowercase) and `telekinesis:robot:base_frame` itself.
 
 | Property | Type | Written when | Purpose |
 |---|---|---|---|
@@ -58,6 +59,7 @@ not remove them.
 Written on a pose (a `Mesh` named `<tool>_Pose`, or `<robot>_Pose` for a robot without a tool,
 in the `poses` Xform beside the robot) by **Add Pose ▸ From Tool** and **Add Pose ▸ From Joint
 Positions**, and rewritten by `PoseService` whenever the pose moves.
+`examples/scenes/pick_and_place_scene.py` writes the same tags on the poses it creates.
 
 | Property | Type | Purpose |
 |---|---|---|
