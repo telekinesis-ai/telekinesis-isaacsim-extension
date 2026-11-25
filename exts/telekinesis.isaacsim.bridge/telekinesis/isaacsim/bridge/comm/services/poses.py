@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Poses a robot is taught, shown as ghosts: see-through copies of the robot's tool that mark
-where the tool should go."""
+"""Poses a robot is taught, shown as ghosts, see-through copies of the robot's tool that mark
+where the tool should go, or as red/green/blue frames marking where a TCP should go."""
 
 import asyncio
 import math
@@ -60,15 +60,17 @@ class PoseService:
     Add Pose ▸ From Tool creates a pose from a tool mounted on a robot, where the tool stands
     now, shown as a ghost of the tool; Add Pose ▸ From Joint Positions creates one where the
     robot's default TCP is when the robot stands at given joint positions, shown as a ghost of
-    the whole robot at those joints and its tool, if it has one.
+    the whole robot at those joints and its tool, if it has one; Add Pose ▸ From TCP creates one
+    where a TCP should go, given in the robot's base frame, shown as that TCP's frame.
 
-    A pose is a single ``Mesh`` prim: the ghost's visible meshes merged into the frame of the
-    robot's default TCP, so the pose's origin is where that TCP has to go for the real tool to
-    cover the pose. Moving a pose moves its ghost rigidly; the robot reaching the pose is drawn
-    by the robot overlay. Poses live in a ``poses`` Xform beside the robot, in its assembly when
-    it has one, carry no physics, and are saved with the stage. Each pose stores the robot's
-    inverse-kinematics solution for it, solved by the Telekinesis Isaac Sim Server, and is tinted
-    blue when the robot can reach it and red when it cannot. Each pose also stores itself in its
+    A ghost pose is a single ``Mesh`` prim: the ghost's visible meshes merged into the frame of
+    the robot's default TCP, so the pose's origin is where that TCP has to go for the real tool
+    to cover the pose. A frame pose is an Xform showing its axes as red/green/blue arrows. Moving
+    a pose moves it rigidly; the robot reaching the pose is drawn by the robot overlay. Poses
+    live in a ``poses`` Xform beside the robot, in its assembly when it has one, carry no
+    physics, and are saved with the stage. Each pose stores the robot's inverse-kinematics
+    solution for it, solved by the Telekinesis Isaac Sim Server; a ghost pose is tinted blue
+    when the robot can reach it and red when it cannot. Each pose also stores itself in its
     robot's base frame, the ``pose`` :meth:`list_poses` returns, so a program can be written
     from the values the Property window shows.
 
@@ -270,6 +272,83 @@ class PoseService:
         )
         return robot_prim_path, default_tcp_prim_path
 
+    async def find_base_frame(self, robot_part_prim_path: str) -> tuple[str, str]:
+        """Return the prim paths of the robot ``robot_part_prim_path`` is part of and of its
+        base frame, the link poses are measured from, as ``(robot_prim_path,
+        base_frame_prim_path)``.
+
+        The server is needed only for a robot that stores no base frame yet, which is then
+        loaded there to store it.
+
+        Args:
+            robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
+
+        Raises:
+            HTTPException: 422 if the prim is part of no robot, the robot stores neither a
+                base frame nor a class name, the server does not know its class, or the robot
+                does not match its class; 503 if the server is needed and cannot be reached.
+        """
+        stage = omni.usd.get_context().get_stage()
+        robot_prim_path, _ = await self.find_robot_and_tool(robot_part_prim_path)
+        base_frame_prim_path = await self._robot_frame_path(
+            stage, robot_prim_path, ROBOT_BASE_FRAME_ATTRIBUTE
+        )
+        return robot_prim_path, base_frame_prim_path
+
+    def robot_tcp_paths(self, robot_prim_path: str) -> dict[str, str]:
+        """Return the prim path of each TCP of the robot at ``robot_prim_path`` created with
+        :meth:`create_tcp`, by TCP name, sorted by name; empty while no stage is followed."""
+        return dict(
+            sorted(
+                (tcp_path.name, tcp_path.pathString)
+                for tcp_path, tcp_robot_path in self._tcp_robots.items()
+                if tcp_robot_path == robot_prim_path
+            )
+        )
+
+    async def solve_tcp_pose(
+        self,
+        robot_prim_path: str,
+        tcp_name: str | None,
+        pose: models.Transformation,
+        seed: dict | None,
+    ) -> dict | None:
+        """Return the joint positions that bring a TCP of the robot to ``pose``, or ``None``
+        when the robot cannot reach it. Writes nothing to the stage.
+
+        Args:
+            robot_prim_path: The robot prim, which stores its Synapse class name.
+            tcp_name: Name of a TCP of the robot, or ``None`` for its default TCP.
+            pose: The TCP's pose in the robot's base frame, metres and XYZ Euler degrees.
+            seed: ``{"joint_names": [...], "joint_positions": [...]}`` in radians to start the
+                search from, keeping the solution on that arm configuration; ``None`` starts
+                from the robot's current joints.
+
+        Returns:
+            ``{"joint_names": [...], "joint_positions": [...]}`` in radians, or ``None``.
+
+        Raises:
+            HTTPException: 422 if the robot stores no class name or is no longer known to the
+                server, or the server has no TCP ``tcp_name``; 503 if the server cannot be
+                reached.
+        """
+        stage = omni.usd.get_context().get_stage()
+        robot_id = await self._connected_robot_id(stage, robot_prim_path)
+        solution = await _call_server(
+            self._server_client.inverse_kinematics(
+                robot_id,
+                [[*pose.translation, *pose.rotation]],
+                seed or await self.current_joint_positions(robot_prim_path),
+                tcp_name,
+            )
+        )
+        if solution["joint_positions"][0] is None:
+            return None
+        return {
+            "joint_names": solution["joint_names"],
+            "joint_positions": solution["joint_positions"][0],
+        }
+
     async def create_tcp(
         self, robot_part_prim_path: str, name: str, offset: models.Transformation
     ) -> str:
@@ -363,15 +442,78 @@ class PoseService:
         """
         return await self._create_pose(robot_part_prim_path, joints)
 
+    async def create_pose_from_tcp(
+        self,
+        robot_part_prim_path: str,
+        tcp_name: str | None,
+        pose: models.Transformation,
+    ) -> dict:
+        """Create a pose of a TCP of the robot at ``pose`` in the robot's base frame.
+
+        The pose is an Xform showing its axes as red/green/blue arrows, named after the TCP
+        or, for the default TCP, after the default TCP frame. Its inverse kinematics is solved,
+        seeded with the robot's current joints, before anything is written, so a failure leaves
+        the stage unchanged; a pose out of reach is still created, marked unreachable.
+
+        Args:
+            robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
+            tcp_name: Name of a TCP of the robot, or ``None`` for its default TCP.
+            pose: Where the TCP should go, in the robot's base frame: metres and XYZ Euler
+                degrees.
+
+        Returns:
+            ``{"prim_path": ..., "reachable": ...}`` of the new pose.
+
+        Raises:
+            HTTPException: 422 if the stage is not in metres, the prim is part of no robot, the
+                robot stores no class name or is no longer known to the server, the robot does
+                not match its class, or the server has no TCP ``tcp_name``; 503 if the server
+                cannot be reached.
+        """
+        stage = omni.usd.get_context().get_stage()
+        _require_metres(stage)
+        robot_prim_path, default_tcp_prim_path = await self.find_default_tcp(robot_part_prim_path)
+        if tcp_name is not None:
+            # Given again in case the TCP changed since the server last got it.
+            robot_id = await self._connected_robot_id(stage, robot_prim_path)
+            await _call_server(
+                self._server_client.set_tcps(robot_id, self._robot_tcps(stage, robot_prim_path))
+            )
+        solution = await self.solve_tcp_pose(robot_prim_path, tcp_name, pose, None)
+        base_world = await self._base_frame_world(stage, robot_prim_path)
+
+        poses_path = asset_loader.path_beside_clear_of_rigid_bodies(
+            stage, robot_prim_path, POSES_GROUP_NAME
+        )
+        UsdGeom.Xform.Define(stage, poses_path)
+        pose_name = (tcp_name or Sdf.Path(default_tcp_prim_path).name) + POSE_NAME_SUFFIX
+        pose_path = omni.usd.get_stage_next_free_path(stage, f"{poses_path}/{pose_name}", False)
+        # Gf composes row-vector first: the pose in the base frame, then the base frame.
+        pose_world = robot_assembler.offset_matrix(pose) * base_world
+        translation, rotation = robot_assembler.matrix_to_translation_rotation(
+            pose_world
+            * omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(poses_path)).GetInverse()
+        )
+        pose_prim = robot_assembler.define_tcp_marker(
+            stage,
+            pose_path,
+            models.Transformation(translation=translation, rotation=rotation),
+        ).GetPrim()
+        reachable = self._tag_new_pose(
+            stage,
+            pose_prim,
+            robot_prim_path,
+            tcp_name,
+            _pose_in_frame(pose_world, base_world),
+            solution or {"joint_names": [], "joint_positions": None},
+        )
+        return {"prim_path": pose_path, "reachable": reachable}
+
     async def _create_pose(self, robot_part_prim_path: str, joints: dict | None) -> dict:
         """Create a pose of a robot's TCP, as :meth:`create_pose_from_tool` when ``joints`` is
         ``None`` and as :meth:`create_pose_from_joint_positions` otherwise."""
         stage = omni.usd.get_context().get_stage()
-        if UsdGeom.GetStageMetersPerUnit(stage) != 1.0:
-            # The bridge loads robots at metre scale whatever the stage unit, so a pose read in
-            # another unit would not match the robot.
-            raise HTTPException(422, "Poses need a stage in metres (metersPerUnit = 1).")
-
+        _require_metres(stage)
         robot_prim_path, tool_prim_path = await self.find_robot_and_tool(robot_part_prim_path)
         if tool_prim_path is None and joints is None:
             raise HTTPException(
@@ -473,18 +615,45 @@ class PoseService:
         )
         pose_mesh.AddScaleOp(UsdGeom.XformOp.PrecisionDouble).Set(local_transform.GetScale())
 
-        pose_prim = pose_mesh.GetPrim()
+        reachable = self._tag_new_pose(
+            stage,
+            pose_mesh.GetPrim(),
+            robot_prim_path,
+            tcp_name,
+            pose,
+            {"joint_names": joint_names, "joint_positions": joint_positions},
+        )
+        return {"prim_path": pose_path, "reachable": reachable}
+
+    def _tag_new_pose(
+        self,
+        stage: Usd.Stage,
+        pose_prim: Usd.Prim,
+        robot_prim_path: str,
+        tcp_name: str | None,
+        pose: list[float],
+        solution: dict,
+    ) -> bool:
+        """Mark the new ``pose_prim`` as a pose of the robot's TCP ``tcp_name`` (``None`` for
+        the default TCP), store ``pose`` in the base frame and its ``solution``, and return
+        whether it is reachable.
+
+        ``solution`` is ``{"joint_names": [...], "joint_positions": [...]}`` in radians, with
+        ``joint_positions`` ``None`` for a pose out of reach.
+        """
         pose_prim.CreateRelationship(POSE_ROBOT_RELATIONSHIP).SetTargets([robot_prim_path])
         if tcp_name is not None:
             pose_prim.CreateAttribute(POSE_TCP_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(tcp_name)
         _write_pose_in_base_frame(pose_prim, pose)
-        reachable = _write_pose_solution(stage, pose_prim, joint_names, joint_positions)
+        reachable = _write_pose_solution(
+            stage, pose_prim, solution["joint_names"], solution["joint_positions"]
+        )
         # Recorded before the creation's own change notice is handled, so that notice does not
         # solve the new pose a second time.
         self._solved_poses[pose_prim.GetPath()] = pose
         if self.on_pose_solved is not None:
             self.on_pose_solved(pose_prim.GetPath())
-        return {"prim_path": pose_path, "reachable": reachable}
+        return reachable
 
     async def list_poses(self, robot_prim_path: str | None = None) -> list[dict]:
         """Return the poses of the open stage, sorted by prim path.
@@ -989,6 +1158,16 @@ class PoseService:
         return {"joint_names": joint_names, "joint_positions": joint_positions}
 
 
+def _require_metres(stage: Usd.Stage):
+    """Raise ``HTTPException`` 422 unless ``stage`` is in metres.
+
+    The bridge loads robots at metre scale whatever the stage unit, so a pose read in another
+    unit would not match the robot.
+    """
+    if UsdGeom.GetStageMetersPerUnit(stage) != 1.0:
+        raise HTTPException(422, "Poses need a stage in metres (metersPerUnit = 1).")
+
+
 def _find_robot_frame(
     stage: Usd.Stage, robot_prim_path: str, frame_name: str, class_name: str
 ) -> str:
@@ -1079,8 +1258,8 @@ def _write_pose_solution(
     joint_names: list[str],
     joint_positions: list[float] | None,
 ) -> bool:
-    """Store an inverse-kinematics solution on a pose and tint it; return whether it is
-    reachable.
+    """Store an inverse-kinematics solution on a pose and, when it is a ghost, tint it; return
+    whether it is reachable.
 
     ``joint_positions`` is ``None`` when the pose is out of reach: the pose is then marked
     unreachable and keeps the joint positions it stored before, empty for a new pose.
@@ -1097,7 +1276,9 @@ def _write_pose_solution(
         positions_attribute.Set([])
     reachable = joint_positions is not None
     pose_prim.CreateAttribute(POSE_REACHABLE_ATTRIBUTE, Sdf.ValueTypeNames.Bool).Set(reachable)
-    _set_ghost_look(stage, pose_prim, reachable)
+    # A pose made from a TCP is a frame of red/green/blue arrows, which keeps its colours.
+    if pose_prim.IsA(UsdGeom.Mesh):
+        _set_ghost_look(stage, pose_prim, reachable)
     return reachable
 
 

@@ -57,16 +57,18 @@ not remove them. `examples/scenes/pick_and_place_scene.py` writes `telekinesis:r
 
 ## Pose tags
 
-Written on a pose (a `Mesh` named `<tcp>_Pose` for a pose made from a TCP, otherwise
+Written on a pose (a `Mesh` ghost named `<tcp>_Pose` for a pose made from a TCP, otherwise
 `<tool>_Pose`, or `<robot>_Pose` for a robot without a tool, in the `poses` Xform beside the
 robot) by **Add Pose ▸ From Tool** and **Add Pose ▸ From Joint
-Positions**, and rewritten by `PoseService` whenever the pose moves.
+Positions**, and on a frame pose (an `Xform` of red/green/blue axis arrows named `<tcp>_Pose`,
+or `<default TCP>_Pose` such as `tool0_Pose`, in the same `poses` Xform) by **Add Pose ▸ From
+TCP**; rewritten by `PoseService` whenever the pose moves.
 `examples/scenes/pick_and_place_scene.py` writes the same tags on the poses it creates.
 
 | Property | Type | Purpose |
 |---|---|---|
 | `telekinesis:pose:robot` | relationship to the robot prim | The robot whose TCP the pose places |
-| `telekinesis:pose:tcp` | `string` attribute | Name of the robot's TCP the pose places, written when the pose is made from a TCP (right-click the TCP ▸ Add Pose). Absent for a pose of the default TCP. The pose is solved for this TCP; renaming or deleting the TCP makes its solves fail |
+| `telekinesis:pose:tcp` | `string` attribute | Name of the robot's TCP the pose places, written when the pose is made from a TCP (right-click the TCP ▸ Add Pose, or a TCP picked in Add Pose ▸ From TCP). Absent for a pose of the default TCP. The pose is solved for this TCP; renaming or deleting the TCP makes its solves fail |
 | `telekinesis:pose:pose_in_base_frame` | `double[6]`: metres, then extrinsic XYZ Euler degrees | `[x, y, z, rx, ry, rz]` of the pose's TCP in the robot's base frame, the `pose` `GET /teaching/poses` returns. Written on creation, on every move (including moves too small to solve again), and when the stage is opened wherever it is missing or differs, e.g. on poses taught before 0.11.2; not for a robot that stores no `telekinesis:robot:base_frame` yet. A mirror for reading: `GET /teaching/poses` still computes the pose from the prim's transform |
 | `telekinesis:pose:joint_names` | `string[]` | The robot's joint names, in the order of `joint_positions` |
 | `telekinesis:pose:joint_positions` | `double[]`, radians | The robot's inverse-kinematics solution for the pose; empty when unreachable |
@@ -76,7 +78,7 @@ Positions**, and rewritten by `PoseService` whenever the pose moves.
 
 Written on a TCP, an `Xform` that **Add TCP** places under the robot's default TCP frame
 (`<default TCP>/<name>`, e.g. `…/wrist_3_link/flange/tool0/fingertip`), with red/green/blue
-guide-purpose axes. The TCP's name is its prim's name. Its offset is not stored separately: it is
+axis arrows: a cylinder and a cone per axis in the default purpose, drawn without guides. The TCP's name is its prim's name. Its offset is not stored separately: it is
 the prim's pose in the default TCP frame, read from where the prim stands, so its own translate
 and rotateXYZ ops show it while it sits directly under the default TCP: metres, then extrinsic XYZ
 Euler degrees, as Synapse's `add_tcp` takes it. The bridge gives a robot's TCPs to the

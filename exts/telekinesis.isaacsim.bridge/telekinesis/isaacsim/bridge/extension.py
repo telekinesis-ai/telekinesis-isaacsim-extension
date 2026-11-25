@@ -46,6 +46,7 @@ from .ui.add_asset_window import AddAssetWindow
 from .ui.add_camera_window import AddCameraWindow
 from .ui.add_mesh_window import AddMeshWindow
 from .ui.add_pose_from_joint_positions_window import AddPoseFromJointPositionsWindow
+from .ui.add_pose_from_tcp_window import AddPoseFromTcpWindow
 from .ui.add_robot_window import AddRobotWindow
 from .ui.add_tcp_window import AddTcpWindow
 from .ui.add_tool_window import AddToolWindow
@@ -168,6 +169,9 @@ class Extension(omni.ext.IExt):
         self._add_pose_from_joint_positions_window = AddPoseFromJointPositionsWindow(
             self._pose_service, self._robot_overlay, self._bridge_server.isaacsim_server_client
         )
+        self._add_pose_from_tcp_window = AddPoseFromTcpWindow(
+            self._pose_service, self._robot_overlay
+        )
         self._add_tcp_window = AddTcpWindow(self._pose_service)
 
         # Shown at the top of the right-click menu in the Stage panel and viewport. The returned
@@ -233,6 +237,15 @@ class Extension(omni.ext.IExt):
                                             )
                                         ),
                                     },
+                                    {
+                                        "name": "From TCP",
+                                        "show_fn": self._clicked_prim_is_robot_part,
+                                        "onclick_fn": lambda objects: (
+                                            self._add_pose_from_tcp_window.show(
+                                                self._clicked_prim_path(objects)
+                                            )
+                                        ),
+                                    },
                                 ],
                             },
                         },
@@ -252,6 +265,7 @@ class Extension(omni.ext.IExt):
         self._add_camera_window.destroy()
         self._isaacsim_server_window.destroy()
         self._add_pose_from_joint_positions_window.destroy()
+        self._add_pose_from_tcp_window.destroy()
         self._add_tcp_window.destroy()
         self._robot_overlay.destroy()
         self._pose_service.follow_stage(None)
@@ -360,6 +374,7 @@ class Extension(omni.ext.IExt):
                 self._add_mesh_window,
                 self._add_camera_window,
                 self._add_pose_from_joint_positions_window,
+                self._add_pose_from_tcp_window,
                 self._add_tcp_window,
             ):
                 window.close()

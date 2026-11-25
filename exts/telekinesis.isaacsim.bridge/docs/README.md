@@ -249,6 +249,17 @@ running at `http://127.0.0.1:8770`.
    the TCP first (see **TCPs** below), then right-click the TCP and choose **Add Pose ▸ From
    Tool** or **From Joint Positions**. The pose is placed at that TCP, named `<tcp>_Pose`, and
    solved for it.
+
+   To teach a pose by placing a frame where a TCP should go, choose **Add Pose ▸ From TCP**.
+   Pick the TCP in the **TCP** dropdown: the default TCP or one added with Add TCP (right-click
+   a TCP to pick it). A red/green/blue frame appears where that TCP stands, with the move/rotate
+   gizmo of the Add windows (W/E); Position (m) and Rotation (XYZ Euler degrees) are the frame
+   in the robot's base frame, the pose a program moves that TCP to. While you drag, the robot
+   and its tool are drawn see-through reaching the frame with the picked TCP, and a line above
+   **Add** says whether the robot reaches it. Picking another TCP keeps the frame where it is.
+   **Add** creates the pose as that frame's arrows, named `<tcp>_Pose` (`tool0_Pose` for the
+   default TCP), also when it is out of reach. A frame pose keeps its colours: select it to see
+   whether the robot reaches it. Solving the frame needs the server.
 3. **Place it.** Rename the pose, move it with the viewport gizmo or the Transform fields, or
    duplicate it. While one pose is selected and reachable, the robot is drawn see-through in
    the pose's solution, reaching it; the drawing is never saved and disappears when the pose

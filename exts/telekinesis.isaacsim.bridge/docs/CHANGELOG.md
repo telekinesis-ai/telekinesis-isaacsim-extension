@@ -25,6 +25,13 @@
   move/rotate gizmo on it to drag the offset. The TCP is tagged
   `telekinesis:tcp:robot` and can be moved with the gizmo or the Property window. Adding one does
   not need the Telekinesis Isaac Sim Server once the robot stores its default TCP.
+- Right-click a robot or one of its TCPs → **Telekinesis Isaac Sim Bridge ▸ Add Pose ▸ From
+  TCP** opens a window with a **TCP** dropdown and a red/green/blue frame to drag with the
+  move/rotate gizmo, entered in the robot's base frame and starting where the picked TCP stands.
+  The robot and its tool are drawn see-through reaching the frame with the picked TCP, solved
+  whenever the frame or TCP changes, and a line above **Add** says whether it is reachable.
+  **Add** creates a pose of that TCP shown as the frame's red/green/blue arrows, an Xform named
+  `<tcp>_Pose`, which is not tinted by reachability.
 - The Telekinesis Isaac Sim Server gets a robot's TCPs (`PUT /robots/{robot_id}/tcps`) whenever
   the robot is loaded there, e.g. on **Connect**, and again whenever a TCP is created, moved,
   renamed or deleted.
