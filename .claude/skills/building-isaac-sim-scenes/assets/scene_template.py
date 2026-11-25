@@ -158,9 +158,13 @@ def place_prim_at(prim: Usd.Prim, world: Gf.Matrix4d) -> None:
     """
     local = Gf.Transform(world * world_transform(prim.GetParent()).GetInverse())
     xformable = UsdGeom.Xformable(prim)
+    # The asset's op attributes keep their authored precision: re-adding them with another raises.
+    precisions = {op.GetOpType(): op.GetPrecision() for op in xformable.GetOrderedXformOps()}
     xformable.ClearXformOpOrder()
-    xformable.AddTranslateOp(UsdGeom.XformOp.PrecisionDouble).Set(local.GetTranslation())
-    xformable.AddOrientOp(UsdGeom.XformOp.PrecisionDouble).Set(local.GetRotation().GetQuat())
+    translate_op = xformable.AddTranslateOp(precisions.get(UsdGeom.XformOp.TypeTranslate, UsdGeom.XformOp.PrecisionDouble))
+    translate_op.Set(Gf.Vec3f(local.GetTranslation()) if translate_op.GetPrecision() == UsdGeom.XformOp.PrecisionFloat else local.GetTranslation())
+    orient_op = xformable.AddOrientOp(precisions.get(UsdGeom.XformOp.TypeOrient, UsdGeom.XformOp.PrecisionDouble))
+    orient_op.Set(Gf.Quatf(local.GetRotation().GetQuat()) if orient_op.GetPrecision() == UsdGeom.XformOp.PrecisionFloat else local.GetRotation().GetQuat())
 
 
 def reference_asset(stage: Usd.Stage, path: str, asset_file: pathlib.Path, asset_root: str) -> Usd.Prim:

@@ -73,6 +73,10 @@ def joint_frame_world(joint: UsdPhysics.Joint, body_index: int, stage: Usd.Stage
 def check_dependencies(scene_path: str, report: Report) -> None:
     _, _, unresolved = UsdUtils.ComputeAllDependencies(Sdf.AssetPath(scene_path))
     for path in unresolved:
+        # A bare MDL name, such as OmniPBR.mdl, is one of the materials Isaac Sim ships: it
+        # resolves there, never offline.
+        if path.endswith(".mdl") and "/" not in path and "\\" not in path:
+            continue
         report.error(f"Unresolved file: {path}")
 
 
