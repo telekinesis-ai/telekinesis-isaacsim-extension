@@ -14,7 +14,7 @@ from omni.kit.window.property import templates
 from pxr import UsdGeom, UsdPhysics
 
 from ..comm.isaacsim_server_client import IsaacSimServerClient, IsaacSimServerError
-from ..comm.services.poses import PoseService
+from ..comm.services.poses import PoseService, find_tcp_name
 from ..core import articulation
 from ..global_variables import EXTENSION_TITLE
 from .add_asset_window import BUTTON_ROW_GAP, BUTTON_WIDTH, WINDOW_HEIGHT, WINDOW_WIDTH
@@ -46,8 +46,9 @@ class AddPoseFromJointPositionsWindow:
     While the window is open, the robot and its tool, if it has one, are drawn see-through at
     those positions instead of the selected pose's solution.
 
-    **Add** creates a pose where the robot's default TCP is at those positions, storing them as
-    the pose's solution, and leaves the window open for the next pose. The pose is a ghost of
+    **Add** creates a pose where the robot's TCP is at those positions, storing them as the pose's
+    solution, and leaves the window open for the next pose. The TCP is the one the window was
+    opened on, or the robot's default TCP, as the TCP row shows. The pose is a ghost of
     the whole robot at those positions and its tool, if it has one. The new pose is hidden, as with
     the Stage window's eye icon, unless **Pose Visible After Add** is checked.
 
@@ -74,8 +75,10 @@ class AddPoseFromJointPositionsWindow:
         self._robot_overlay = robot_overlay
         self._server_client = server_client
         server_client.on_reachability_changed = self._apply_server_reachability
-        # The robot the window teaches and its tool, None for a robot without one; set each time
-        # the window is opened.
+        # The prim the window was opened on, which names the pose's TCP when it is a TCP; the
+        # robot the window teaches and its tool, None for a robot without one. Set each time the
+        # window is opened.
+        self._robot_part_prim_path = ""
         self._robot_prim_path = ""
         self._tool_prim_path: str | None = None
         # One entry per joint: the joint's name, the value model its slider and field share,
@@ -100,6 +103,14 @@ class AddPoseFromJointPositionsWindow:
                     tooltip="The robot the pose is taught to",
                 )
                 self._robot_model = ui.StringField(read_only=True).model
+            with ui.HStack(height=0):
+                ui.Label(
+                    "TCP",
+                    width=templates.LABEL_WIDTH,
+                    alignment=ui.Alignment.LEFT_CENTER,
+                    tooltip="The TCP the pose places. Right-click a TCP to teach a pose for it",
+                )
+                self._tcp_model = ui.StringField(read_only=True).model
             self._joints_stack = ui.VStack(spacing=5, height=0)
             with ui.HStack(height=0):
                 ui.Label(
@@ -143,7 +154,8 @@ class AddPoseFromJointPositionsWindow:
         prim is part of no robot added with Add Robot, which is notified.
 
         Args:
-            robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
+            robot_part_prim_path: Any prim of the robot, its assembly, or its tool; a TCP of the
+                robot to teach poses for that TCP.
         """
         asyncio.ensure_future(self._open(robot_part_prim_path))
 
@@ -167,9 +179,13 @@ class AddPoseFromJointPositionsWindow:
         except HTTPException as error:
             self._post_failure(f"Opening Add Pose From Joint Positions failed: {error.detail}")
             return
+        self._robot_part_prim_path = robot_part_prim_path
         self._robot_prim_path, self._tool_prim_path = robot_prim_path, tool_prim_path
         self._robot_model.set_value(robot_prim_path)
-        joint_prims = articulation.joint_prims(omni.usd.get_context().get_stage(), robot_prim_path)
+        stage = omni.usd.get_context().get_stage()
+        tcp_name = find_tcp_name(stage.GetPrimAtPath(robot_part_prim_path), robot_prim_path)
+        self._tcp_model.set_value(tcp_name or "Default TCP")
+        joint_prims = articulation.joint_prims(stage, robot_prim_path)
         self._joint_values = []
         self._joint_widgets = []
         self._joints_stack.clear()
@@ -294,7 +310,7 @@ class AddPoseFromJointPositionsWindow:
         self._add_button.enabled = False
         try:
             pose = await self._pose_service.create_pose_from_joint_positions(
-                self._robot_prim_path, self._joint_positions()
+                self._robot_part_prim_path, self._joint_positions()
             )
         except HTTPException as error:
             self._post_failure(f"Adding a pose failed: {error.detail}")

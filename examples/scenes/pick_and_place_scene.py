@@ -13,9 +13,10 @@ Every asset comes from the Telekinesis asset library and is downloaded once into
 on the machine that built it.
 
 The robot and the gripper carry the bridge's tags with an empty id, and the robot its Synapse
-class name and base frame: the bridge registers them under fresh ids when the scene is opened,
-and drives the Hand-E's left finger joint only. The tags, the assembly and the poses follow the
-extension's Add Robot, Add Mesh, Add Tool and Add Pose, and must be kept in step with them.
+class name, base frame and default TCP: the bridge registers them under fresh ids when the
+scene is opened, and drives the Hand-E's left finger joint only. The tags, the assembly and the
+poses follow the extension's Add Robot, Add Mesh, Add Tool and Add Pose, and must be kept in
+step with them.
 
 Example:
     In the SDK environment::
@@ -57,10 +58,11 @@ MOUNT_LINK_ATTRIBUTE = "telekinesis:mountLink"
 # The Synapse class the Telekinesis Isaac Sim Server loads the robot as, for its poses.
 ROBOT_CLASS_NAME_ATTRIBUTE = "telekinesis:robot:class_name"
 ROBOT_CLASS_NAME = "universalrobotsur10e"
-# The robot frame that class measures poses from, and the one it places them at. The base
-# frame is stored on the robot, so the bridge lists the poses without the server.
+# The robot frame that class measures poses from, and the one it places them at. Both are
+# stored on the robot, so the bridge lists the poses and adds TCPs without the server.
 ROBOT_BASE_FRAME_ATTRIBUTE = "telekinesis:robot:base_frame"
 ROBOT_BASE_FRAME = "base_link"
+ROBOT_DEFAULT_TCP_ATTRIBUTE = "telekinesis:robot:default_tcp"
 ROBOT_DEFAULT_TCP = "tool0"
 
 # The poses taught in the quickstart scene. "pose" is the robot's default TCP in its base
@@ -329,6 +331,9 @@ def main() -> None:
     )
     robot.CreateAttribute(ROBOT_BASE_FRAME_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(
         ROBOT_BASE_FRAME
+    )
+    robot.CreateAttribute(ROBOT_DEFAULT_TCP_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(
+        ROBOT_DEFAULT_TCP
     )
 
     mount_link_path = f"{ROBOT_PATH}/{MOUNT_LINK}"

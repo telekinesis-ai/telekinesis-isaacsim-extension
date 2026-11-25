@@ -18,18 +18,25 @@ from ..isaacsim_server_client import IsaacSimServerClient, IsaacSimServerError
 from .articulations import (
     ROBOT_BASE_FRAME_ATTRIBUTE,
     ROBOT_CLASS_NAME_ATTRIBUTE,
+    ROBOT_DEFAULT_TCP_ATTRIBUTE,
     ROBOT_ID_ATTRIBUTE,
     ArticulationService,
 )
 
-# Properties of a pose prim. The relationship targets the robot prim whose default TCP
-# the pose places; the joint attributes hold the robot's inverse-kinematics solution for the
-# pose, in radians; ``reachable`` says whether there is one.
+# Properties of a pose prim. The relationship targets the robot prim whose TCP the pose
+# places, and ``tcp`` names that TCP, absent or empty for the robot's default TCP; the joint
+# attributes hold the robot's inverse-kinematics solution for the pose, in radians;
+# ``reachable`` says whether there is one.
 POSE_ROBOT_RELATIONSHIP = "telekinesis:pose:robot"
+POSE_TCP_ATTRIBUTE = "telekinesis:pose:tcp"
 POSE_JOINT_NAMES_ATTRIBUTE = "telekinesis:pose:joint_names"
 POSE_JOINT_POSITIONS_ATTRIBUTE = "telekinesis:pose:joint_positions"
 POSE_REACHABLE_ATTRIBUTE = "telekinesis:pose:reachable"
 POSE_IN_BASE_FRAME_ATTRIBUTE = "telekinesis:pose:pose_in_base_frame"
+# Relationship on a TCP prim targeting its robot prim; it also marks the prim as a TCP. The
+# TCP's name is the prim's name, and its pose in the robot's default TCP frame is its offset,
+# as Synapse's add_tcp takes it.
+TCP_ROBOT_RELATIONSHIP = "telekinesis:tcp:robot"
 
 # Name of the Xform beside the robot that holds its poses, and the suffix of a new
 # pose's name after its tool's: the default pose path is <tool parent>/poses/<tool>_Pose.
@@ -74,10 +81,18 @@ class PoseService:
     reach keeps its last solution, which seeds the next solve. A solve that fails, e.g. because
     the server is not running, logs a warning and leaves the pose as it was.
 
+    A robot can have TCPs besides its default TCP, created with :meth:`create_tcp`: Xforms under
+    the default TCP frame, each placed at its offset from that frame. A pose made from a TCP,
+    by right-clicking the TCP, places that TCP instead of the default TCP and is solved for it.
+
     The robots are loaded on the Telekinesis Isaac Sim Server from the Synapse class name each
     robot prim stores, which Add Robot writes. A robot is loaded the first time one of its poses
     needs it, and again for every robot of the stage by :meth:`connect_stage_robots`; the server's
-    id is stored on the robot prim.
+    id is stored on the robot prim. Loading a robot also gives the server the robot's TCPs, and
+    while the service follows a stage, a TCP that is created, moved, renamed or deleted gives
+    the server its robot's TCPs again and solves the poses of the robot's TCPs again. The stage
+    holds the TCPs; a TCP change the server misses, e.g. because it is not running, reaches it
+    with the next load.
 
     Example:
         service = PoseService(bridge_server.articulation_service, IsaacSimServerClient())
@@ -108,6 +123,11 @@ class PoseService:
         # The solve running for each pose, and the poses moved while theirs ran.
         self._solve_tasks: dict[Sdf.Path, asyncio.Task] = {}
         self._moved_while_solving: set[Sdf.Path] = set()
+        # TCP prims of the followed stage and the robot prim each belongs to, and the robots
+        # whose TCPs are waiting to be given to the server. One TCP sync runs at a time.
+        self._tcp_robots: dict[Sdf.Path, str] = {}
+        self._tcp_syncs_pending: set[str] = set()
+        self._tcp_sync_lock = asyncio.Lock()
         # Serializes loading robots on the server, so concurrent solves of a robot that is not
         # loaded yet load it once.
         self._connect_lock = asyncio.Lock()
@@ -133,8 +153,10 @@ class PoseService:
         self._solve_tasks.clear()
         self._moved_while_solving.clear()
         self._solved_poses.clear()
+        self._tcp_syncs_pending.clear()
         self._stage = stage
         self._pose_paths = set() if stage is None else _find_poses(stage.GetPseudoRoot())
+        self._tcp_robots = {} if stage is None else _find_tcps(stage.GetPseudoRoot())
         if stage is not None:
             self._store_poses_in_base_frame(stage)
             self._objects_changed_listener = Tf.Notice.Register(
@@ -226,17 +248,78 @@ class PoseService:
             self._articulation_service.find_tool_on_robot(articulation_id),
         )
 
+    async def find_default_tcp(self, robot_part_prim_path: str) -> tuple[str, str]:
+        """Return the prim paths of the robot ``robot_part_prim_path`` is part of and of its
+        default TCP frame, such as ``tool0``, as ``(robot_prim_path, default_tcp_prim_path)``.
+
+        The server is needed only for a robot that stores no default TCP yet, which is then
+        loaded there to store it.
+
+        Args:
+            robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
+
+        Raises:
+            HTTPException: 422 if the prim is part of no robot, the robot stores neither a
+                default TCP nor a class name, the server does not know its class, or the robot
+                does not match its class; 503 if the server is needed and cannot be reached.
+        """
+        stage = omni.usd.get_context().get_stage()
+        robot_prim_path, _ = await self.find_robot_and_tool(robot_part_prim_path)
+        default_tcp_prim_path = await self._robot_frame_path(
+            stage, robot_prim_path, ROBOT_DEFAULT_TCP_ATTRIBUTE
+        )
+        return robot_prim_path, default_tcp_prim_path
+
+    async def create_tcp(
+        self, robot_part_prim_path: str, name: str, offset: models.Transformation
+    ) -> str:
+        """Create a TCP of the robot ``robot_part_prim_path`` is part of and return its prim path.
+
+        The TCP is an Xform named ``name`` under the robot's default TCP frame, at ``offset`` in
+        that frame: the offset Synapse's ``add_tcp`` takes. It shows its axes as red/green/blue
+        arrows. The Telekinesis Isaac Sim Server gets it when the robot is next loaded
+        there, or at once when the robot is loaded already and the service follows the stage;
+        the TCP is created without the server. The server is needed only for a robot that
+        stores no default TCP yet, which is then loaded there to store it.
+
+        Args:
+            robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
+            name: The TCP's name; it is made a valid prim name.
+            offset: The TCP's pose in the default TCP frame, metres and XYZ Euler degrees.
+
+        Raises:
+            HTTPException: 422 if the prim is part of no robot, ``name`` is empty or names a
+                prim of the robot already, the robot stores neither a default TCP nor a class
+                name, the server does not know its class, or the robot does not match its class;
+                503 if the server is needed and cannot be reached.
+        """
+        stage = omni.usd.get_context().get_stage()
+        if not name.strip():
+            raise HTTPException(422, "Enter a name for the TCP.")
+        robot_prim_path, default_tcp_path = await self.find_default_tcp(robot_part_prim_path)
+        tcp_name = Tf.MakeValidIdentifier(name.strip())
+        # Frames are found by name under the robot, so a TCP must not share a prim's name.
+        robot_prim = stage.GetPrimAtPath(robot_prim_path)
+        if any(prim.GetName() == tcp_name for prim in Usd.PrimRange(robot_prim)):
+            raise HTTPException(422, f"{robot_prim_path} already has a prim named '{tcp_name}'.")
+        tcp_path = Sdf.Path(default_tcp_path).AppendChild(tcp_name)
+        marker = robot_assembler.define_tcp_marker(stage, tcp_path, offset)
+        marker.GetPrim().CreateRelationship(TCP_ROBOT_RELATIONSHIP).SetTargets([robot_prim_path])
+        return tcp_path.pathString
+
     async def create_pose_from_tool(self, robot_part_prim_path: str) -> dict:
         """Create a pose from the tool mounted on a robot: a pose of the whole tool,
         where the tool stands now.
 
-        The robot must be added with Add Robot and carry a tool added with Add Tool. The robot's
-        inverse kinematics for the pose is solved before anything is written, so a failure
-        leaves the stage unchanged. It is seeded with the robot's current joints, so the
-        solution keeps the robot's current arm configuration.
+        The robot must be added with Add Robot and carry a tool added with Add Tool. The pose
+        places the robot's default TCP, or the TCP ``robot_part_prim_path`` is, and is named
+        after the tool, or after that TCP. The robot's inverse kinematics for the pose is solved
+        before anything is written, so a failure leaves the stage unchanged. It is seeded with
+        the robot's current joints, so the solution keeps the robot's current arm configuration.
 
         Args:
-            robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
+            robot_part_prim_path: Any prim of the robot, its assembly, or its tool; a TCP of the
+                robot to make the pose for that TCP.
 
         Returns:
             ``{"prim_path": ..., "reachable": ...}`` of the new pose.
@@ -252,17 +335,19 @@ class PoseService:
     async def create_pose_from_joint_positions(
         self, robot_part_prim_path: str, joints: dict
     ) -> dict:
-        """Create a pose where the robot's default TCP is when the robot stands at ``joints``.
+        """Create a pose where the robot's TCP is when the robot stands at ``joints``.
 
-        The pose is placed at the robot's default TCP in the forward kinematics of ``joints``,
-        computed by the Telekinesis Isaac Sim Server, and stores ``joints`` as its solution, so
-        it is reachable. Its ghost is the whole robot standing at ``joints`` together with its
-        tool, when it carries one added with Add Tool; the pose is named after the tool, or
-        after the robot when it has none. The forward kinematics is computed before anything is
-        written, so a failure leaves the stage unchanged.
+        The pose places the robot's default TCP, or the TCP ``robot_part_prim_path`` is. It is
+        placed at that TCP in the forward kinematics of ``joints``, computed by the Telekinesis
+        Isaac Sim Server, and stores ``joints`` as its solution, so it is reachable. Its ghost is
+        the whole robot standing at ``joints`` together with its tool, when it carries one added
+        with Add Tool; the pose is named after the TCP it was made from, the tool, or the robot,
+        whichever comes first. The forward kinematics is computed before anything is written, so
+        a failure leaves the stage unchanged.
 
         Args:
-            robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
+            robot_part_prim_path: Any prim of the robot, its assembly, or its tool; a TCP of the
+                robot to make the pose for that TCP.
             joints: ``{"joint_names": [...], "joint_positions": [...]}`` in radians, naming
                 every joint of the robot.
 
@@ -279,8 +364,8 @@ class PoseService:
         return await self._create_pose(robot_part_prim_path, joints)
 
     async def _create_pose(self, robot_part_prim_path: str, joints: dict | None) -> dict:
-        """Create a pose of a robot's default TCP, as :meth:`create_pose_from_tool` when
-        ``joints`` is ``None`` and as :meth:`create_pose_from_joint_positions` otherwise."""
+        """Create a pose of a robot's TCP, as :meth:`create_pose_from_tool` when ``joints`` is
+        ``None`` and as :meth:`create_pose_from_joint_positions` otherwise."""
         stage = omni.usd.get_context().get_stage()
         if UsdGeom.GetStageMetersPerUnit(stage) != 1.0:
             # The bridge loads robots at metre scale whatever the stage unit, so a pose read in
@@ -292,8 +377,14 @@ class PoseService:
             raise HTTPException(
                 422, f"'{robot_prim_path}' has no tool. Attach one with Add Tool first."
             )
+        tcp_name = find_tcp_name(stage.GetPrimAtPath(robot_part_prim_path), robot_prim_path)
         robot_id = await self._connected_robot_id(stage, robot_prim_path)
         robot = await self._describe_robot(robot_id)
+        if tcp_name is not None:
+            # Given again in case the TCP changed since the server last got it.
+            await _call_server(
+                self._server_client.set_tcps(robot_id, self._robot_tcps(stage, robot_prim_path))
+            )
 
         default_tcp_world = _world_transform_of_robot_frame(
             stage, robot_prim_path, robot["default_tcp"], robot["class_name"]
@@ -301,20 +392,26 @@ class PoseService:
         base_world = _world_transform_of_robot_frame(
             stage, robot_prim_path, robot["base_frame"], robot["class_name"]
         )
+        tcp_world = (
+            default_tcp_world
+            if tcp_name is None
+            else omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(robot_part_prim_path))
+        )
         ghost_meshes = []
         if tool_prim_path is not None:
-            # The tool is fixed to the robot, so its meshes in the current default TCP's frame
-            # are also its meshes in the default TCP's frame at any joint positions.
-            ghost_meshes.append(
-                meshes.merge_meshes_in_frame(stage, tool_prim_path, default_tcp_world)
-            )
+            # The tool is fixed to the robot, so its meshes in the current TCP's frame are also
+            # its meshes in the TCP's frame at any joint positions.
+            ghost_meshes.append(meshes.merge_meshes_in_frame(stage, tool_prim_path, tcp_world))
 
         if joints is None:
-            pose_world = default_tcp_world
+            pose_world = tcp_world
             pose = _pose_in_frame(pose_world, base_world)
             solution = await _call_server(
                 self._server_client.inverse_kinematics(
-                    robot_id, [pose], await self.current_joint_positions(robot_prim_path)
+                    robot_id,
+                    [pose],
+                    await self.current_joint_positions(robot_prim_path),
+                    tcp_name,
                 )
             )
             joint_names, joint_positions = (
@@ -323,7 +420,12 @@ class PoseService:
             )
         else:
             link_world_transforms = await self.robot_link_world_transforms(robot_prim_path, joints)
-            pose_world = link_world_transforms[robot["default_tcp"]]
+            # The TCP is fixed to the default TCP, so it keeps its offset from it at ``joints``.
+            pose_world = (
+                tcp_world
+                * default_tcp_world.GetInverse()
+                * link_world_transforms[robot["default_tcp"]]
+            )
             pose = _pose_in_frame(pose_world, base_world)
             joint_names, joint_positions = joints["joint_names"], joints["joint_positions"]
             link_paths = meshes.find_link_paths(stage, robot_prim_path, link_world_transforms)
@@ -354,9 +456,8 @@ class PoseService:
         )
         UsdGeom.Xform.Define(stage, poses_path)
         pose_name = (
-            Tf.MakeValidIdentifier(Sdf.Path(tool_prim_path or robot_prim_path).name)
-            + POSE_NAME_SUFFIX
-        )
+            tcp_name or Tf.MakeValidIdentifier(Sdf.Path(tool_prim_path or robot_prim_path).name)
+        ) + POSE_NAME_SUFFIX
         pose_path = omni.usd.get_stage_next_free_path(stage, f"{poses_path}/{pose_name}", False)
         pose_mesh = UsdGeom.Mesh.Define(stage, pose_path)
         pose_mesh.CreatePointsAttr(points)
@@ -374,6 +475,8 @@ class PoseService:
 
         pose_prim = pose_mesh.GetPrim()
         pose_prim.CreateRelationship(POSE_ROBOT_RELATIONSHIP).SetTargets([robot_prim_path])
+        if tcp_name is not None:
+            pose_prim.CreateAttribute(POSE_TCP_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(tcp_name)
         _write_pose_in_base_frame(pose_prim, pose)
         reachable = _write_pose_solution(stage, pose_prim, joint_names, joint_positions)
         # Recorded before the creation's own change notice is handled, so that notice does not
@@ -386,10 +489,11 @@ class PoseService:
     async def list_poses(self, robot_prim_path: str | None = None) -> list[dict]:
         """Return the poses of the open stage, sorted by prim path.
 
-        Each entry is ``{"name", "prim_path", "robot_prim_path", "pose", "joint_names",
-        "joint_positions", "reachable"}``: ``pose`` is the pose's ``[x, y, z, rx, ry, rz]`` in
+        Each entry is ``{"name", "prim_path", "robot_prim_path", "tcp", "pose", "joint_names",
+        "joint_positions", "reachable"}``: ``tcp`` is the name of the TCP the pose places, or
+        ``None`` for the robot's default TCP; ``pose`` is the pose's ``[x, y, z, rx, ry, rz]`` in
         its robot's base frame, metres and extrinsic XYZ Euler degrees, the pose a program moves
-        the robot's default TCP to; ``joint_positions`` is the stored solution in radians.
+        that TCP to; ``joint_positions`` is the stored solution in radians.
 
         Args:
             robot_prim_path: Only the poses of this robot, or every pose when ``None``.
@@ -426,6 +530,7 @@ class PoseService:
                     "name": pose_path.name,
                     "prim_path": pose_path.pathString,
                     "robot_prim_path": pose_robot_path,
+                    "tcp": pose_prim.GetAttribute(POSE_TCP_ATTRIBUTE).Get() or None,
                     "pose": _pose_in_frame(
                         omni.usd.get_world_transform_matrix(pose_prim), base_world
                     ),
@@ -514,16 +619,116 @@ class PoseService:
                 server does not know its class, or the robot does not match its class; 503 if
                 the server cannot be reached.
         """
+        frame_path = await self._robot_frame_path(
+            stage, robot_prim_path, ROBOT_BASE_FRAME_ATTRIBUTE
+        )
+        return omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(frame_path))
+
+    async def _robot_frame_path(
+        self, stage: Usd.Stage, robot_prim_path: str, frame_attribute: str
+    ) -> str:
+        """Return the path of the robot's prim named by the robot prim's ``frame_attribute``,
+        such as its base frame or default TCP.
+
+        The server is contacted only for a robot that stores no name in ``frame_attribute``
+        yet, which is then loaded on the server to store it.
+
+        Raises:
+            HTTPException: 422 if the robot stores neither the name nor a class name, the server
+                does not know its class, or the robot does not match its class; 503 if the
+                server cannot be reached.
+        """
         robot_prim = stage.GetPrimAtPath(robot_prim_path)
         async with self._connect_lock:
-            if not robot_prim.GetAttribute(ROBOT_BASE_FRAME_ATTRIBUTE).Get():
+            if not robot_prim.GetAttribute(frame_attribute).Get():
                 await self._load_robot_on_server(stage, robot_prim_path)
-        return _world_transform_of_robot_frame(
+        return _find_robot_frame(
             stage,
             robot_prim_path,
-            robot_prim.GetAttribute(ROBOT_BASE_FRAME_ATTRIBUTE).Get(),
+            robot_prim.GetAttribute(frame_attribute).Get(),
             robot_prim.GetAttribute(ROBOT_CLASS_NAME_ATTRIBUTE).Get(),
         )
+
+    def _robot_tcps(self, stage: Usd.Stage, robot_prim_path: str) -> dict[str, list[float]]:
+        """Return each TCP of the robot at ``robot_prim_path`` by name: its pose
+        ``[x, y, z, rx, ry, rz]`` in the robot's default TCP frame, metres and extrinsic XYZ Euler
+        degrees, read from where its prim stands, so a TCP moved anywhere fixed to the default
+        TCP keeps its meaning.
+
+        Raises:
+            HTTPException: 422 if the robot has TCPs and its stored default TCP is not one of its
+                prims, so it does not match its class.
+        """
+        tcp_prims = [
+            stage.GetPrimAtPath(tcp_path)
+            for tcp_path, tcp_robot_path in self._tcp_robots.items()
+            if tcp_robot_path == robot_prim_path and stage.GetPrimAtPath(tcp_path)
+        ]
+        if not tcp_prims:
+            return {}
+        robot_prim = stage.GetPrimAtPath(robot_prim_path)
+        default_tcp_world = _world_transform_of_robot_frame(
+            stage,
+            robot_prim_path,
+            robot_prim.GetAttribute(ROBOT_DEFAULT_TCP_ATTRIBUTE).Get(),
+            robot_prim.GetAttribute(ROBOT_CLASS_NAME_ATTRIBUTE).Get(),
+        )
+        return {
+            tcp_prim.GetName(): _pose_in_frame(
+                omni.usd.get_world_transform_matrix(tcp_prim), default_tcp_world
+            )
+            for tcp_prim in tcp_prims
+        }
+
+    def _schedule_tcp_sync(self, robot_prim_path: str):
+        """Give the server the TCPs of the robot at ``robot_prim_path`` again, unless that is
+        already waiting to run."""
+        if robot_prim_path in self._tcp_syncs_pending:
+            return
+        self._tcp_syncs_pending.add(robot_prim_path)
+        asyncio.ensure_future(self._sync_robot_tcps(robot_prim_path))
+
+    async def _sync_robot_tcps(self, robot_prim_path: str):
+        """Give the server the TCPs of the robot at ``robot_prim_path`` as the stage holds them
+        now, then solve the robot's poses of a TCP again.
+
+        Only a robot loaded on the server gets its TCPs; any other gets them when it is loaded.
+        A failure logs a warning and leaves the poses as they are. Runs one at a time, and reads
+        the stage only once it runs, so the last sync gives the server the latest TCPs.
+        """
+        async with self._tcp_sync_lock:
+            self._tcp_syncs_pending.discard(robot_prim_path)
+            stage = self._stage
+            robot_prim = stage.GetPrimAtPath(robot_prim_path) if stage is not None else None
+            if not robot_prim:
+                return
+            robot_id = robot_prim.GetAttribute(ROBOT_ID_ATTRIBUTE).Get()
+            if robot_id:
+                try:
+                    await _call_server(
+                        self._server_client.set_tcps(
+                            robot_id, self._robot_tcps(stage, robot_prim_path)
+                        )
+                    )
+                except HTTPException as error:
+                    carb.log_warn(
+                        f"[bridge] could not give the TCPs of {robot_prim_path} to the "
+                        f"Telekinesis Isaac Sim Server: {error.detail}"
+                    )
+                    return
+            if stage is not self._stage:
+                return
+            for pose_path in self._pose_paths:
+                pose_prim = stage.GetPrimAtPath(pose_path)
+                robot_targets = pose_prim.GetRelationship(POSE_ROBOT_RELATIONSHIP).GetTargets()
+                if (
+                    pose_prim.GetAttribute(POSE_TCP_ATTRIBUTE).Get()
+                    and robot_targets
+                    and robot_targets[0].pathString == robot_prim_path
+                ):
+                    # Solved again even though the pose did not move: its TCP did.
+                    self._solved_poses.pop(pose_path, None)
+                    self._schedule_solve(pose_path)
 
     def _on_objects_changed(self, notice, sender):
         """Hand the prims a change to the followed stage moved or re-created to Isaac Sim's loop.
@@ -548,17 +753,38 @@ class PoseService:
     def _on_prims_changed(
         self, stage: Usd.Stage, moved_paths: list[Sdf.Path], resynced_paths: list[Sdf.Path]
     ):
-        """Update the known poses under the re-created prims, then solve every pose that is or
-        lies under a moved or re-created prim. Runs on Isaac Sim's loop."""
+        """Update the known poses and TCPs under the re-created prims, then solve every pose
+        that is or lies under a moved or re-created prim, and give the server the TCPs of every
+        robot with a TCP that was moved itself, re-created or removed. Runs on Isaac Sim's loop.
+
+        A TCP moved only with its parent prims, such as the robot's links while the simulation
+        runs, keeps its offset from the default TCP, so it is not given to the server again.
+        """
         if stage is not self._stage:
             return
+        changed_tcp_robots = {
+            self._tcp_robots[path] for path in moved_paths if path in self._tcp_robots
+        }
         for resynced_path in resynced_paths:
             self._pose_paths = {
                 path for path in self._pose_paths if not path.HasPrefix(resynced_path)
             }
+            removed_tcps = {
+                path: robot_path
+                for path, robot_path in self._tcp_robots.items()
+                if path.HasPrefix(resynced_path)
+            }
+            for path in removed_tcps:
+                del self._tcp_robots[path]
+            changed_tcp_robots |= set(removed_tcps.values())
             resynced_prim = stage.GetPrimAtPath(resynced_path)
             if resynced_prim:
                 self._pose_paths |= _find_poses(resynced_prim)
+                found_tcps = _find_tcps(resynced_prim)
+                self._tcp_robots |= found_tcps
+                changed_tcp_robots |= set(found_tcps.values())
+        for robot_path in changed_tcp_robots:
+            self._schedule_tcp_sync(robot_path)
         for path in [path for path in self._solved_poses if path not in self._pose_paths]:
             del self._solved_poses[path]
         changed_paths = set(moved_paths) | set(resynced_paths)
@@ -592,7 +818,7 @@ class PoseService:
 
     async def _solve_moved_pose(self, pose_path: Sdf.Path):
         """Store the pose at ``pose_path`` in its robot's base frame, then solve it for that pose
-        and store the solution.
+        and its TCP and store the solution.
 
         Nothing happens when the pose is gone, and only the pose in the base frame is stored when
         it has moved less than the thresholds since it was last solved. The solve is seeded
@@ -602,8 +828,9 @@ class PoseService:
 
         Raises:
             HTTPException: 422 if the pose names no robot, the robot stores no class name or is
-                no longer known to the server, or the robot does not match its class; 503 if the
-                server cannot be reached.
+                no longer known to the server, the robot does not match its class, or the server
+                has no TCP of the pose's TCP name, e.g. because the TCP was renamed or deleted;
+                503 if the server cannot be reached.
         """
         stage = self._stage
         pose_prim = stage.GetPrimAtPath(pose_path)
@@ -634,7 +861,9 @@ class PoseService:
         else:
             seed = await self.current_joint_positions(robot_prim_path)
         solution = await _call_server(
-            self._server_client.inverse_kinematics(robot_id, [pose], seed)
+            self._server_client.inverse_kinematics(
+                robot_id, [pose], seed, pose_prim.GetAttribute(POSE_TCP_ATTRIBUTE).Get() or None
+            )
         )
         if stage is not self._stage or not pose_prim.IsValid():
             return
@@ -659,15 +888,17 @@ class PoseService:
 
     async def _load_robot_on_server(self, stage: Usd.Stage, robot_prim_path: str) -> str:
         """Load the robot at ``robot_prim_path`` on the server from its stored class name, store
-        the new id, the exact class name and the base frame on the prim, and return the id.
+        the new id, the exact class name, the base frame and the default TCP on the prim, give
+        the server the robot's TCPs, and return the id.
 
         The server robot of the id the prim stored before is deleted. Failing to delete it only
         logs a warning: the robot is loaded either way, and a server that restarted no longer
         has the old robot (404). Called with ``_connect_lock`` held.
 
         Raises:
-            HTTPException: 422 if the robot stores no class name, or the server does not know it
-                or answers with another error; 503 if the server cannot be reached.
+            HTTPException: 422 if the robot stores no class name, the server does not know it,
+                refuses a TCP or answers with another error, or the robot does not match its
+                class; 503 if the server cannot be reached.
         """
         robot_prim = stage.GetPrimAtPath(robot_prim_path)
         class_name = robot_prim.GetAttribute(ROBOT_CLASS_NAME_ATTRIBUTE).Get()
@@ -685,6 +916,9 @@ class PoseService:
         robot_prim.CreateAttribute(ROBOT_BASE_FRAME_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(
             robot["base_frame"]
         )
+        robot_prim.CreateAttribute(ROBOT_DEFAULT_TCP_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(
+            robot["default_tcp"]
+        )
         self._robot_descriptions[robot["id"]] = robot
         if previous_robot_id:
             try:
@@ -695,6 +929,9 @@ class PoseService:
                         f"[bridge] could not delete the previous server robot "
                         f"{previous_robot_id} of {robot_prim_path}: {error}"
                     )
+        tcps = self._robot_tcps(stage, robot_prim_path)
+        if tcps:
+            await _call_server(self._server_client.set_tcps(robot["id"], tcps))
         return robot["id"]
 
     async def _describe_robot(self, robot_id: str) -> dict:
@@ -752,6 +989,24 @@ class PoseService:
         return {"joint_names": joint_names, "joint_positions": joint_positions}
 
 
+def _find_robot_frame(
+    stage: Usd.Stage, robot_prim_path: str, frame_name: str, class_name: str
+) -> str:
+    """Return the path of the robot's prim named ``frame_name``.
+
+    Raises:
+        HTTPException: 422 if the robot has no such prim, so it does not match ``class_name``.
+    """
+    try:
+        return robot_assembler.find_prim_by_name(stage, robot_prim_path, frame_name)
+    except RuntimeError as error:
+        raise HTTPException(
+            422,
+            f"{robot_prim_path} has no '{frame_name}', so it does not match its robot class "
+            f"{class_name}. Add the robot again with Add Robot.",
+        ) from error
+
+
 def _world_transform_of_robot_frame(
     stage: Usd.Stage, robot_prim_path: str, frame_name: str, class_name: str
 ) -> Gf.Matrix4d:
@@ -760,14 +1015,7 @@ def _world_transform_of_robot_frame(
     Raises:
         HTTPException: 422 if the robot has no such prim, so it does not match ``class_name``.
     """
-    try:
-        frame_path = robot_assembler.find_prim_by_name(stage, robot_prim_path, frame_name)
-    except RuntimeError as error:
-        raise HTTPException(
-            422,
-            f"{robot_prim_path} has no '{frame_name}', so it does not match its robot class "
-            f"{class_name}. Add the robot again with Add Robot.",
-        ) from error
+    frame_path = _find_robot_frame(stage, robot_prim_path, frame_name, class_name)
     return omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(frame_path))
 
 
@@ -796,6 +1044,25 @@ def _find_poses(root: Usd.Prim) -> set[Sdf.Path]:
         for prim in Usd.PrimRange(root)
         if prim.HasAttribute(POSE_REACHABLE_ATTRIBUTE)
     }
+
+
+def _find_tcps(root: Usd.Prim) -> dict[Sdf.Path, str]:
+    """Return the paths of the TCPs at or under ``root``, each with its robot prim's path."""
+    tcps = {}
+    for prim in Usd.PrimRange(root):
+        robot_targets = prim.GetRelationship(TCP_ROBOT_RELATIONSHIP).GetTargets()
+        if robot_targets:
+            tcps[prim.GetPath()] = robot_targets[0].pathString
+    return tcps
+
+
+def find_tcp_name(prim: Usd.Prim, robot_prim_path: str) -> str | None:
+    """Return the name of the TCP ``prim`` is when it is a TCP of the robot at
+    ``robot_prim_path``, otherwise ``None``."""
+    robot_targets = prim.GetRelationship(TCP_ROBOT_RELATIONSHIP).GetTargets() if prim else []
+    if robot_targets and robot_targets[0].pathString == robot_prim_path:
+        return prim.GetName()
+    return None
 
 
 def _write_pose_in_base_frame(pose_prim: Usd.Prim, pose: list[float]):

@@ -18,7 +18,7 @@ from ..comm.services.articulations import (
 from ..comm.services.asset_library import AssetLibraryService
 from ..comm.services.stage import StageService
 from ..core import robot_assembler
-from .add_asset_window import BUTTON_WIDTH, AddAssetWindow
+from .add_asset_window import BUTTON_WIDTH, AddAssetWindow, hint_callout
 
 CAMERA_CATEGORY = "cameras"
 
@@ -79,7 +79,7 @@ class AddCameraWindow(AddAssetWindow):
 
     def build_extra_hints(self):
         """Say which way the camera looks."""
-        with self._hint_callout():
+        with hint_callout():
             ui.Label(
                 "The camera looks the opposite way to the gizmo's blue Z arrow.",
                 width=0,

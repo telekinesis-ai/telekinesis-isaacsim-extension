@@ -47,9 +47,11 @@ _MOUNTED_PRIM_DENSITY = 1000.0
 _TCP_XFORM_NAME = "tcp"
 # ROS-Industrial (REP-199) name of the frame on an arm's flange face, Z pointing out of it.
 _FLANGE_FRAME_NAME = "tool0"
-# Size of the TCP marker's axes, in meters.
-_TCP_AXIS_LENGTH = 0.05
-_TCP_AXIS_RADIUS = 0.002
+# Size of the TCP marker's axis arrows, in meters: a cylinder shaft with a cone head on its end.
+_TCP_ARROW_SHAFT_LENGTH = 0.04
+_TCP_ARROW_SHAFT_RADIUS = 0.005
+_TCP_ARROW_HEAD_LENGTH = 0.02
+_TCP_ARROW_HEAD_RADIUS = 0.01
 
 
 def find_prim_by_name(stage, root_path, name):
@@ -479,15 +481,12 @@ def add_convex_hull_colliders(prim):
 def place_tcp(stage, arm_prim, arm_mount_link, tcp_name, offset):
     """Place the arm's TCP marker, named ``tcp_name``, at ``offset`` in the mount link's frame.
 
-    The marker is a plain Xform at ``<mount link>/_TCP_XFORM_NAME/<tcp_name>`` with no
-    physics API, so it is drawn with the link like the link's visuals rather than
-    simulated -- the fixed-joint bolt-on :func:`mount_prim` needs for a rigid body is
-    not needed. The fixed parent keeps the TCP name from colliding with the arm's own
-    prims, and is emptied on every call so only the most recently set TCP is shown.
-
-    The marker carries red/green/blue X/Y/Z axes with guide purpose, so they are
-    drawn only while the viewport shows guides (``StageService.set_guides_visible``).
-    Returns the marker's path.
+    The marker (see :func:`define_tcp_marker`) is a plain Xform at
+    ``<mount link>/_TCP_XFORM_NAME/<tcp_name>`` with no physics API, so it is drawn with
+    the link like the link's visuals rather than simulated -- the fixed-joint bolt-on
+    :func:`mount_prim` needs for a rigid body is not needed. The fixed parent keeps the
+    TCP name from colliding with the arm's own prims, and is emptied on every call so
+    only the most recently set TCP is shown. Returns the marker's path.
     """
     if not stage.GetPrimAtPath(arm_prim).IsValid():
         raise RuntimeError(f"arm prim {arm_prim!r} not found in the open stage")
@@ -497,24 +496,58 @@ def place_tcp(stage, arm_prim, arm_mount_link, tcp_name, offset):
     for child in list(parent.GetChildren()):
         stage.RemovePrim(child.GetPath())
 
-    marker = UsdGeom.Xform.Define(
-        stage, parent.GetPath().AppendChild(Tf.MakeValidIdentifier(tcp_name))
+    marker = define_tcp_marker(
+        stage, parent.GetPath().AppendChild(Tf.MakeValidIdentifier(tcp_name)), offset
     )
-    marker.MakeMatrixXform().Set(offset_matrix(offset))
+    return marker.GetPath().pathString
+
+
+def define_tcp_marker(stage, marker_path, offset):
+    """Define a TCP marker at ``marker_path``: an Xform at ``offset`` in its parent's frame,
+    showing its X/Y/Z axes as red/green/blue arrows.
+
+    ``offset`` is a ``models.Transformation`` (meters, XYZ Euler degrees), or ``None`` for the
+    parent's own frame. It is authored as a translate and a rotateXYZ op, so the Property
+    window shows it as entered. Each arrow is a cylinder shaft and a cone head under
+    ``<marker>/<axis>``, coloured by its own material under ``<marker>/Looks``, so a copy of the
+    marker keeps its colours. The arrows are ordinary geometry, drawn in the viewport and in
+    camera images. The marker carries no physics. ``marker_path`` must not exist yet. Returns
+    the marker.
+    """
+    marker = UsdGeom.Xform.Define(stage, marker_path)
+    marker.ClearXformOpOrder()
+    marker.AddTranslateOp().Set(Gf.Vec3d(*offset.translation) if offset else Gf.Vec3d(0.0))
+    marker.AddRotateXYZOp().Set(Gf.Vec3f(*offset.rotation) if offset else Gf.Vec3f(0.0))
 
     for axis, color in (("X", (1, 0, 0)), ("Y", (0, 1, 0)), ("Z", (0, 0, 1))):
-        cylinder = UsdGeom.Cylinder.Define(stage, marker.GetPath().AppendChild(f"axis_{axis}"))
-        cylinder.CreateAxisAttr(axis)
-        cylinder.CreateHeightAttr(_TCP_AXIS_LENGTH)
-        cylinder.CreateRadiusAttr(_TCP_AXIS_RADIUS)
-        cylinder.CreateDisplayColorAttr([Gf.Vec3f(*color)])
-        cylinder.CreatePurposeAttr(UsdGeom.Tokens.guide)
-        # A cylinder is centred on its origin; shift it so the axis starts at the TCP.
-        shift = Gf.Vec3d(0, 0, 0)
-        shift["XYZ".index(axis)] = _TCP_AXIS_LENGTH / 2
-        cylinder.AddTranslateOp().Set(shift)
+        material = UsdShade.Material.Define(stage, marker.GetPath().AppendPath(f"Looks/{axis}"))
+        shader = UsdShade.Shader.Define(stage, material.GetPath().AppendChild("Shader"))
+        shader.CreateIdAttr("UsdPreviewSurface")
+        shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set(Gf.Vec3f(*color))
+        material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
 
-    return marker.GetPath().pathString
+        arrow = UsdGeom.Xform.Define(stage, marker.GetPath().AppendChild(axis))
+        UsdShade.MaterialBindingAPI.Apply(arrow.GetPrim()).Bind(material)
+        shaft = UsdGeom.Cylinder.Define(stage, arrow.GetPath().AppendChild("Shaft"))
+        shaft.CreateRadiusAttr(_TCP_ARROW_SHAFT_RADIUS)
+        head = UsdGeom.Cone.Define(stage, arrow.GetPath().AppendChild("Head"))
+        head.CreateRadiusAttr(_TCP_ARROW_HEAD_RADIUS)
+        # Cylinders and cones are centred on their origin, a cone's tip pointing to +axis;
+        # each is shifted so the shaft starts at the TCP and the head sits on its end.
+        for part, length, start in (
+            (shaft, _TCP_ARROW_SHAFT_LENGTH, 0.0),
+            (head, _TCP_ARROW_HEAD_LENGTH, _TCP_ARROW_SHAFT_LENGTH),
+        ):
+            part.CreateAxisAttr(axis)
+            part.CreateHeightAttr(length)
+            part.CreateExtentAttr(
+                UsdGeom.Boundable.ComputeExtentFromPlugins(part, Usd.TimeCode.Default())
+            )
+            shift = Gf.Vec3d(0.0)
+            shift["XYZ".index(axis)] = start + length / 2
+            part.AddTranslateOp().Set(shift)
+
+    return marker
 
 
 def _remove_previous_mount_joints(stage, gripper_prim):

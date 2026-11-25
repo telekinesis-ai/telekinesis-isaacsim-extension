@@ -234,7 +234,7 @@ class AssetLibraryService:
         produces: ``{"<category>": [{"manufacturer", "model", "identifier", "bundle"}, ...]}``,
         where ``manufacturer`` may be ``null`` and ``manufacturer`` and ``model`` are
         display names. A robot entry may also carry
-        ``simulation_mount_link``, which is passed through unchanged.
+        ``simulation_mount_link`` and ``default_tcp``, which are passed through unchanged.
         """
         import omni.kit.app
 

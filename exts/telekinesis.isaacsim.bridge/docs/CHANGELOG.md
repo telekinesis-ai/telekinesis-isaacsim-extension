@@ -18,14 +18,40 @@
   (`pick_pose`, `pick_pose_01`, `pick_pose_02`, `start_place_pose`) as Add Pose ▸ From Tool
   leaves them, and stores the robot's `telekinesis:robot:base_frame`, so
   `examples/ur10e_hande_teach_pick_place.py` runs on the generated scene.
+- Right-click a robot → **Telekinesis Isaac Sim Bridge ▸ Add TCP** adds a TCP: an Xform with
+  red/green/blue X/Y/Z arrows under the robot's default TCP frame (e.g. `tool0`), at an entered
+  offset from it in metres and XYZ Euler degrees, the offset Synapse's `add_tcp` takes. A preview
+  of the arrows follows the entered offset while the window is open, with the Add windows'
+  move/rotate gizmo on it to drag the offset. The TCP is tagged
+  `telekinesis:tcp:robot` and can be moved with the gizmo or the Property window. Adding one does
+  not need the Telekinesis Isaac Sim Server once the robot stores its default TCP.
+- The Telekinesis Isaac Sim Server gets a robot's TCPs (`PUT /robots/{robot_id}/tcps`) whenever
+  the robot is loaded there, e.g. on **Connect**, and again whenever a TCP is created, moved,
+  renamed or deleted.
+- Right-click a TCP → **Add Pose ▸ From Tool** or **From Joint Positions** teaches a pose for
+  that TCP: the pose is placed at the TCP, named `<tcp>_Pose`, stores
+  `telekinesis:pose:tcp`, and is solved for that TCP, also after the TCP moves.
+  `GET /teaching/poses` returns each pose's `tcp`, `null` for the default TCP.
+- Catalogue robots store their default TCP as `telekinesis:robot:default_tcp`, from the new
+  `default_tcp` field of the asset index; loading a robot on the server stores it too.
+  `examples/scenes/pick_and_place_scene.py` writes it.
 
 ### Changed
+- TCP markers placed by `PUT /articulations/{articulation_id}/tcp` carry a translate and a
+  rotateXYZ op instead of one matrix op, and show their axes as red/green/blue arrows (cylinder
+  and cone) in the default purpose instead of guide cylinders, so they are drawn without turning
+  the viewport's guides on, and also in camera images.
 - The robot drawn reaching the selected pose is the see-through blue of the Add window previews
   instead of purple.
 - The bridge's message for an unreachable Telekinesis Isaac Sim Server names the
   `telekinesis-isaacsim-server` command instead of a `fastapi run` command line.
 
 ### Fixed
+- A robot added with Add Robot where it would overlap a robot already in the stage is moved
+  along +X clear of it again, inside its new `<model>_assembly`, instead of being loaded into
+  the other robot. Loading an asset now parks it clear of the robots beside any prim it lies
+  in, not only of those beside the asset itself, so the robots of the neighbouring assemblies
+  count.
 - `examples/scenes/pick_and_place_scene.py` stands the UR10e on the table's base plate instead of
   7 mm above it, and mounts the Hand-E 9.8 mm above the flange instead of 14 mm, as in the
   quickstart scene assembled in the GUI.

@@ -83,16 +83,21 @@ class IsaacSimServerClient:
         return await self._request("GET", f"/robots/{robot_id}")
 
     async def inverse_kinematics(
-        self, robot_id: str, poses: list[list[float]], seed: dict | None = None
+        self,
+        robot_id: str,
+        poses: list[list[float]],
+        seed: dict | None = None,
+        tcp: str | None = None,
     ) -> dict:
-        """Solve the joint positions that bring the robot's default TCP to each pose.
+        """Solve the joint positions that bring the robot's TCP ``tcp`` to each pose.
 
         Args:
             robot_id: Id of the server's robot.
-            poses: Poses ``[x, y, z, rx, ry, rz]`` of the default TCP in the robot's base frame:
+            poses: Poses ``[x, y, z, rx, ry, rz]`` of the TCP in the robot's base frame:
                 metres, then extrinsic XYZ Euler angles in degrees.
             seed: ``{"joint_names": [...], "joint_positions": [...]}`` in radians to start the
                 search from, or ``None``.
+            tcp: Name of a TCP set with :meth:`set_tcps`, or ``None`` for the default TCP.
 
         Returns:
             ``{"joint_names": [...], "joint_positions": [...]}`` with one solution in radians
@@ -100,10 +105,25 @@ class IsaacSimServerClient:
 
         Raises:
             IsaacSimServerError: If the server is not reachable or answers with an error, e.g.
-                404 when it has no robot of that id.
+                404 when it has no robot of that id, 422 when it has no TCP ``tcp``.
         """
-        body = {"poses": poses} if seed is None else {"poses": poses, "seed": seed}
+        body = {"poses": poses, "seed": seed, "tcp": tcp}
         return await self._request("POST", f"/robots/{robot_id}/inverse_kinematics", body)
+
+    async def set_tcps(self, robot_id: str, tcps: dict[str, list[float]]) -> dict:
+        """Make ``tcps`` the server robot's TCPs besides its default TCP, deleting those set
+        before that ``tcps`` leaves out, and return the robot's description.
+
+        Args:
+            robot_id: Id of the server's robot.
+            tcps: Each TCP's pose ``[x, y, z, rx, ry, rz]`` in the default TCP's frame, by name:
+                metres, then extrinsic XYZ Euler angles in degrees.
+
+        Raises:
+            IsaacSimServerError: If the server is not reachable or answers with an error, e.g.
+                404 when it has no robot of that id, 422 when a name is a frame of the robot.
+        """
+        return await self._request("PUT", f"/robots/{robot_id}/tcps", {"tcps": tcps})
 
     async def link_poses(self, robot_id: str, joints: dict) -> dict:
         """Return the pose of every link of the robot's URDF for the given joints.

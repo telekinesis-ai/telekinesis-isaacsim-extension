@@ -46,28 +46,46 @@ Written on the robot prim (the articulation) by Add Robot and by loading the rob
 Telekinesis Isaac Sim Server (`PoseService`, `comm/services/poses.py`). Not a device kind: they
 store no device id, so the device restore never reads them, and `DELETE` of an articulation does
 not remove them. `examples/scenes/pick_and_place_scene.py` writes `telekinesis:robot:class_name`
-(lowercase) and `telekinesis:robot:base_frame` itself.
+(lowercase), `telekinesis:robot:base_frame` and `telekinesis:robot:default_tcp` itself.
 
 | Property | Type | Written when | Purpose |
 |---|---|---|---|
 | `telekinesis:robot:id` | `string` attribute | The robot is loaded on the server: Connect in the Telekinesis Isaac Sim Server window, or the first pose that needs it | Id (UUID) of the robot loaded for this robot on the Telekinesis Isaac Sim Server. Valid until the server stops; afterwards the server answers 404 until Connect loads the robot again |
 | `telekinesis:robot:base_frame` | `string` attribute | The robot is loaded on the server, as for `telekinesis:robot:id` | Name of the link the Synapse class measures poses from, e.g. `base_link`. Lets `GET /teaching/poses` read poses without the server |
+| `telekinesis:robot:default_tcp` | `string` attribute | A catalogue robot whose index entry names a `default_tcp` is loaded (Add Robot, `PUT` articulation with `asset_info`); rewritten when the robot is loaded on the server, as for `telekinesis:robot:id` | Name of the robot's default TCP frame, e.g. `tool0`. Add TCP places TCPs under the prim of that name |
 | `telekinesis:robot:class_name` | `string` attribute | A catalogue robot is loaded (Add Robot, `PUT` articulation with `asset_info`), in lowercase; rewritten with the server's exact casing when the robot is loaded on the server | Synapse class the server loads the robot as, e.g. `universalrobotsur10e`, then `UniversalRobotsUR10E` |
 
 ## Pose tags
 
-Written on a pose (a `Mesh` named `<tool>_Pose`, or `<robot>_Pose` for a robot without a tool,
-in the `poses` Xform beside the robot) by **Add Pose ▸ From Tool** and **Add Pose ▸ From Joint
+Written on a pose (a `Mesh` named `<tcp>_Pose` for a pose made from a TCP, otherwise
+`<tool>_Pose`, or `<robot>_Pose` for a robot without a tool, in the `poses` Xform beside the
+robot) by **Add Pose ▸ From Tool** and **Add Pose ▸ From Joint
 Positions**, and rewritten by `PoseService` whenever the pose moves.
 `examples/scenes/pick_and_place_scene.py` writes the same tags on the poses it creates.
 
 | Property | Type | Purpose |
 |---|---|---|
-| `telekinesis:pose:robot` | relationship to the robot prim | The robot whose default TCP the pose places |
-| `telekinesis:pose:pose_in_base_frame` | `double[6]`: metres, then extrinsic XYZ Euler degrees | `[x, y, z, rx, ry, rz]` of the pose in the robot's base frame, the `pose` `GET /teaching/poses` returns. Written on creation, on every move (including moves too small to solve again), and when the stage is opened wherever it is missing or differs, e.g. on poses taught before 0.11.2; not for a robot that stores no `telekinesis:robot:base_frame` yet. A mirror for reading: `GET /teaching/poses` still computes the pose from the prim's transform |
+| `telekinesis:pose:robot` | relationship to the robot prim | The robot whose TCP the pose places |
+| `telekinesis:pose:tcp` | `string` attribute | Name of the robot's TCP the pose places, written when the pose is made from a TCP (right-click the TCP ▸ Add Pose). Absent for a pose of the default TCP. The pose is solved for this TCP; renaming or deleting the TCP makes its solves fail |
+| `telekinesis:pose:pose_in_base_frame` | `double[6]`: metres, then extrinsic XYZ Euler degrees | `[x, y, z, rx, ry, rz]` of the pose's TCP in the robot's base frame, the `pose` `GET /teaching/poses` returns. Written on creation, on every move (including moves too small to solve again), and when the stage is opened wherever it is missing or differs, e.g. on poses taught before 0.11.2; not for a robot that stores no `telekinesis:robot:base_frame` yet. A mirror for reading: `GET /teaching/poses` still computes the pose from the prim's transform |
 | `telekinesis:pose:joint_names` | `string[]` | The robot's joint names, in the order of `joint_positions` |
 | `telekinesis:pose:joint_positions` | `double[]`, radians | The robot's inverse-kinematics solution for the pose; empty when unreachable |
 | `telekinesis:pose:reachable` | `bool` | Whether the robot can reach the pose; also marks the prim as a pose |
+
+## TCP tags
+
+Written on a TCP, an `Xform` that **Add TCP** places under the robot's default TCP frame
+(`<default TCP>/<name>`, e.g. `…/wrist_3_link/flange/tool0/fingertip`), with red/green/blue
+guide-purpose axes. The TCP's name is its prim's name. Its offset is not stored separately: it is
+the prim's pose in the default TCP frame, read from where the prim stands, so its own translate
+and rotateXYZ ops show it while it sits directly under the default TCP: metres, then extrinsic XYZ
+Euler degrees, as Synapse's `add_tcp` takes it. The bridge gives a robot's TCPs to the
+Telekinesis Isaac Sim Server when the robot is loaded there, and again whenever a TCP is
+created, moved, renamed or deleted.
+
+| Property | Type | Purpose |
+|---|---|---|
+| `telekinesis:tcp:robot` | relationship to the robot prim | Marks the prim as a TCP of that robot |
 
 ## Prim customData
 

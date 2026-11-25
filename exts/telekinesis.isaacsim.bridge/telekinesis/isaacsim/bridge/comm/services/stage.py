@@ -206,11 +206,11 @@ class StageService:
             scene_api.CreateBroadphaseTypeAttr().Set("MBP")
 
     def set_guides_visible(self, visible: bool) -> None:
-        """Show or hide guide-purpose prims, such as the TCP marker axes, in the viewport.
+        """Show or hide guide-purpose prims, such as colliders' guide meshes, in the viewport.
 
         This is the viewport's Display > Show By Purpose > Guide toggle, so it applies
-        to every guide prim in the stage, not only the TCP markers. The setting is
-        persistent and survives an Isaac Sim restart.
+        to every guide prim in the stage. The setting is persistent and survives an
+        Isaac Sim restart.
         """
         import carb.settings
 

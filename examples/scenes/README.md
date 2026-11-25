@@ -37,7 +37,8 @@ scene too.
 /World/vention_table/robot_mount/UR10e_assembly    telekinesis:assemblyRobot -> UR10e
 │                       7 mm below robot_mount, standing the robot on the base plate
 ├─ UR10e                telekinesis:articulation:id = "", telekinesis:mountLink = wrist_3_link,
-│                       telekinesis:robot:class_name, telekinesis:robot:base_frame = base_link
+│                       telekinesis:robot:class_name, telekinesis:robot:base_frame = base_link,
+│                       telekinesis:robot:default_tcp = tool0
 ├─ Robotiq_UR_Coupler   rigid body fixed to wrist_3_link
 ├─ Hand_E               telekinesis:articulation:id = "", driven_joints = [left_finger_joint]
 │                       merged into the UR10e's articulation, 9.8 mm above wrist_3_link

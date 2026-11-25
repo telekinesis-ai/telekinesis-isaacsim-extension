@@ -41,6 +41,62 @@ HINT_BACKGROUND_COLOR = 0x33FFD141
 KEY_CAP_TEXT_COLOR = 0xFF1E1E1E
 
 
+@contextlib.contextmanager
+def hint_callout():
+    """Build a hint box in the preview's colour; the widgets built inside the ``with`` block
+    form its centered row."""
+    with ui.ZStack(height=0):
+        ui.Rectangle(
+            style={
+                "background_color": HINT_BACKGROUND_COLOR,
+                "border_color": ACCENT_COLOR,
+                "border_width": 1,
+                "border_radius": 4,
+            }
+        )
+        with ui.VStack(height=0):
+            ui.Spacer(height=6)
+            with ui.HStack(height=0, spacing=6):
+                ui.Spacer()
+                yield
+                ui.Spacer()
+            ui.Spacer(height=6)
+
+
+def build_key_cap(key: str):
+    """Build a keyboard key labelled ``key``, as the gizmo hint names it."""
+    with ui.ZStack(width=22, height=20):
+        ui.Rectangle(style={"background_color": ACCENT_COLOR, "border_radius": 3})
+        ui.Label(
+            key,
+            alignment=ui.Alignment.CENTER,
+            style={"color": KEY_CAP_TEXT_COLOR, "font_size": 14},
+        )
+
+
+def build_gizmo_hint():
+    """Build the hint naming the keys that switch a :class:`PlacementGizmo` between moving
+    and rotating."""
+    with hint_callout():
+        ui.Label("Hover over the viewport and press", width=0)
+        build_key_cap("W")
+        ui.Label("for the move or", width=0)
+        build_key_cap("E")
+        ui.Label("for the rotate tool", width=0)
+
+
+def deselect_all():
+    """Clear the stage selection, unless nothing is selected.
+
+    A window with its own gizmo calls this on every selection change, so Kit's gizmo on a
+    selected prim never stands beside it; clearing only a non-empty selection ends the loop
+    the clearing's own selection change starts.
+    """
+    selection = omni.usd.get_context().get_selection()
+    if selection.get_selected_prim_paths():
+        selection.clear_selected_prim_paths()
+
+
 class AddAssetWindow(abc.ABC):
     """A window that adds one asset from the Telekinesis asset library to the stage.
 
@@ -146,12 +202,7 @@ class AddAssetWindow(abc.ABC):
                 self._attaching_prim_model = ui.StringField(read_only=True).model
             self._transformation_fields = TransformationFields(on_changed_fn=self.update_ghost)
             # Always shown, so the buttons below it never move.
-            with self._hint_callout():
-                ui.Label("Hover over the viewport and press", width=0)
-                self._build_key_cap("W")
-                ui.Label("for the move or", width=0)
-                self._build_key_cap("E")
-                ui.Label("for the rotate tool", width=0)
+            build_gizmo_hint()
             self.build_extra_hints()
             ui.Spacer(height=BUTTON_ROW_GAP)
             # The button row is centered by a stretching spacer on either side.
@@ -195,7 +246,7 @@ class AddAssetWindow(abc.ABC):
         """Build hints shown below the move/rotate hint. Optional; the default builds none.
 
         Called once from the constructor, inside the window's vertical stack; build
-        each hint as the widgets of a ``with self._hint_callout():`` block, so it looks
+        each hint as the widgets of a ``with hint_callout():`` block, so it looks
         like the move/rotate hint.
         """
 
@@ -313,12 +364,12 @@ class AddAssetWindow(abc.ABC):
         if visible:
             # A selected prim gets Kit's own gizmo, which would stand beside the
             # window's; so nothing stays selected while the window is open.
-            self._deselect_all()
+            deselect_all()
             usd_context = omni.usd.get_context()
             self._selection_subscription = (
                 usd_context.get_stage_event_stream().create_subscription_to_pop_by_type(
                     int(omni.usd.StageEventType.SELECTION_CHANGED),
-                    lambda _: self._deselect_all(),
+                    lambda _: deselect_all(),
                     name="telekinesis add window selection lock",
                 )
             )
@@ -327,51 +378,11 @@ class AddAssetWindow(abc.ABC):
             self._remove_ghost()
         self.update_ghost()
 
-    @staticmethod
-    def _deselect_all():
-        """Clear the stage selection, unless nothing is selected."""
-        selection = omni.usd.get_context().get_selection()
-        if selection.get_selected_prim_paths():
-            selection.clear_selected_prim_paths()
-
     def _remove_ghost(self):
         """Remove the ghost and the gizmo standing on it."""
         self._ghost.remove()
         self._ghost_asset = None
         self._gizmo.hide()
-
-    @staticmethod
-    @contextlib.contextmanager
-    def _hint_callout():
-        """Build a hint box in the preview's colour; the widgets built inside the
-        ``with`` block form its centered row."""
-        with ui.ZStack(height=0):
-            ui.Rectangle(
-                style={
-                    "background_color": HINT_BACKGROUND_COLOR,
-                    "border_color": ACCENT_COLOR,
-                    "border_width": 1,
-                    "border_radius": 4,
-                }
-            )
-            with ui.VStack(height=0):
-                ui.Spacer(height=6)
-                with ui.HStack(height=0, spacing=6):
-                    ui.Spacer()
-                    yield
-                    ui.Spacer()
-                ui.Spacer(height=6)
-
-    @staticmethod
-    def _build_key_cap(key: str):
-        """Build a keyboard key labelled ``key``, as the gizmo hint names it."""
-        with ui.ZStack(width=22, height=20):
-            ui.Rectangle(style={"background_color": ACCENT_COLOR, "border_radius": 3})
-            ui.Label(
-                key,
-                alignment=ui.Alignment.CENTER,
-                style={"color": KEY_CAP_TEXT_COLOR, "font_size": 14},
-            )
 
     def _on_gizmo_dragged(self, pose: Gf.Matrix4d):
         """Enter the dragged world ``pose``, read in the transformation frame, in

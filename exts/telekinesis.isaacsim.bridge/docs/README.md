@@ -244,6 +244,11 @@ running at `http://127.0.0.1:8770`.
    **Pose Visible After Add** is checked. The window stays open for the next pose. Moving the
    pose later moves its ghost as one piece; select it to see the robot reaching it.
    **From Tool** is offered only for a robot carrying a tool.
+
+   To teach a pose for another TCP than the default one, such as the gripper's fingertip, add
+   the TCP first (see **TCPs** below), then right-click the TCP and choose **Add Pose ▸ From
+   Tool** or **From Joint Positions**. The pose is placed at that TCP, named `<tcp>_Pose`, and
+   solved for it.
 3. **Place it.** Rename the pose, move it with the viewport gizmo or the Transform fields, or
    duplicate it. While one pose is selected and reachable, the robot is drawn see-through in
    the pose's solution, reaching it; the drawing is never saved and disappears when the pose
@@ -251,10 +256,11 @@ running at `http://127.0.0.1:8770`.
    its stored joint positions so the arm keeps its configuration; a pose moved out of reach turns
    red and keeps its last solution.
 4. **Read the poses.** `GET /teaching/poses?robot_prim_path=<robot>` lists them with their
-   `name`, `pose` and stored `joint_positions`. The pose is `[x, y, z, rx, ry, rz]` of the robot's
-   default TCP (`tool0` on a Universal Robots arm) in the robot's base frame, in metres and
-   extrinsic XYZ Euler degrees, so it can be passed to a Synapse robot's `pick` and `place`
-   unchanged. Reading the poses needs no server once the robot stores its base frame. The same
+   `name`, `tcp`, `pose` and stored `joint_positions`. The pose is `[x, y, z, rx, ry, rz]` of
+   the pose's TCP in the robot's base frame, in metres and extrinsic XYZ Euler degrees: the
+   robot's default TCP (`tool0` on a Universal Robots arm) when `tcp` is `null`, so it can be
+   passed to a Synapse robot's `pick` and `place` unchanged. For a pose of another TCP, give the
+   Synapse robot that TCP first with `robot.add_tcp(name, offset)`, the offset shown below. Reading the poses needs no server once the robot stores its base frame. The same
    pose is stored on the pose as `telekinesis:pose:pose_in_base_frame`, so it can also be read
    in the Property window and written into a program that runs without Isaac Sim.
    `examples/ur10e_hande_teach_pick_place.py` picks at poses named `pick_pose*` and places in a
@@ -262,12 +268,35 @@ running at `http://127.0.0.1:8770`.
    from values written into the script.
 
 A pose is a single `Mesh` with no physics, saved with the stage. Its origin is the robot's default
-TCP, and it stores `telekinesis:pose:robot` (its robot), `telekinesis:pose:pose_in_base_frame`
+TCP, or the TCP it was made from, and it stores `telekinesis:pose:robot` (its robot),
+`telekinesis:pose:tcp` (that TCP's name, for a pose made from one),
+`telekinesis:pose:pose_in_base_frame`
 (the `pose` above), `telekinesis:pose:joint_names`, `telekinesis:pose:joint_positions` (radians)
 and `telekinesis:pose:reachable`. Poses need a
 stage in metres. When the server is not running, adding a pose reports it and a moved pose keeps
 its last solution, with a warning in the console. A robot added before the bridge stored class
 names, and never connected, has no class name; add it again with Add Robot.
+
+### TCPs
+
+A TCP is a frame fixed to the robot's default TCP, such as a gripper's fingertip. Right-click the
+robot, any part of it, or its tool, and choose **Telekinesis Isaac Sim Bridge ▸ Add TCP**. Enter a
+name and the TCP's Position (m) and Rotation (XYZ Euler degrees) in the default TCP's frame
+(`tool0` on a Universal Robots arm). While the window is open, a preview of the TCP's
+red/green/blue X/Y/Z arrows stands where the entered offset puts it, with a move/rotate gizmo on
+it, as in Add Tool: drag it to enter the offset (**W** to move, **E** to rotate). **Add** creates
+the TCP as an Xform with those arrows under the default TCP, e.g.
+`…/wrist_3_link/flange/tool0/fingertip`; the arrows are ordinary geometry, so they also show in
+camera images. Once the window is closed, move the TCP with Kit's gizmo or the
+Property window: its translate and rotate there are the offset Synapse's
+`robot.add_tcp(name, [x, y, z, rx, ry, rz])` takes. A TCP must sit under the default TCP to move
+with the robot, since prims follow their parents in the stage.
+
+Adding a TCP needs no server once the robot stores its default TCP. The Telekinesis Isaac Sim Server gets the robot's TCPs whenever the
+robot is loaded there, e.g. on **Connect**, and again whenever a TCP is created, moved, renamed or
+deleted; the poses of a moved TCP are solved again. A TCP stores `telekinesis:tcp:robot`, and the
+robot its default TCP's name as `telekinesis:robot:default_tcp`. Renaming or deleting a TCP
+leaves its poses without it: their solves then fail with a warning in the console.
 
 ### Saved stages
 

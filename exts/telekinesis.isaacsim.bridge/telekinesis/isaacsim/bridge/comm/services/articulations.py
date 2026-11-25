@@ -51,13 +51,14 @@ MOUNT_LINK_ATTRIBUTE = "telekinesis:mountLink"
 # create_articulation when it loads a catalogue robot into a parent that does not exist.
 ASSEMBLY_ROBOT_RELATIONSHIP = "telekinesis:assemblyRobot"
 # String attributes on a robot prim for the Telekinesis Isaac Sim Server: the id of the robot
-# loaded for it there, the Synapse class name it is loaded from, and the name of the link that
-# class measures poses from. A catalogue robot gets its class name in lowercase when it is
-# loaded; connecting it stores the id, the exact class name and the base frame the server
-# answers with.
+# loaded for it there, the Synapse class name it is loaded from, the name of the link that
+# class measures poses from, and the name of its default TCP frame. A catalogue robot gets its
+# class name in lowercase and its default TCP when it is loaded; connecting it stores the id,
+# the exact class name, the base frame and the default TCP the server answers with.
 ROBOT_ID_ATTRIBUTE = "telekinesis:robot:id"
 ROBOT_CLASS_NAME_ATTRIBUTE = "telekinesis:robot:class_name"
 ROBOT_BASE_FRAME_ATTRIBUTE = "telekinesis:robot:base_frame"
+ROBOT_DEFAULT_TCP_ATTRIBUTE = "telekinesis:robot:default_tcp"
 # Catalogue category of robot arms.
 ROBOT_CATEGORY = "robots/manipulators"
 
@@ -198,7 +199,8 @@ class ArticulationService(DeviceRegistry):
         (see :meth:`resolve_arm_mount_link`). A catalogue robot arm this request loads
         also stores its Synapse class name, in lowercase, as
         :data:`ROBOT_CLASS_NAME_ATTRIBUTE`, the class the Telekinesis Isaac Sim Server
-        loads it as.
+        loads it as, and the catalogue's ``default_tcp`` as
+        :data:`ROBOT_DEFAULT_TCP_ATTRIBUTE`, the frame Add TCP attaches TCPs to.
 
         A gripper merged onto an arm -- by ``assemble_robot`` or the Add Tool window,
         in this session or one saved before -- has no articulation of its own; the
@@ -275,6 +277,10 @@ class ArticulationService(DeviceRegistry):
                 self._stage().GetPrimAtPath(device.prim_path).CreateAttribute(
                     ROBOT_CLASS_NAME_ATTRIBUTE, Sdf.ValueTypeNames.String
                 ).Set(catalogue_entry["identifier"].replace("/", "").replace("_", ""))
+                if catalogue_entry.get("default_tcp"):
+                    self._stage().GetPrimAtPath(device.prim_path).CreateAttribute(
+                        ROBOT_DEFAULT_TCP_ATTRIBUTE, Sdf.ValueTypeNames.String
+                    ).Set(catalogue_entry["default_tcp"])
             await self.rebind_stale_devices()
             return {
                 "articulation_id": articulation_id,

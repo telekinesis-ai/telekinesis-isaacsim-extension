@@ -899,7 +899,7 @@ async def set_cpu_simulation(stage_service=Depends(get_stage_service)):
 
 @stage.put("/viewport/guides", summary="Set Guides Visible")
 async def set_guides_visible(req: SetEnabledRequest, stage_service=Depends(get_stage_service)):
-    """Show or hide guide-purpose prims (e.g. TCP marker axes) in the viewport.
+    """Show or hide guide-purpose prims (e.g. colliders' guide meshes) in the viewport.
 
     Same as Display > Show By Purpose > Guide: applies to every guide prim and persists
     across Isaac Sim restarts.

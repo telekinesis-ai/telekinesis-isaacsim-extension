@@ -47,6 +47,7 @@ from .ui.add_camera_window import AddCameraWindow
 from .ui.add_mesh_window import AddMeshWindow
 from .ui.add_pose_from_joint_positions_window import AddPoseFromJointPositionsWindow
 from .ui.add_robot_window import AddRobotWindow
+from .ui.add_tcp_window import AddTcpWindow
 from .ui.add_tool_window import AddToolWindow
 from .ui.isaacsim_server_window import IsaacSimServerWindow
 from .ui.robot_overlay import RobotOverlay
@@ -167,6 +168,7 @@ class Extension(omni.ext.IExt):
         self._add_pose_from_joint_positions_window = AddPoseFromJointPositionsWindow(
             self._pose_service, self._robot_overlay, self._bridge_server.isaacsim_server_client
         )
+        self._add_tcp_window = AddTcpWindow(self._pose_service)
 
         # Shown at the top of the right-click menu in the Stage panel and viewport. The returned
         # subscription keeps the entry alive; dropping it in on_shutdown removes it.
@@ -201,6 +203,13 @@ class Extension(omni.ext.IExt):
                             "name": "Add Camera",
                             "onclick_fn": lambda objects: self._show_add_asset_window(
                                 self._add_camera_window, objects
+                            ),
+                        },
+                        {
+                            "name": "Add TCP",
+                            "show_fn": self._clicked_prim_is_robot_part,
+                            "onclick_fn": lambda objects: self._add_tcp_window.show(
+                                self._clicked_prim_path(objects)
                             ),
                         },
                         {
@@ -243,6 +252,7 @@ class Extension(omni.ext.IExt):
         self._add_camera_window.destroy()
         self._isaacsim_server_window.destroy()
         self._add_pose_from_joint_positions_window.destroy()
+        self._add_tcp_window.destroy()
         self._robot_overlay.destroy()
         self._pose_service.follow_stage(None)
         self._bridge_stage_event_sub = None
@@ -350,6 +360,7 @@ class Extension(omni.ext.IExt):
                 self._add_mesh_window,
                 self._add_camera_window,
                 self._add_pose_from_joint_positions_window,
+                self._add_tcp_window,
             ):
                 window.close()
 
