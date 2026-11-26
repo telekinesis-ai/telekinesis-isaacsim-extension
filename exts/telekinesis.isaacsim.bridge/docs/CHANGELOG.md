@@ -4,6 +4,10 @@
 - The bridge connects to the Telekinesis Isaac Sim Server at its new address,
   `http://127.0.0.1:6000/telekinesis-isaacsim-server/v1` (was port 8770, prefix `/api/v1`).
   Route paths and bodies are unchanged.
+- A TCP's and a frame pose's red/green/blue axis arrows are one `Mesh` at `<prim>/frame`,
+  coloured per face by `primvars:displayColor`, in place of an `X`/`Y`/`Z` Xform each holding a
+  `Shaft` cylinder and a `Head` cone, and the `Looks` scope with their materials. TCPs and poses
+  created earlier keep the old arrows.
 
 ### Added
 - Right-click a robot → **Telekinesis Isaac Sim Bridge ▸ Add Pose ▸ From Joint Positions** opens a

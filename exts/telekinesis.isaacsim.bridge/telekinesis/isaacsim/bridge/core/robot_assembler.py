@@ -26,6 +26,8 @@ omni/isaac imports live at module top (only imported inside Isaac Sim), matching
 enabled + imported lazily inside the two assembly functions.
 """
 
+import math
+
 import carb
 import omni.kit.app
 import omni.kit.commands
@@ -512,46 +514,72 @@ def define_tcp_marker(stage, marker_path, offset):
 
     ``offset`` is a ``models.Transformation`` (meters, XYZ Euler degrees), or ``None`` for the
     parent's own frame. It is authored as a translate and a rotateXYZ op, so the Property
-    window shows it as entered. Each arrow is a cylinder shaft and a cone head under
-    ``<marker>/<axis>``, coloured by its own material under ``<marker>/Looks``, so a copy of the
-    marker keeps its colours. The arrows are ordinary geometry, drawn in the viewport and in
-    camera images. The marker carries no physics. ``marker_path`` must not exist yet. Returns
-    the marker.
+    window shows it as entered. The arrows are a single mesh at ``<marker>/frame``, each a
+    cylinder shaft starting at the marker's origin and a cone head on its end, coloured per
+    face through ``primvars:displayColor``, so a copy of the marker keeps its colours. The
+    arrows are ordinary geometry, drawn in the viewport and in camera images. The marker
+    carries no physics. ``marker_path`` must not exist yet. Returns the marker.
     """
     marker = UsdGeom.Xform.Define(stage, marker_path)
     marker.ClearXformOpOrder()
     marker.AddTranslateOp().Set(Gf.Vec3d(*offset.translation) if offset else Gf.Vec3d(0.0))
     marker.AddRotateXYZOp().Set(Gf.Vec3f(*offset.rotation) if offset else Gf.Vec3f(0.0))
 
-    for axis, color in (("X", (1, 0, 0)), ("Y", (0, 1, 0)), ("Z", (0, 0, 1))):
-        material = UsdShade.Material.Define(stage, marker.GetPath().AppendPath(f"Looks/{axis}"))
-        shader = UsdShade.Shader.Define(stage, material.GetPath().AppendChild("Shader"))
-        shader.CreateIdAttr("UsdPreviewSurface")
-        shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set(Gf.Vec3f(*color))
-        material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+    segments = 16
+    points, face_vertex_counts, face_vertex_indices, face_colors = [], [], [], []
+    angles = [2 * math.pi * i / segments for i in range(segments)]
+    shaft_end = _TCP_ARROW_SHAFT_LENGTH
+    for axis_index, color in enumerate(((1, 0, 0), (0, 1, 0), (0, 0, 1))):
+        base = len(points)
+        points.append(_arrow_point(axis_index, 0.0, 0.0, 0.0))
+        points += [_arrow_point(axis_index, 0.0, _TCP_ARROW_SHAFT_RADIUS, a) for a in angles]
+        points += [_arrow_point(axis_index, shaft_end, _TCP_ARROW_SHAFT_RADIUS, a) for a in angles]
+        points += [_arrow_point(axis_index, shaft_end, _TCP_ARROW_HEAD_RADIUS, a) for a in angles]
+        points.append(_arrow_point(axis_index, shaft_end, 0.0, 0.0))
+        points.append(_arrow_point(axis_index, shaft_end + _TCP_ARROW_HEAD_LENGTH, 0.0, 0.0))
+        shaft_start_ring = base + 1
+        shaft_end_ring = shaft_start_ring + segments
+        head_ring = shaft_end_ring + segments
+        head_center = head_ring + segments
+        tip = head_center + 1
 
-        arrow = UsdGeom.Xform.Define(stage, marker.GetPath().AppendChild(axis))
-        UsdShade.MaterialBindingAPI.Apply(arrow.GetPrim()).Bind(material)
-        shaft = UsdGeom.Cylinder.Define(stage, arrow.GetPath().AppendChild("Shaft"))
-        shaft.CreateRadiusAttr(_TCP_ARROW_SHAFT_RADIUS)
-        head = UsdGeom.Cone.Define(stage, arrow.GetPath().AppendChild("Head"))
-        head.CreateRadiusAttr(_TCP_ARROW_HEAD_RADIUS)
-        # Cylinders and cones are centred on their origin, a cone's tip pointing to +axis;
-        # each is shifted so the shaft starts at the TCP and the head sits on its end.
-        for part, length, start in (
-            (shaft, _TCP_ARROW_SHAFT_LENGTH, 0.0),
-            (head, _TCP_ARROW_HEAD_LENGTH, _TCP_ARROW_SHAFT_LENGTH),
-        ):
-            part.CreateAxisAttr(axis)
-            part.CreateHeightAttr(length)
-            part.CreateExtentAttr(
-                UsdGeom.Boundable.ComputeExtentFromPlugins(part, Usd.TimeCode.Default())
+        for i in range(segments):
+            j = (i + 1) % segments
+            # The head's base disc covers the open end of the shaft.
+            faces = (
+                (base, shaft_start_ring + j, shaft_start_ring + i),
+                (shaft_start_ring + i, shaft_start_ring + j, shaft_end_ring + j, shaft_end_ring + i),
+                (head_center, head_ring + j, head_ring + i),
+                (head_ring + i, head_ring + j, tip),
             )
-            shift = Gf.Vec3d(0.0)
-            shift["XYZ".index(axis)] = start + length / 2
-            part.AddTranslateOp().Set(shift)
+            for face in faces:
+                face_vertex_counts.append(len(face))
+                face_vertex_indices += face
+                face_colors.append(Gf.Vec3f(*color))
+
+    frame = UsdGeom.Mesh.Define(stage, marker.GetPath().AppendChild("frame"))
+    frame.CreatePointsAttr(points)
+    frame.CreateFaceVertexCountsAttr(face_vertex_counts)
+    frame.CreateFaceVertexIndicesAttr(face_vertex_indices)
+    frame.CreateExtentAttr(UsdGeom.Mesh.ComputeExtent(points))
+    frame.CreateSubdivisionSchemeAttr(UsdGeom.Tokens.none)
+    frame.CreateDisplayColorPrimvar(UsdGeom.Tokens.uniform).Set(face_colors)
 
     return marker
+
+
+def _arrow_point(axis_index, distance, radius, angle):
+    """Return a point of a TCP marker arrow along axis ``axis_index`` (0, 1, 2 for X, Y, Z):
+    ``distance`` along that axis and ``radius`` from it, at ``angle`` radians around it.
+
+    The two other axes are taken in cyclic order, so the angle runs counterclockwise seen
+    from the arrow's tip and the marker's faces wind outward.
+    """
+    point = Gf.Vec3f(0.0)
+    point[axis_index] = distance
+    point[(axis_index + 1) % 3] = radius * math.cos(angle)
+    point[(axis_index + 2) % 3] = radius * math.sin(angle)
+    return point
 
 
 def _remove_previous_mount_joints(stage, gripper_prim):

@@ -78,7 +78,8 @@ TCP**; rewritten by `PoseService` whenever the pose moves.
 
 Written on a TCP, an `Xform` that **Add TCP** places under the robot's default TCP frame
 (`<default TCP>/<name>`, e.g. `…/wrist_3_link/flange/tool0/fingertip`), with red/green/blue
-axis arrows: a cylinder and a cone per axis in the default purpose, drawn without guides. The TCP's name is its prim's name. Its offset is not stored separately: it is
+axis arrows: one `Mesh` at `<tcp>/frame` in the default purpose, coloured per face by
+`primvars:displayColor`, drawn without guides. The TCP's name is its prim's name. Its offset is not stored separately: it is
 the prim's pose in the default TCP frame, read from where the prim stands, so its own translate
 and rotateXYZ ops show it while it sits directly under the default TCP: metres, then extrinsic XYZ
 Euler degrees, as Synapse's `add_tcp` takes it. The bridge gives a robot's TCPs to the
