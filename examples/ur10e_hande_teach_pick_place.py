@@ -16,8 +16,10 @@ PLACE_START_POSE, set ROBOT_IP, and run the same command.
 
 The objects are picked in the order of the pick poses, and each is placed at the place start
 pose shifted by PLACE_STEP_Y metres in y for every object already placed. Every pose is
-[x, y, z, rx, ry, rz] of the robot's default TCP in its base frame, metres and extrinsic XYZ
-Euler degrees.
+[x, y, z, rx, ry, rz] of the robot's tool_base TCP, the Hand-E's base, in its base frame, metres
+and extrinsic XYZ Euler degrees. attach_tool adds that TCP at TOOL_BASE_IN_TOOL0, the Hand-E's
+base in tool0 as Add Tool mounted it; if the Hand-E sits differently on the real flange, measure
+it and change TOOL_BASE_IN_TOOL0, and the taught poses stay valid.
 """
 
 import requests
@@ -41,11 +43,14 @@ GRIPPER_IP = "192.168.1.100"
 # telekinesis:pose:pose_in_base_frame in Isaac Sim, in pick order. Left empty on purpose: the
 # script refuses to move the real robot until they are filled in.
 PICK_POSES: list[list[float]] = [
-    [0.0884, 0.4983, 0.1429, 180, 0, 0],
-    [-0.0164, 0.4983, 0.1429, 180, 0, 0],
-    [-0.1349, 0.4983, 0.1429, 180, 0, 0],
+    [0.0884, 0.4983, 0.1331, 180, 0, 0],
+    [-0.0164, 0.4983, 0.1331, 180, 0, 0],
+    [-0.1349, 0.4983, 0.1331, 180, 0, 0],
 ]
-PLACE_START_POSE: list[float] = [-0.6837, -0.0609, 0.1429, 180, 0, 0]
+PLACE_START_POSE: list[float] = [-0.6837, -0.0609, 0.1331, 180, 0, 0]
+# The Hand-E's base in tool0, [x, y, z, rx, ry, rz] in metres and XYZ Euler degrees: on the
+# coupler, as Add Tool mounted it in Isaac Sim.
+TOOL_BASE_IN_TOOL0 = [0.0, 0.0, 0.0098, 0.0, 0.0, 0.0]
 
 PLACE_STEP_Y = 0.04  # m, shift in y of each further object's place pose
 APPROACH_OFFSET_Z = 0.1  # m, pre-pick and pre-place distance above the poses
@@ -78,6 +83,13 @@ def get_isaacsim_poses() -> tuple[list[list[float]], list[float]]:
     unreachable = [pose["name"] for pose in poses if not pose["reachable"]]
     if unreachable:
         raise SystemExit(f"The robot cannot reach the poses {unreachable}.")
+    tool_base_tcp_name = universal_robots.UniversalRobotsUR10E.tool_base_tcp_name
+    not_tool_base = [pose["name"] for pose in poses if pose["tcp"] != tool_base_tcp_name]
+    if not_tool_base:
+        raise SystemExit(
+            f"The poses {not_tool_base} place another TCP than {tool_base_tcp_name}; "
+            "teach them again with Add Pose > From Tool."
+        )
     pick_poses = [pose["pose"] for pose in poses if pose["name"].startswith(PICK_POSE_PREFIX)]
     place_start_poses = [pose["pose"] for pose in poses if pose["name"] == PLACE_START_POSE_NAME]
     if not pick_poses or len(place_start_poses) != 1:
@@ -105,7 +117,8 @@ def main() -> None:
     else:
         robot.connect(simulation_prim_path=ROBOT_PRIM_PATH)
         gripper.connect(simulation_prim_path=GRIPPER_PRIM_PATH)
-    robot.attach_tool(gripper)
+    robot.attach_tool(gripper, transform=TOOL_BASE_IN_TOOL0)
+    robot.active_tcp = robot.tool_base_tcp_name
 
     try:
         for index, pick_pose in enumerate(pick_poses):

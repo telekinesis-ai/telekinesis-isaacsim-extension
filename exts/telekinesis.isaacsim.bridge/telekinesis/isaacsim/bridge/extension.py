@@ -143,6 +143,7 @@ class Extension(omni.ext.IExt):
             self._bridge_server.asset_library_service,
             self._bridge_server.articulation_service,
             self._bridge_server.surface_gripper_service,
+            self._bridge_server.pose_service,
         )
         self._add_mesh_window = AddMeshWindow(
             self._bridge_server.asset_library_service,

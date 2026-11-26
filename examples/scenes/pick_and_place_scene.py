@@ -4,9 +4,10 @@ Writes ``pick_and_place_scene.usda`` next to this script: the sample scene (Vent
 table and three cubes) with a UR10e on the table's robot mount, a Robotiq UR coupler
 and a Robotiq Hand-E on its flange. The result is the scene the quickstart builds with
 Add Robot, Add Mesh and Add Tool, so the quickstart's pick-and-place example runs on it.
-It also holds the poses taught in the quickstart scene with Add Pose > From Tool (three
-pick poses on the cubes and a place start pose), so the teach pick-and-place example runs
-on it too.
+It also holds the hidden ``tool_base`` TCP Add Tool places at the Hand-E's base, and the poses
+taught in the quickstart scene with Add Pose > From Tool (three pick poses on the cubes and a
+place start pose), so the teach pick-and-place example runs on it too. The TCP is drawn without
+the axis arrows the bridge gives it, which only show when it is made visible.
 
 Every asset comes from the Telekinesis asset library and is downloaded once into
 ``~/.cache/telekinesis/usd``. The output scene links to those cached files, so it opens
@@ -64,9 +65,13 @@ ROBOT_BASE_FRAME_ATTRIBUTE = "telekinesis:robot:base_frame"
 ROBOT_BASE_FRAME = "base_link"
 ROBOT_DEFAULT_TCP_ATTRIBUTE = "telekinesis:robot:default_tcp"
 ROBOT_DEFAULT_TCP = "tool0"
+# The TCP Add Tool places at the tool's base, under the default TCP, and its tag.
+TOOL_BASE_TCP = "tool_base"
+TCP_ROBOT_RELATIONSHIP = "telekinesis:tcp:robot"
+GRIPPER_BASE_PATH = f"{GRIPPER_PATH}/Robotiq_Hand_E/base_link"
 
-# The poses taught in the quickstart scene. "pose" is the robot's default TCP in its base
-# frame, [x, y, z, rx, ry, rz] in metres and extrinsic XYZ Euler degrees, and
+# The poses taught in the quickstart scene. "pose" is the robot's tool_base TCP, the Hand-E's
+# base, in its base frame, [x, y, z, rx, ry, rz] in metres and extrinsic XYZ Euler degrees, and
 # "joint_positions" the joint positions that reach it, in radians, in POSE_JOINT_NAMES order.
 POSES_PATH = f"{ASSEMBLY_PATH}/poses"
 POSE_JOINT_NAMES = [
@@ -79,24 +84,25 @@ POSE_JOINT_NAMES = [
 ]
 TAUGHT_POSES = {
     "pick_pose": {
-        "pose": [0.088433, 0.498376, 0.142902, 180.0, 0.0, -0.012],
+        "pose": [0.088433, 0.498376, 0.133102, 180.0, 0.0, -0.012],
         "joint_positions": [1.746539, -1.771143, -2.52046, -0.420786, 1.570796, 0.175952],
     },
     "pick_pose_01": {
-        "pose": [-0.016451, 0.498376, 0.142902, 180.0, 0.0, -0.012],
+        "pose": [-0.016451, 0.498376, 0.133102, 180.0, 0.0, -0.012],
         "joint_positions": [1.960722, -1.761941, -2.534385, -0.416064, 1.570796, 0.390136],
     },
     "pick_pose_02": {
-        "pose": [-0.134993, 0.498376, 0.142902, 180.0, 0.0, -0.012],
+        "pose": [-0.134993, 0.498376, 0.133102, 180.0, 0.0, -0.012],
         "joint_positions": [2.179209, -1.783456, -2.50157, -0.427363, 1.570796, 0.608623],
     },
     "start_place_pose": {
-        "pose": [-0.683706, -0.060906, 0.142902, 180.0, 0.0, 90.0],
+        "pose": [-0.683706, -0.060906, 0.133102, 180.0, 0.0, 90.0],
         "joint_positions": [3.486991, -1.974982, -2.178495, -0.558912, 1.570796, 0.345399],
     },
 }
 # The extension's pose tags, and the see-through blue of a reachable pose's ghost.
 POSE_ROBOT_RELATIONSHIP = "telekinesis:pose:robot"
+POSE_TCP_ATTRIBUTE = "telekinesis:pose:tcp"
 POSE_IN_BASE_FRAME_ATTRIBUTE = "telekinesis:pose:pose_in_base_frame"
 POSE_JOINT_NAMES_ATTRIBUTE = "telekinesis:pose:joint_names"
 POSE_JOINT_POSITIONS_ATTRIBUTE = "telekinesis:pose:joint_positions"
@@ -231,11 +237,36 @@ def define_ghost_material(stage: Usd.Stage, material_path: str) -> UsdShade.Mate
     return material
 
 
+def create_tool_base_tcp(stage: Usd.Stage) -> None:
+    """Create the robot's hidden ``tool_base`` TCP at the Hand-E's base, as Add Tool places it:
+    an Xform under the default TCP, at the base's pose in that frame, tagged as a TCP of the
+    robot. Call it with the Hand-E mounted."""
+    default_tcp = find_prim_named(stage.GetPrimAtPath(ROBOT_PATH), ROBOT_DEFAULT_TCP)
+    tcp = UsdGeom.Xform.Define(stage, default_tcp.GetPath().AppendChild(TOOL_BASE_TCP))
+    xform_cache = UsdGeom.XformCache()
+    offset = Gf.Transform(
+        xform_cache.GetLocalToWorldTransform(stage.GetPrimAtPath(GRIPPER_BASE_PATH))
+        * xform_cache.GetLocalToWorldTransform(default_tcp).GetInverse()
+    )
+    # The translate and rotateXYZ ops the bridge authors on a TCP; Gf composes row vectors, so
+    # the X, Y, Z decomposition is the rotateXYZ op's angles.
+    tcp.AddTranslateOp().Set(offset.GetTranslation())
+    tcp.AddRotateXYZOp().Set(
+        Gf.Vec3f(
+            offset.GetRotation().Decompose(
+                Gf.Vec3d.XAxis(), Gf.Vec3d.YAxis(), Gf.Vec3d.ZAxis()
+            )
+        )
+    )
+    tcp.MakeInvisible()
+    tcp.GetPrim().CreateRelationship(TCP_ROBOT_RELATIONSHIP).SetTargets([Sdf.Path(ROBOT_PATH)])
+
+
 def create_taught_poses(stage: Usd.Stage) -> None:
     """Create the poses of ``TAUGHT_POSES`` in the ``poses`` Xform beside the robot, as Add
     Pose > From Tool creates them.
 
-    Each pose is a see-through blue mesh of the Hand-E, placed at the robot's default TCP
+    Each pose is a see-through blue mesh of the Hand-E, placed at the robot's ``tool_base`` TCP
     for that pose, and stores the bridge's pose tags, so the bridge treats it as a pose
     taught in Isaac Sim. Call it with the robot at its rest pose and the Hand-E mounted.
     """
@@ -243,13 +274,13 @@ def create_taught_poses(stage: Usd.Stage) -> None:
     base_world = UsdGeom.Xformable(
         find_prim_named(robot, ROBOT_BASE_FRAME)
     ).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
-    default_tcp_world = UsdGeom.Xformable(
-        find_prim_named(robot, ROBOT_DEFAULT_TCP)
+    tool_base_world = UsdGeom.Xformable(
+        stage.GetPrimAtPath(GRIPPER_BASE_PATH)
     ).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
-    # The Hand-E is fixed to the flange, so its meshes in the default TCP's frame are the
-    # same for every pose.
+    # The Hand-E is fixed to the flange, so its meshes in its base's frame are the same for
+    # every pose.
     points, face_vertex_counts, face_vertex_indices = merge_meshes_in_frame(
-        stage.GetPrimAtPath(GRIPPER_PATH), default_tcp_world
+        stage.GetPrimAtPath(GRIPPER_PATH), tool_base_world
     )
 
     UsdGeom.Xform.Define(stage, POSES_PATH)
@@ -272,6 +303,9 @@ def create_taught_poses(stage: Usd.Stage) -> None:
 
         pose_prim = pose_mesh.GetPrim()
         pose_prim.CreateRelationship(POSE_ROBOT_RELATIONSHIP).SetTargets([Sdf.Path(ROBOT_PATH)])
+        pose_prim.CreateAttribute(POSE_TCP_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(
+            TOOL_BASE_TCP
+        )
         pose_prim.CreateAttribute(POSE_IN_BASE_FRAME_ATTRIBUTE, Sdf.ValueTypeNames.DoubleArray).Set(
             taught_pose["pose"]
         )
@@ -376,6 +410,7 @@ def main() -> None:
         ["left_finger_joint"]
     )
 
+    create_tool_base_tcp(stage)
     create_taught_poses(stage)
 
     stage.GetRootLayer().Save()

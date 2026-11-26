@@ -71,8 +71,12 @@ class AddTcpWindow(FramePlacementWindow):
         return robot_prim_path, default_tcp_prim_path, models.Transformation()
 
     async def add_frame(self, transformation: models.Transformation) -> str:
-        """Create the TCP named after the Name field at ``transformation``."""
+        """Create the TCP named after the Name field at ``transformation``, with its arrows
+        shown."""
         tcp_prim_path = await self._pose_service.create_tcp(
-            self._robot_part_prim_path, self._name_model.get_value_as_string(), transformation
+            self._robot_part_prim_path,
+            self._name_model.get_value_as_string(),
+            transformation,
+            visible=True,
         )
         return f"Added TCP {tcp_prim_path}."

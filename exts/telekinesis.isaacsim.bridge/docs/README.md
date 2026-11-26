@@ -230,7 +230,12 @@ running at `http://127.0.0.1:6000`.
    Isaac Sim Bridge ▸ Add Pose ▸ From Tool**. The robot needs a tool attached with Add Tool. A
    ghost of the whole tool appears where the tool stands, as `<tool>_Pose` in a `poses` Xform
    beside the robot, and is selected. It is blue (`#41d1ff`, as the Add Tool preview) when the
-   robot can reach it and red when it cannot.
+   robot can reach it and red when it cannot. The pose is a pose of the robot's `tool_base` TCP,
+   the tool's base, which Add Tool places hidden under the default TCP (From Tool places it first
+   for a tool a program attached). A Synapse robot's `attach_tool(tool, transform=...)` adds a
+   `tool_base` TCP at the mount it is given, so with `robot.active_tcp = "tool_base"` a taught
+   pose puts the tool where it was taught; a tool that sits differently on the real flange is
+   corrected by the `transform` passed to `attach_tool`, not by teaching again.
 
    To teach a pose by joint positions instead, choose **Add Pose ▸ From Joint Positions**. A
    window opens with a slider and a value field per joint (degrees, or metres for a prismatic
@@ -238,7 +243,9 @@ running at `http://127.0.0.1:6000`.
    clamped to the nearest limit. Changing a joint draws the robot and its tool see-through at
    those joints. The joints and **Add** stay locked, with a notice saying how to connect, while
    the Telekinesis Isaac Sim Server cannot be reached, and unlock once **Connect** reaches it.
-   **Add** creates a pose at the default TCP for those joints and stores them as its solution.
+   **Add** creates a pose at the default TCP for those joints and stores them as its solution,
+   whichever prim the window was opened on, so a change to the tool or a TCP never solves it
+   again: run it with the stored `joint_positions`, as a joint move.
    Its ghost is the whole robot at those joints together with its tool, named `<tool>_Pose`, or
    `<robot>_Pose` for a robot without a tool. The new pose is hidden (its eye icon off) unless
    **Pose Visible After Add** is checked. The window stays open for the next pose. Moving the
@@ -247,8 +254,7 @@ running at `http://127.0.0.1:6000`.
 
    To teach a pose for another TCP than the default one, such as the gripper's fingertip, add
    the TCP first (see **TCPs** below), then right-click the TCP and choose **Add Pose ▸ From
-   Tool** or **From Joint Positions**. The pose is placed at that TCP, named `<tcp>_Pose`, and
-   solved for it.
+   Tool**. The pose is placed at that TCP, named `<tcp>_Pose`, and solved for it.
 
    To teach a pose by placing a frame where a TCP should go, choose **Add Pose ▸ From TCP**.
    Pick the TCP in the **TCP** dropdown: the default TCP or one added with Add TCP (right-click
@@ -268,19 +274,20 @@ running at `http://127.0.0.1:6000`.
    red and keeps its last solution.
 4. **Read the poses.** `GET /teaching/poses?robot_prim_path=<robot>` lists them with their
    `name`, `tcp`, `pose` and stored `joint_positions`. The pose is `[x, y, z, rx, ry, rz]` of
-   the pose's TCP in the robot's base frame, in metres and extrinsic XYZ Euler degrees: the
-   robot's default TCP (`tool0` on a Universal Robots arm) when `tcp` is `null`, so it can be
-   passed to a Synapse robot's `pick` and `place` unchanged. For a pose of another TCP, give the
-   Synapse robot that TCP first with `robot.add_tcp(name, offset)`, the offset shown below. Reading the poses needs no server once the robot stores its base frame. The same
+   the TCP named by `tcp` in the robot's base frame, in metres and extrinsic XYZ Euler degrees:
+   `tool_base` for a pose from a tool, the default TCP (`tool0` on a Universal Robots arm) for a
+   pose from joint positions, and the default TCP when `tcp` is `null`, for poses taught before
+   poses stored it. Set the Synapse robot's `active_tcp` to `tcp` before passing the pose to its
+   `pick` and `place`; `attach_tool` adds `tool_base`, and another TCP is given with
+   `robot.add_tcp(name, offset)`, the offset shown below. Reading the poses needs no server once the robot stores its base frame. The same
    pose is stored on the pose as `telekinesis:pose:pose_in_base_frame`, so it can also be read
    in the Property window and written into a program that runs without Isaac Sim.
    `examples/ur10e_hande_teach_pick_place.py` picks at poses named `pick_pose*` and places in a
    row from the pose named `start_place_pose`, reading them from Isaac Sim or, on the real robot,
    from values written into the script.
 
-A pose is a single `Mesh` with no physics, saved with the stage. Its origin is the robot's default
-TCP, or the TCP it was made from, and it stores `telekinesis:pose:robot` (its robot),
-`telekinesis:pose:tcp` (that TCP's name, for a pose made from one),
+A pose is a single `Mesh` with no physics, saved with the stage. Its origin is the TCP it places,
+and it stores `telekinesis:pose:robot` (its robot), `telekinesis:pose:tcp` (that TCP's name),
 `telekinesis:pose:pose_in_base_frame`
 (the `pose` above), `telekinesis:pose:joint_names`, `telekinesis:pose:joint_positions` (radians)
 and `telekinesis:pose:reachable`. Poses need a
@@ -298,7 +305,8 @@ red/green/blue X/Y/Z arrows stands where the entered offset puts it, with a move
 it, as in Add Tool: drag it to enter the offset (**W** to move, **E** to rotate). **Add** creates
 the TCP as an Xform with those arrows under the default TCP, e.g.
 `…/wrist_3_link/flange/tool0/fingertip`; the arrows are ordinary geometry, so they also show in
-camera images. Once the window is closed, move the TCP with Kit's gizmo or the
+camera images. The `tool_base` TCP Add Tool places is created hidden; its eye icon in the Stage
+window shows it. Once the window is closed, move the TCP with Kit's gizmo or the
 Property window: its translate and rotate there are the offset Synapse's
 `robot.add_tcp(name, [x, y, z, rx, ry, rz])` takes. A TCP must sit under the default TCP to move
 with the robot, since prims follow their parents in the stage.

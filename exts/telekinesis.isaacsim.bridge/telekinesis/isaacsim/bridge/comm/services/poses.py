@@ -24,7 +24,8 @@ from .articulations import (
 )
 
 # Properties of a pose prim. The relationship targets the robot prim whose TCP the pose
-# places, and ``tcp`` names that TCP, absent or empty for the robot's default TCP; the joint
+# places, and ``tcp`` names that TCP; poses taught before every pose stored it lack it, which
+# means the robot's default TCP. The joint
 # attributes hold the robot's inverse-kinematics solution for the pose, in radians;
 # ``reachable`` says whether there is one.
 POSE_ROBOT_RELATIONSHIP = "telekinesis:pose:robot"
@@ -37,6 +38,10 @@ POSE_IN_BASE_FRAME_ATTRIBUTE = "telekinesis:pose:pose_in_base_frame"
 # TCP's name is the prim's name, and its pose in the robot's default TCP frame is its offset,
 # as Synapse's add_tcp takes it.
 TCP_ROBOT_RELATIONSHIP = "telekinesis:tcp:robot"
+# Name of the TCP at the base of a robot's tool, which Add Pose ▸ From Tool teaches. Synapse's
+# attach_tool adds a TCP of the same name at the tool mount it is given, so a program on the real
+# robot reaches a taught pose with its own measured tool mount.
+TOOL_BASE_TCP_NAME = "tool_base"
 
 # Name of the Xform beside the robot that holds its poses, and the suffix of a new
 # pose's name after its tool's: the default pose path is <tool parent>/poses/<tool>_Pose.
@@ -57,15 +62,19 @@ MIN_ROTATION_CHANGE = 0.01
 class PoseService:
     """Creates the poses a robot is taught, and solves them again when they are moved.
 
-    Add Pose ▸ From Tool creates a pose from a tool mounted on a robot, where the tool stands
-    now, shown as a ghost of the tool; Add Pose ▸ From Joint Positions creates one where the
-    robot's default TCP is when the robot stands at given joint positions, shown as a ghost of
-    the whole robot at those joints and its tool, if it has one; Add Pose ▸ From TCP creates one
-    where a TCP should go, given in the robot's base frame, shown as that TCP's frame.
+    Add Pose ▸ From Tool creates a pose of the robot's ``tool_base`` TCP, the base of the tool
+    mounted on the robot, where the tool stands now, shown as a ghost of the tool; Add Pose ▸
+    From Joint Positions creates one where the robot's default TCP is when the robot stands at
+    given joint positions, shown as a ghost of the whole robot at those joints and its tool, if
+    it has one; Add Pose ▸ From TCP creates one where a TCP should go, given in the robot's base
+    frame, shown as that TCP's frame. Every pose stores the name of the TCP it places.
 
     A ghost pose is a single ``Mesh`` prim: the ghost's visible meshes merged into the frame of
-    the robot's default TCP, so the pose's origin is where that TCP has to go for the real tool
-    to cover the pose. A frame pose is an Xform showing its axes as red/green/blue arrows. Moving
+    the TCP it places, so the pose's origin is where that TCP has to go for the real tool to
+    cover the pose. A pose of the tool base is therefore solved for wherever the tool sits on
+    the flange: correcting the ``tool_base`` TCP keeps the taught tool placement, and a pose of
+    the default TCP, such as one from joint positions, is never solved again because a TCP
+    changed. A frame pose is an Xform showing its axes as red/green/blue arrows. Moving
     a pose moves it rigidly; the robot reaching the pose is drawn by the robot overlay. Poses
     live in a ``poses`` Xform beside the robot, in its assembly when it has one, carry no
     physics, and are saved with the stage. Each pose stores the robot's inverse-kinematics
@@ -84,8 +93,10 @@ class PoseService:
     the server is not running, logs a warning and leaves the pose as it was.
 
     A robot can have TCPs besides its default TCP, created with :meth:`create_tcp`: Xforms under
-    the default TCP frame, each placed at its offset from that frame. A pose made from a TCP,
-    by right-clicking the TCP, places that TCP instead of the default TCP and is solved for it.
+    the default TCP frame, each placed at its offset from that frame. Attaching a tool with Add
+    Tool places the hidden ``tool_base`` TCP at the tool's base with :meth:`place_tool_base_tcp`;
+    a robot has one tool, so attaching another moves it. A pose made from a TCP, by
+    right-clicking the TCP, places that TCP instead and is solved for it.
 
     The robots are loaded on the Telekinesis Isaac Sim Server from the Synapse class name each
     robot prim stores, which Add Robot writes. A robot is loaded the first time one of its poses
@@ -350,21 +361,27 @@ class PoseService:
         }
 
     async def create_tcp(
-        self, robot_part_prim_path: str, name: str, offset: models.Transformation
+        self,
+        robot_part_prim_path: str,
+        name: str,
+        offset: models.Transformation,
+        visible: bool = False,
     ) -> str:
         """Create a TCP of the robot ``robot_part_prim_path`` is part of and return its prim path.
 
         The TCP is an Xform named ``name`` under the robot's default TCP frame, at ``offset`` in
         that frame: the offset Synapse's ``add_tcp`` takes. It shows its axes as red/green/blue
-        arrows. The Telekinesis Isaac Sim Server gets it when the robot is next loaded
-        there, or at once when the robot is loaded already and the service follows the stage;
-        the TCP is created without the server. The server is needed only for a robot that
-        stores no default TCP yet, which is then loaded there to store it.
+        arrows, which the Stage window's visibility toggle shows when the TCP is created hidden.
+        The Telekinesis Isaac Sim Server gets it when the robot is next loaded there, or at once
+        when the robot is loaded already and the service follows the stage; the TCP is created
+        without the server. The server is needed only for a robot that stores no default TCP
+        yet, which is then loaded there to store it.
 
         Args:
             robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
             name: The TCP's name; it is made a valid prim name.
             offset: The TCP's pose in the default TCP frame, metres and XYZ Euler degrees.
+            visible: Whether the TCP's arrows are shown in the viewport and in camera images.
 
         Raises:
             HTTPException: 422 if the prim is part of no robot, ``name`` is empty or names a
@@ -377,24 +394,90 @@ class PoseService:
             raise HTTPException(422, "Enter a name for the TCP.")
         robot_prim_path, default_tcp_path = await self.find_default_tcp(robot_part_prim_path)
         tcp_name = Tf.MakeValidIdentifier(name.strip())
-        # Frames are found by name under the robot, so a TCP must not share a prim's name.
-        robot_prim = stage.GetPrimAtPath(robot_prim_path)
-        if any(prim.GetName() == tcp_name for prim in Usd.PrimRange(robot_prim)):
-            raise HTTPException(422, f"{robot_prim_path} already has a prim named '{tcp_name}'.")
+        # Frames are found by name under the robot, so a TCP must not share a prim's name. The
+        # markers Synapse draws for its active TCP are no frames, so their names are free.
+        robot_prims = iter(Usd.PrimRange(stage.GetPrimAtPath(robot_prim_path)))
+        for prim in robot_prims:
+            if prim.GetName() == tcp_name:
+                raise HTTPException(
+                    422, f"{robot_prim_path} already has a prim named '{tcp_name}'."
+                )
+            if prim.GetName() == robot_assembler.TCP_MARKER_GROUP_NAME:
+                robot_prims.PruneChildren()
         tcp_path = Sdf.Path(default_tcp_path).AppendChild(tcp_name)
         marker = robot_assembler.define_tcp_marker(stage, tcp_path, offset)
         marker.GetPrim().CreateRelationship(TCP_ROBOT_RELATIONSHIP).SetTargets([robot_prim_path])
+        if not visible:
+            marker.MakeInvisible()
+        if stage is self._stage:
+            # Known at once, so a pose can be made for the TCP before the creation's change
+            # notice is handled.
+            self._tcp_robots[tcp_path] = robot_prim_path
         return tcp_path.pathString
+
+    async def place_tool_base_tcp(self, robot_part_prim_path: str) -> str:
+        """Place the ``tool_base`` TCP of the robot ``robot_part_prim_path`` is part of at the
+        base of the robot's tool, where the tool stands now, and return the TCP's prim path.
+
+        The tool base is the tool's body fixed to the robot: an articulated tool's base link, or
+        a suction gripper's mounted body. The TCP is created hidden when the robot has none, and
+        moved otherwise, so it follows a tool attached in place of another. While the service
+        follows the stage, a moved TCP is given to the server again and the poses of the tool
+        base are solved again, as for any moved TCP. The server is needed only for a robot that
+        stores no default TCP yet, which is then loaded there to store it.
+
+        Args:
+            robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
+
+        Raises:
+            HTTPException: 422 if the prim is part of no robot, the robot has no tool, the robot
+                stores neither a default TCP nor a class name, the server does not know its
+                class, or the robot does not match its class; 503 if the server is needed and
+                cannot be reached.
+        """
+        stage = omni.usd.get_context().get_stage()
+        robot_prim_path, default_tcp_path = await self.find_default_tcp(robot_part_prim_path)
+        robot_id = await self._articulation_service.find_robot_for_prim(robot_prim_path)
+        tool_base_path = self._articulation_service.find_tool_base_on_robot(robot_id)
+        if tool_base_path is None:
+            raise HTTPException(
+                422, f"'{robot_prim_path}' has no tool. Attach one with Add Tool first."
+            )
+        tool_base_world = omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(tool_base_path))
+        tcp_path = self.robot_tcp_paths(robot_prim_path).get(TOOL_BASE_TCP_NAME)
+        if tcp_path is None:
+            offset = _pose_in_frame(
+                tool_base_world,
+                omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(default_tcp_path)),
+            )
+            return await self.create_tcp(
+                robot_prim_path,
+                TOOL_BASE_TCP_NAME,
+                models.Transformation(translation=offset[:3], rotation=offset[3:]),
+            )
+        tcp = UsdGeom.Xformable(stage.GetPrimAtPath(tcp_path))
+        translation, rotation = robot_assembler.matrix_to_translation_rotation(
+            tool_base_world
+            * omni.usd.get_world_transform_matrix(tcp.GetPrim().GetParent()).GetInverse()
+        )
+        # The translate and rotateXYZ ops create_tcp authors, so the Property window keeps
+        # showing the TCP's offset.
+        tcp.ClearXformOpOrder()
+        tcp.AddTranslateOp().Set(Gf.Vec3d(*translation))
+        tcp.AddRotateXYZOp().Set(Gf.Vec3f(*rotation))
+        return tcp_path
 
     async def create_pose_from_tool(self, robot_part_prim_path: str) -> dict:
         """Create a pose from the tool mounted on a robot: a pose of the whole tool,
         where the tool stands now.
 
         The robot must be added with Add Robot and carry a tool added with Add Tool. The pose
-        places the robot's default TCP, or the TCP ``robot_part_prim_path`` is, and is named
-        after the tool, or after that TCP. The robot's inverse kinematics for the pose is solved
-        before anything is written, so a failure leaves the stage unchanged. It is seeded with
-        the robot's current joints, so the solution keeps the robot's current arm configuration.
+        places the robot's ``tool_base`` TCP, which is placed at the tool's base first when the
+        robot has none, e.g. because a program attached the tool; or the TCP
+        ``robot_part_prim_path`` is. It is named after the tool, or after that TCP. The robot's
+        inverse kinematics for the pose is solved before the pose is written, so a failure
+        leaves no pose behind. It is seeded with the robot's current joints, so the solution
+        keeps the robot's current arm configuration.
 
         Args:
             robot_part_prim_path: Any prim of the robot, its assembly, or its tool; a TCP of the
@@ -414,19 +497,19 @@ class PoseService:
     async def create_pose_from_joint_positions(
         self, robot_part_prim_path: str, joints: dict
     ) -> dict:
-        """Create a pose where the robot's TCP is when the robot stands at ``joints``.
+        """Create a pose where the robot's default TCP is when the robot stands at ``joints``.
 
-        The pose places the robot's default TCP, or the TCP ``robot_part_prim_path`` is. It is
-        placed at that TCP in the forward kinematics of ``joints``, computed by the Telekinesis
+        The pose places the robot's default TCP whichever prim it is made from, so ``joints``
+        stay its solution whatever is later done to the robot's tool or TCPs. It is placed at
+        the default TCP in the forward kinematics of ``joints``, computed by the Telekinesis
         Isaac Sim Server, and stores ``joints`` as its solution, so it is reachable. Its ghost is
         the whole robot standing at ``joints`` together with its tool, when it carries one added
-        with Add Tool; the pose is named after the TCP it was made from, the tool, or the robot,
-        whichever comes first. The forward kinematics is computed before anything is written, so
-        a failure leaves the stage unchanged.
+        with Add Tool; the pose is named after the tool, or the robot when it has none. The
+        forward kinematics is computed before anything is written, so a failure leaves the
+        stage unchanged.
 
         Args:
-            robot_part_prim_path: Any prim of the robot, its assembly, or its tool; a TCP of the
-                robot to make the pose for that TCP.
+            robot_part_prim_path: Any prim of the robot, its assembly, or its tool.
             joints: ``{"joint_names": [...], "joint_positions": [...]}`` in radians, naming
                 every joint of the robot.
 
@@ -519,7 +602,15 @@ class PoseService:
             raise HTTPException(
                 422, f"'{robot_prim_path}' has no tool. Attach one with Add Tool first."
             )
-        tcp_name = find_tcp_name(stage.GetPrimAtPath(robot_part_prim_path), robot_prim_path)
+        tcp_name, tcp_prim_path = None, None
+        if joints is None:
+            tcp_name = find_tcp_name(stage.GetPrimAtPath(robot_part_prim_path), robot_prim_path)
+            tcp_prim_path = robot_part_prim_path
+            if tcp_name is None:
+                tcp_name = TOOL_BASE_TCP_NAME
+                tcp_prim_path = self.robot_tcp_paths(robot_prim_path).get(
+                    TOOL_BASE_TCP_NAME
+                ) or await self.place_tool_base_tcp(robot_prim_path)
         robot_id = await self._connected_robot_id(stage, robot_prim_path)
         robot = await self._describe_robot(robot_id)
         if tcp_name is not None:
@@ -536,8 +627,8 @@ class PoseService:
         )
         tcp_world = (
             default_tcp_world
-            if tcp_name is None
-            else omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(robot_part_prim_path))
+            if tcp_prim_path is None
+            else omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(tcp_prim_path))
         )
         ghost_meshes = []
         if tool_prim_path is not None:
@@ -562,12 +653,7 @@ class PoseService:
             )
         else:
             link_world_transforms = await self.robot_link_world_transforms(robot_prim_path, joints)
-            # The TCP is fixed to the default TCP, so it keeps its offset from it at ``joints``.
-            pose_world = (
-                tcp_world
-                * default_tcp_world.GetInverse()
-                * link_world_transforms[robot["default_tcp"]]
-            )
+            pose_world = link_world_transforms[robot["default_tcp"]]
             pose = _pose_in_frame(pose_world, base_world)
             joint_names, joint_positions = joints["joint_names"], joints["joint_positions"]
             link_paths = meshes.find_link_paths(stage, robot_prim_path, link_world_transforms)
@@ -597,8 +683,11 @@ class PoseService:
             stage, robot_prim_path, POSES_GROUP_NAME
         )
         UsdGeom.Xform.Define(stage, poses_path)
+        # A pose of the tool base is named after the tool it shows.
         pose_name = (
-            tcp_name or Tf.MakeValidIdentifier(Sdf.Path(tool_prim_path or robot_prim_path).name)
+            tcp_name
+            if tcp_name not in (None, TOOL_BASE_TCP_NAME)
+            else Tf.MakeValidIdentifier(Sdf.Path(tool_prim_path or robot_prim_path).name)
         ) + POSE_NAME_SUFFIX
         pose_path = omni.usd.get_stage_next_free_path(stage, f"{poses_path}/{pose_name}", False)
         pose_mesh = UsdGeom.Mesh.Define(stage, pose_path)
@@ -635,15 +724,17 @@ class PoseService:
         solution: dict,
     ) -> bool:
         """Mark the new ``pose_prim`` as a pose of the robot's TCP ``tcp_name`` (``None`` for
-        the default TCP), store ``pose`` in the base frame and its ``solution``, and return
-        whether it is reachable.
+        the default TCP, whose name is stored), store ``pose`` in the base frame and its
+        ``solution``, and return whether it is reachable.
 
         ``solution`` is ``{"joint_names": [...], "joint_positions": [...]}`` in radians, with
         ``joint_positions`` ``None`` for a pose out of reach.
         """
         pose_prim.CreateRelationship(POSE_ROBOT_RELATIONSHIP).SetTargets([robot_prim_path])
-        if tcp_name is not None:
-            pose_prim.CreateAttribute(POSE_TCP_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(tcp_name)
+        pose_prim.CreateAttribute(POSE_TCP_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(
+            tcp_name
+            or stage.GetPrimAtPath(robot_prim_path).GetAttribute(ROBOT_DEFAULT_TCP_ATTRIBUTE).Get()
+        )
         _write_pose_in_base_frame(pose_prim, pose)
         reachable = _write_pose_solution(
             stage, pose_prim, solution["joint_names"], solution["joint_positions"]
@@ -659,8 +750,10 @@ class PoseService:
         """Return the poses of the open stage, sorted by prim path.
 
         Each entry is ``{"name", "prim_path", "robot_prim_path", "tcp", "pose", "joint_names",
-        "joint_positions", "reachable"}``: ``tcp`` is the name of the TCP the pose places, or
-        ``None`` for the robot's default TCP; ``pose`` is the pose's ``[x, y, z, rx, ry, rz]`` in
+        "joint_positions", "reachable"}``: ``tcp`` is the name of the TCP the pose places, such
+        as ``tool_base`` for a pose from a tool or the default TCP's name for a pose from joint
+        positions, and ``None`` for a pose taught before poses stored it, which places the
+        default TCP; ``pose`` is the pose's ``[x, y, z, rx, ry, rz]`` in
         its robot's base frame, metres and extrinsic XYZ Euler degrees, the pose a program moves
         that TCP to; ``joint_positions`` is the stored solution in radians.
 
@@ -887,11 +980,14 @@ class PoseService:
                     return
             if stage is not self._stage:
                 return
+            default_tcp = robot_prim.GetAttribute(ROBOT_DEFAULT_TCP_ATTRIBUTE).Get()
             for pose_path in self._pose_paths:
                 pose_prim = stage.GetPrimAtPath(pose_path)
                 robot_targets = pose_prim.GetRelationship(POSE_ROBOT_RELATIONSHIP).GetTargets()
+                pose_tcp = pose_prim.GetAttribute(POSE_TCP_ATTRIBUTE).Get()
                 if (
-                    pose_prim.GetAttribute(POSE_TCP_ATTRIBUTE).Get()
+                    pose_tcp
+                    and pose_tcp != default_tcp
                     and robot_targets
                     and robot_targets[0].pathString == robot_prim_path
                 ):

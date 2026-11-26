@@ -4,12 +4,14 @@
 import asyncio
 
 import omni.usd
+from fastapi import HTTPException
 from omni import ui
 from pxr import Gf, Sdf
 
 from ..comm import models
 from ..comm.services.articulations import ArticulationService
 from ..comm.services.asset_library import AssetLibraryService
+from ..comm.services.poses import PoseService
 from ..comm.services.surface_grippers import SurfaceGripperService
 from ..core import robot_assembler
 from .add_asset_window import BUTTON_WIDTH, AddAssetWindow
@@ -29,10 +31,13 @@ class AddToolWindow(AddAssetWindow):
     rigid body the robot stands in, and assembled onto the robot's stored mount
     link at the entered offset, as ``assemble_robot`` does: a parallel gripper is
     merged into the robot's articulation, a suction gripper is bolted on and keeps its
-    own id. A robot that stores no mount link refuses the add before anything is
-    loaded. Otherwise the gripper is only loaded under the attaching prim. An assembly
-    cannot be undone. The window's ghost shows the gripper on the mount link at the
-    entered offset, following every edit of it, or at the attaching prim off a robot.
+    own id. Once assembled, the robot's hidden ``tool_base`` TCP is placed at the
+    gripper's base, the frame Add Pose ▸ From Tool teaches; a robot has one tool, so
+    attaching another moves it. A robot that stores no mount link refuses the add
+    before anything is loaded. Otherwise the gripper is only loaded under the attaching
+    prim. An assembly cannot be undone. The window's ghost shows the gripper on the
+    mount link at the entered offset, following every edit of it, or at the attaching
+    prim off a robot.
 
     Auto-calculate Placement enters the offset that stands the gripper in front of
     the robot's flange: the gripper's Z axis along the flange's Z axis, its X axis
@@ -46,7 +51,8 @@ class AddToolWindow(AddAssetWindow):
     Example:
         window = AddToolWindow(bridge_server.asset_library_service,
                                bridge_server.articulation_service,
-                               bridge_server.surface_gripper_service)
+                               bridge_server.surface_gripper_service,
+                               bridge_server.pose_service)
         window.show("/World/ur10e/wrist_3_link")
     """
 
@@ -55,8 +61,10 @@ class AddToolWindow(AddAssetWindow):
         asset_library_service: AssetLibraryService,
         articulation_service: ArticulationService,
         surface_gripper_service: SurfaceGripperService,
+        pose_service: PoseService,
     ):
         self._surface_gripper_service = surface_gripper_service
+        self._pose_service = pose_service
         super().__init__("Add Tool", asset_library_service, articulation_service)
 
     def asset_categories(self) -> list[str]:
@@ -136,7 +144,13 @@ class AddToolWindow(AddAssetWindow):
             self._transformation_fields.transformation(),
             True,
         )
-        return (
+        attached_message = (
             f"Added {tool_id} at {tool['prim_path']} and attached it to {robot_id} "
             f"at {assembly['arm_mount_link']}."
         )
+        try:
+            await self._pose_service.place_tool_base_tcp(robot_prim_path)
+        except HTTPException as exc:
+            # The tool is attached either way; Add Pose ▸ From Tool places the TCP later.
+            return f"{attached_message} Its tool_base TCP was not placed: {exc.detail}"
+        return attached_message

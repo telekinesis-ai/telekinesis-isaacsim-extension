@@ -37,6 +37,7 @@ from ...core.robot_assembler import (
     attach_surface_gripper,
     bind_gripping_friction,
     bind_shared_articulation,
+    find_prim_by_name,
     mount_prim,
     place_tcp,
 )
@@ -1121,6 +1122,22 @@ class ArticulationService(DeviceRegistry):
             self._surface_gripper_service if record["gripper_kind"] == "surface" else self
         )
         return tool_registry.get_device(record["gripper_id"]).prim_path
+
+    def find_tool_base_on_robot(self, robot_id) -> str | None:
+        """Return the prim path of the base of the tool assembled onto robot ``robot_id``, or
+        ``None`` when it carries no tool.
+
+        The base is the tool's body fixed to the robot's mount link: an articulated tool's base
+        link, or a suction gripper's mounted rigid body.
+        """
+        record = self._assemblies.get(robot_id)
+        if record is None:
+            return None
+        if record["gripper_kind"] == "surface":
+            return record["gripper_mount_link"]
+        return find_prim_by_name(
+            self._stage(), self.find_tool_on_robot(robot_id), record["gripper_mount_link"]
+        )
 
     def resolve_arm_mount_link(self, arm_id, arm_mount_link=None):
         """Return ``arm_mount_link``, or the arm's stored mount link when it is ``None``.

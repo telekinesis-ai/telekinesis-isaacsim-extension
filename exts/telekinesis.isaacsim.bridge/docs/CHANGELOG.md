@@ -1,6 +1,18 @@
 # Changelog
 ## [0.11.2] - 2026-11-24
 ### Changed
+- **Add Pose ▸ From Tool** teaches the tool's base instead of the default TCP: the pose places
+  the robot's `tool_base` TCP and its ghost's origin is the tool base. With the Synapse robot's
+  `active_tcp` set to `tool_base`, a tool that sits differently on the real flange is corrected
+  by the `transform` given to `attach_tool` and the taught poses stay valid. Poses taught
+  earlier keep placing the default TCP.
+- **Add Pose ▸ From Joint Positions** always makes a pose of the default TCP, also when opened on
+  a TCP, so a change to the tool or a TCP never solves it again.
+- Every new pose stores `telekinesis:pose:tcp`, the default TCP's name for a pose of the default
+  TCP, so `GET /teaching/poses` returns `tcp` as a name; it is `null` only for poses taught
+  earlier. A pose of the default TCP is not solved again when one of the robot's TCPs changes.
+- A TCP may share its name with a marker under the Synapse active-TCP marker group
+  (`<mount link>/tcp/<name>`), which is no frame of the robot.
 - The bridge connects to the Telekinesis Isaac Sim Server at its new address,
   `http://127.0.0.1:6000/telekinesis-isaacsim-server/v1` (was port 8770, prefix `/api/v1`).
   Route paths and bodies are unchanged.
@@ -10,6 +22,10 @@
   created earlier keep the old arrows.
 
 ### Added
+- **Add Tool** places a hidden TCP named `tool_base` at the attached tool's base, under the
+  robot's default TCP, and moves it when another tool is attached. **Add Pose ▸ From Tool**
+  places it first for a robot without one, e.g. one whose tool a program attached. The TCPs
+  **Add TCP** creates stay visible.
 - Right-click a robot → **Telekinesis Isaac Sim Bridge ▸ Add Pose ▸ From Joint Positions** opens a
   window with a slider and a value field per robot joint, clamped to the joint limits. The robot
   and its tool are drawn see-through at those joints, and **Add** creates a pose at the default
@@ -44,10 +60,9 @@
 - The Telekinesis Isaac Sim Server gets a robot's TCPs (`PUT /robots/{robot_id}/tcps`) whenever
   the robot is loaded there, e.g. on **Connect**, and again whenever a TCP is created, moved,
   renamed or deleted.
-- Right-click a TCP → **Add Pose ▸ From Tool** or **From Joint Positions** teaches a pose for
-  that TCP: the pose is placed at the TCP, named `<tcp>_Pose`, stores
-  `telekinesis:pose:tcp`, and is solved for that TCP, also after the TCP moves.
-  `GET /teaching/poses` returns each pose's `tcp`, `null` for the default TCP.
+- Right-click a TCP → **Add Pose ▸ From Tool** teaches a pose for that TCP: the pose is placed
+  at the TCP, named `<tcp>_Pose`, stores `telekinesis:pose:tcp`, and is solved for that TCP,
+  also after the TCP moves. `GET /teaching/poses` returns each pose's `tcp`.
 - Catalogue robots store their default TCP as `telekinesis:robot:default_tcp`, from the new
   `default_tcp` field of the asset index; loading a robot on the server stores it too.
   `examples/scenes/pick_and_place_scene.py` writes it.

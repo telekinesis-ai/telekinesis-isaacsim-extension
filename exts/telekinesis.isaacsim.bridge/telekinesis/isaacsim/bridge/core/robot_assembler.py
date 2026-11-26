@@ -46,7 +46,8 @@ _BIND_RETRIES = 60
 MOUNT_JOINT_NAME = "AssemblerFixedJoint"
 # PhysX's default density, in kg/m^3, used to weigh a mounted prim that has no mass.
 _MOUNTED_PRIM_DENSITY = 1000.0
-_TCP_XFORM_NAME = "tcp"
+# Name of the Xform under the mount link that holds the active-TCP marker place_tcp draws.
+TCP_MARKER_GROUP_NAME = "tcp"
 # ROS-Industrial (REP-199) name of the frame on an arm's flange face, Z pointing out of it.
 _FLANGE_FRAME_NAME = "tool0"
 # Size of the TCP marker's axis arrows, in meters: a cylinder shaft with a cone head on its end.
@@ -484,7 +485,7 @@ def place_tcp(stage, arm_prim, arm_mount_link, tcp_name, offset):
     """Place the arm's TCP marker, named ``tcp_name``, at ``offset`` in the mount link's frame.
 
     The marker (see :func:`define_tcp_marker`) is a plain Xform at
-    ``<mount link>/_TCP_XFORM_NAME/<tcp_name>`` with no physics API, so it is drawn with
+    ``<mount link>/TCP_MARKER_GROUP_NAME/<tcp_name>`` with no physics API, so it is drawn with
     the link like the link's visuals rather than simulated -- the fixed-joint bolt-on
     :func:`mount_prim` needs for a rigid body is not needed. The fixed parent keeps the
     TCP name from colliding with the arm's own prims, and is emptied on every call so
@@ -495,7 +496,7 @@ def place_tcp(stage, arm_prim, arm_mount_link, tcp_name, offset):
         raise RuntimeError(f"arm prim {arm_prim!r} not found in the open stage")
     arm_mount = find_prim_by_name(stage, arm_prim, arm_mount_link)
 
-    parent = UsdGeom.Xform.Define(stage, f"{arm_mount}/{_TCP_XFORM_NAME}").GetPrim()
+    parent = UsdGeom.Xform.Define(stage, f"{arm_mount}/{TCP_MARKER_GROUP_NAME}").GetPrim()
     for child in list(parent.GetChildren()):
         stage.RemovePrim(child.GetPath())
 
