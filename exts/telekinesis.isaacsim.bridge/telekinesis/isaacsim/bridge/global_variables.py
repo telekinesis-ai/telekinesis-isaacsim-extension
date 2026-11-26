@@ -21,7 +21,7 @@ BRIDGE_HOST = "127.0.0.1"
 BRIDGE_PORT = 8766
 
 # Base URL of the Telekinesis Isaac Sim Server's API, which loads robots for kinematics.
-ISAACSIM_SERVER_URL = "http://127.0.0.1:8770/api/v1"
+ISAACSIM_SERVER_URL = "http://127.0.0.1:6000/telekinesis-isaacsim-server/v1"
 
 # S3 endpoint of the public asset bucket (Kit's storage client lists S3 only through the
 # endpoint URL, not a custom domain). None uses the local asset index instead.

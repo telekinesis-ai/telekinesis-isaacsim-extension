@@ -215,7 +215,7 @@ A pose marks where a robot's tool should go. It is shown as a ghost: a see-throu
 that you place in the stage, for example around an object to pick, and that stores the robot's
 joint positions for it. A program then reads the poses and moves the robot to them. The
 robot's inverse kinematics is solved by the **Telekinesis Isaac Sim Server**, which must be
-running at `http://127.0.0.1:8770`.
+running at `http://127.0.0.1:6000`.
 
 1. **Connect to the server.** Open **Telekinesis Isaac Sim Bridge ▸ Telekinesis Isaac Sim Server**
    in the menu bar. The light is red until you press **Connect**, then green when the server

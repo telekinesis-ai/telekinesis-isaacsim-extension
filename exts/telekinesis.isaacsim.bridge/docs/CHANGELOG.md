@@ -1,5 +1,10 @@
 # Changelog
 ## [0.11.2] - 2026-11-24
+### Changed
+- The bridge connects to the Telekinesis Isaac Sim Server at its new address,
+  `http://127.0.0.1:6000/telekinesis-isaacsim-server/v1` (was port 8770, prefix `/api/v1`).
+  Route paths and bodies are unchanged.
+
 ### Added
 - Right-click a robot → **Telekinesis Isaac Sim Bridge ▸ Add Pose ▸ From Joint Positions** opens a
   window with a slider and a value field per robot joint, clamped to the joint limits. The robot

@@ -486,7 +486,8 @@ def place_tcp(stage, arm_prim, arm_mount_link, tcp_name, offset):
     the link like the link's visuals rather than simulated -- the fixed-joint bolt-on
     :func:`mount_prim` needs for a rigid body is not needed. The fixed parent keeps the
     TCP name from colliding with the arm's own prims, and is emptied on every call so
-    only the most recently set TCP is shown. Returns the marker's path.
+    only the most recently set TCP has a marker. The marker is created invisible. Returns
+    the marker's path.
     """
     if not stage.GetPrimAtPath(arm_prim).IsValid():
         raise RuntimeError(f"arm prim {arm_prim!r} not found in the open stage")
@@ -499,6 +500,9 @@ def place_tcp(stage, arm_prim, arm_mount_link, tcp_name, offset):
     marker = define_tcp_marker(
         stage, parent.GetPath().AppendChild(Tf.MakeValidIdentifier(tcp_name)), offset
     )
+    # Hidden so the arrows neither clutter the viewport nor show in camera images; the
+    # prim keeps its world pose, and its visibility can be switched on in the stage.
+    # marker.CreateVisibilityAttr().Set(UsdGeom.Tokens.invisible)
     return marker.GetPath().pathString
 
 
