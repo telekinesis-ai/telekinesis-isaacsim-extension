@@ -254,17 +254,21 @@ class Extension(omni.ext.IExt):
                             },
                         },
                         {
-                            "name": "Convert Tool Pose to Frame Pose",
-                            "show_fn": lambda objects: self._clicked_pose_is_ghost(objects, True),
+                            "name": "Convert to TCP Pose",
+                            "show_fn": lambda objects: self._clicked_poses_convert_to(
+                                objects, ghost=False
+                            ),
                             "onclick_fn": lambda objects: self._convert_to_frame_pose_window.show(
-                                self._clicked_pose_prim_path(objects)
+                                self._clicked_pose_prim_paths(objects)
                             ),
                         },
                         {
-                            "name": "Convert Frame Pose to Tool Pose",
-                            "show_fn": lambda objects: self._clicked_pose_is_ghost(objects, False),
+                            "name": "Convert to Tool Pose",
+                            "show_fn": lambda objects: self._clicked_poses_convert_to(
+                                objects, ghost=True
+                            ),
                             "onclick_fn": lambda objects: asyncio.ensure_future(
-                                self._convert_pose_to_tool_pose(objects)
+                                self._convert_poses_to_tool_poses(objects)
                             ),
                         },
                     ],
@@ -431,46 +435,58 @@ class Extension(omni.ext.IExt):
         reach = "reachable" if pose["reachable"] else "not reachable by the robot"
         notification_manager.post_notification(f"Added pose {pose['prim_path']} ({reach}).")
 
-    async def _convert_pose_to_tool_pose(self, objects: dict):
-        """Turn the right-clicked pose into a pose of the ``tool_base`` TCP for the same joints,
-        shown as a ghost of the tool, as Add Pose ▸ From Tool makes; select it, and notify a
-        failure as a warning that stays until dismissed.
+    async def _convert_poses_to_tool_poses(self, objects: dict):
+        """Turn each right-clicked pose into a pose of the ``tool_base`` TCP for the same
+        joints, shown as a ghost of the tool, as Add Pose ▸ From Tool makes, and select them.
+        A pose that fails stays as it was and the others are still converted; the failures are
+        notified together as a warning that stays until dismissed.
 
         Args:
             objects: Kit context-menu payload, as for :meth:`_show_add_asset_window`.
         """
-        pose_prim_path = self._clicked_pose_prim_path(objects)
-        try:
-            await self._pose_service.convert_pose(pose_prim_path, TOOL_BASE_TCP_NAME, ghost=True)
-        except HTTPException as error:
+        pose_prim_paths = self._clicked_pose_prim_paths(objects)
+        failures = []
+        for pose_prim_path in pose_prim_paths:
+            try:
+                await self._pose_service.convert_pose(
+                    pose_prim_path, TOOL_BASE_TCP_NAME, ghost=True
+                )
+            except HTTPException as error:
+                failures.append(f"Converting {pose_prim_path} failed: {error.detail}")
+        if failures:
             notification_manager.post_notification(
-                f"Converting the pose failed: {error.detail}",
+                "\n".join(failures),
                 hide_after_timeout=False,
                 status=notification_manager.NotificationStatus.WARNING,
                 button_infos=[notification_manager.NotificationButtonInfo("OK", on_complete=None)],
             )
-            return
-        omni.usd.get_context().get_selection().set_selected_prim_paths([pose_prim_path], True)
+        omni.usd.get_context().get_selection().set_selected_prim_paths(pose_prim_paths, True)
 
     @staticmethod
-    def _clicked_pose_prim_path(objects: dict) -> str | None:
-        """Return the path of the pose the right-clicked prim in a Kit context-menu payload is
-        or lies in, such as a frame pose's arrows, or ``None`` when it is part of no pose."""
+    def _clicked_pose_prim_paths(objects: dict) -> list[str]:
+        """Return the paths of the poses the right-clicked prims in a Kit context-menu payload
+        are or lie in, such as a frame pose's arrows, each once and in the payload's order."""
         stage = omni.usd.get_context().get_stage()
-        for ancestor_path in Sdf.Path(Extension._clicked_prim_path(objects)).GetAncestorsRange():
-            if stage.GetPrimAtPath(ancestor_path).HasAttribute(POSE_REACHABLE_ATTRIBUTE):
-                return ancestor_path.pathString
-        return None
+        pose_prim_paths = []
+        for prim in objects.get("prim_list") or []:
+            prim_path = prim.GetPath() if isinstance(prim, Usd.Prim) else Sdf.Path(str(prim))
+            for ancestor_path in prim_path.GetAncestorsRange():
+                if stage.GetPrimAtPath(ancestor_path).HasAttribute(POSE_REACHABLE_ATTRIBUTE):
+                    if ancestor_path.pathString not in pose_prim_paths:
+                        pose_prim_paths.append(ancestor_path.pathString)
+                    break
+        return pose_prim_paths
 
     @staticmethod
-    def _clicked_pose_is_ghost(objects: dict, ghost: bool) -> bool:
-        """Return whether the right-clicked prim in a Kit context-menu payload is part of a pose
-        shown as a ghost, when ``ghost``, or as a frame of arrows, otherwise."""
-        pose_prim_path = Extension._clicked_pose_prim_path(objects)
-        if pose_prim_path is None:
-            return False
-        pose_prim = omni.usd.get_context().get_stage().GetPrimAtPath(pose_prim_path)
-        return pose_prim.IsA(UsdGeom.Mesh) == ghost
+    def _clicked_poses_convert_to(objects: dict, ghost: bool) -> bool:
+        """Return whether the right-clicked prims in a Kit context-menu payload offer converting
+        their poses to ghosts, when ``ghost``, or to frames otherwise: always for several poses,
+        and for a single pose when it is shown the other way."""
+        pose_prim_paths = Extension._clicked_pose_prim_paths(objects)
+        stage = omni.usd.get_context().get_stage()
+        return len(pose_prim_paths) > 1 or any(
+            stage.GetPrimAtPath(path).IsA(UsdGeom.Mesh) != ghost for path in pose_prim_paths
+        )
 
     @staticmethod
     def _clicked_prim_path(objects: dict) -> str:

@@ -26,8 +26,9 @@ class RobotOverlay:
 
     While exactly one pose is selected and the robot can reach it, the pose's robot is
     drawn with every link where the pose's stored solution puts it, so the arm visibly reaches
-    the pose; it follows the pose when the pose is solved again, e.g. while it is dragged. It
-    is hidden while the pose is unreachable and whenever no single pose is selected. Each link
+    the pose; it follows the pose when the pose is solved again, e.g. while it is dragged. For a
+    frame pose, which shows only arrows, the robot's tool is drawn with it; a ghost pose shows
+    the tool itself. It is hidden while the pose is unreachable and whenever no single pose is selected. Each link
     is the link's own visible meshes merged into one, in the see-through blue of the Add window
     previews.
 
@@ -128,7 +129,6 @@ class RobotOverlay:
             self._refresh_outdated = False
             shown_joint_positions = self._shown_joint_positions
             pose_path = self._pose_path
-            # The pose's own ghost is the tool, so only the robot is drawn for a pose.
             tool_prim_path = None
             try:
                 if shown_joint_positions is not None:
@@ -141,6 +141,12 @@ class RobotOverlay:
                     )
                 elif pose_path is not None:
                     result = await self._pose_service.link_world_transforms(pose_path)
+                    # A ghost pose is the tool already; a frame pose is only arrows.
+                    pose_prim = omni.usd.get_context().get_stage().GetPrimAtPath(pose_path)
+                    if result is not None and pose_prim and not pose_prim.IsA(UsdGeom.Mesh):
+                        _, tool_prim_path = await self._pose_service.find_robot_and_tool(
+                            result[0]
+                        )
                 else:
                     result = None
             except HTTPException as error:

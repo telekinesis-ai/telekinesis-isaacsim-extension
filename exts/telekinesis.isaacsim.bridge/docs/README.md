@@ -268,16 +268,19 @@ running at `http://127.0.0.1:6000`.
    whether the robot reaches it. Solving the frame needs the server.
 
    To switch a pose between the two, right-click it and choose **Telekinesis Isaac Sim Bridge ▸
-   Convert Tool Pose to Frame Pose**, which asks for the TCP the frame pose places, or
-   **Convert Frame Pose to Tool Pose**, which makes a pose of `tool_base` shown as a ghost of
+   Convert to TCP Pose**, which asks for the TCP the frame pose places, or
+   **Convert to Tool Pose**, which makes a pose of `tool_base` shown as a ghost of
    the tool, as From Tool does. The robot's joints for the pose stay the same: the pose moves to
    where the new TCP is for them, so its stored pose changes with its TCP. A `tool_base` pose
    keeps the tool where it was taught when the tool is later mounted differently (Add Tool moves
    `tool_base` and the pose is solved again); a pose of a TCP added with Add TCP does not, since
-   that TCP stays fixed to the default TCP.
+   that TCP stays fixed to the default TCP. With several poses selected, both entries are shown
+   and convert every selected pose: to `tool_base` ghosts, or to frames of the one TCP picked,
+   which needs the poses to belong to the same robot. A pose that fails stays as it was and the
+   others are still converted.
 3. **Place it.** Rename the pose, move it with the viewport gizmo or the Transform fields, or
    duplicate it. While one pose is selected and reachable, the robot is drawn see-through in
-   the pose's solution, reaching it; the drawing is never saved and disappears when the pose
+   the pose's solution, reaching it, with its tool for a frame pose; the drawing is never saved and disappears when the pose
    is out of reach. Every pose that moves more than 1 mm or 0.01 rad is solved again, starting from
    its stored joint positions so the arm keeps its configuration; a pose moved out of reach turns
    red and keeps its last solution.
