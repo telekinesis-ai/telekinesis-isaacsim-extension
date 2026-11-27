@@ -31,8 +31,8 @@ from telekinesis.synapse.tools.parallel_grippers import robotiq
 RUN_ON_REAL_ROBOT = False
 
 BRIDGE_URL = "http://127.0.0.1:8766"
-ROBOT_PRIM_PATH = "/World/vention_table/robot_mount/UR10e_assembly/UR10e"
-GRIPPER_PRIM_PATH = "/World/vention_table/robot_mount/UR10e_assembly/Hand_E"
+ROBOT_PRIM_PATH = "/World/UR10e_assembly/UR10e"
+GRIPPER_PRIM_PATH = "/World/UR10e_assembly/Hand_E"
 PICK_POSE_PREFIX = "pick_pose"
 PLACE_START_POSE_NAME = "start_place_pose"
 

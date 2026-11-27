@@ -22,6 +22,11 @@
   created earlier keep the old arrows.
 
 ### Added
+- The placement gizmo of **Add Robot**, **Add Tool**, **Add Mesh**, **Add TCP** and
+  **Add Pose ▸ From Tool** snaps like Kit's own gizmo: with snapping on and a snap provider
+  (Surface, Prim or Grid) selected in the viewport's snap toolbar, dragging its center square
+  moves the placement to what the provider finds under the cursor, turned to the surface when
+  Conform to target is on. Dragging an axis or a plane does not snap.
 - **Add Tool** places a hidden TCP named `tool_base` at the attached tool's base, under the
   robot's default TCP, and moves it when another tool is attached. **Add Pose ▸ From Tool**
   places it first for a robot without one, e.g. one whose tool a program attached. The TCPs
