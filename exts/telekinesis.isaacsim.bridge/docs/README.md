@@ -266,6 +266,15 @@ running at `http://127.0.0.1:6000`.
    **Add** creates the pose as that frame's arrows, named `<tcp>_Pose` (`tool0_Pose` for the
    default TCP), also when it is out of reach. A frame pose keeps its colours: select it to see
    whether the robot reaches it. Solving the frame needs the server.
+
+   To switch a pose between the two, right-click it and choose **Telekinesis Isaac Sim Bridge ▸
+   Convert Tool Pose to Frame Pose**, which asks for the TCP the frame pose places, or
+   **Convert Frame Pose to Tool Pose**, which makes a pose of `tool_base` shown as a ghost of
+   the tool, as From Tool does. The robot's joints for the pose stay the same: the pose moves to
+   where the new TCP is for them, so its stored pose changes with its TCP. A `tool_base` pose
+   keeps the tool where it was taught when the tool is later mounted differently (Add Tool moves
+   `tool_base` and the pose is solved again); a pose of a TCP added with Add TCP does not, since
+   that TCP stays fixed to the default TCP.
 3. **Place it.** Rename the pose, move it with the viewport gizmo or the Transform fields, or
    duplicate it. While one pose is selected and reachable, the robot is drawn see-through in
    the pose's solution, reaching it; the drawing is never saved and disappears when the pose
@@ -304,8 +313,8 @@ name and the TCP's Position (m) and Rotation (XYZ Euler degrees) in the default 
 red/green/blue X/Y/Z arrows stands where the entered offset puts it, with a move/rotate gizmo on
 it, as in Add Tool: drag it to enter the offset (**W** to move, **E** to rotate). **Add** creates
 the TCP as an Xform with those arrows under the default TCP, e.g.
-`…/wrist_3_link/flange/tool0/fingertip`; the arrows are ordinary geometry, so they also show in
-camera images. The `tool_base` TCP Add Tool places is created hidden; its eye icon in the Stage
+`…/wrist_3_link/flange/tool0/fingertip` and closes the window; the arrows are ordinary
+geometry, so they also show in camera images. The `tool_base` TCP Add Tool places is created hidden; its eye icon in the Stage
 window shows it. Once the window is closed, move the TCP with Kit's gizmo or the
 Property window: its translate and rotate there are the offset Synapse's
 `robot.add_tcp(name, [x, y, z, rx, ry, rz])` takes. A TCP must sit under the default TCP to move

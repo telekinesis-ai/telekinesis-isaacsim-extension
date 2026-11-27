@@ -22,6 +22,16 @@
   created earlier keep the old arrows.
 
 ### Added
+- Right-click a ghost pose → **Telekinesis Isaac Sim Bridge ▸ Convert Tool Pose to Frame Pose**
+  opens a window with a **TCP** dropdown (default TCP or a TCP of the robot, starting at the
+  pose's own) and turns the pose into a frame pose of the picked TCP. Right-click a frame pose →
+  **Convert Frame Pose to Tool Pose** turns it into a pose of `tool_base` shown as a ghost of
+  the tool, as Add Pose ▸ From Tool makes, placing `tool_base` first if the robot has none.
+  Both keep the robot's joints for the pose: the pose moves to where the new TCP is for them,
+  and stores the new TCP and pose in the base frame, keeping its path and solution. A ghost of
+  the whole robot (From Joint Positions) converted to a frame and back becomes a ghost of the
+  tool alone.
+- **Add TCP** closes its window once the TCP is added; it stays open when adding fails.
 - The placement gizmo of **Add Robot**, **Add Tool**, **Add Mesh**, **Add TCP** and
   **Add Pose ▸ From Tool** snaps like Kit's own gizmo: with snapping on and a snap provider
   (Surface, Prim or Grid) selected in the viewport's snap toolbar, dragging its center square

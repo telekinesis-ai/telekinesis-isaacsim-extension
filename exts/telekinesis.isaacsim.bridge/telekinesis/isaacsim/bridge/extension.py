@@ -37,10 +37,11 @@ from omni import ui
 from omni.kit import notification_manager
 from omni.kit.menu.utils import add_menu_items, remove_menu_items
 from omni.usd import StageEventType
-from pxr import Sdf, Usd
+from pxr import Sdf, Usd, UsdGeom
 
 from .comm.server import BridgeServer
 from .comm.services.articulations import ASSEMBLY_ROBOT_RELATIONSHIP, ROBOT_CLASS_NAME_ATTRIBUTE
+from .comm.services.poses import POSE_REACHABLE_ATTRIBUTE, TOOL_BASE_TCP_NAME
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_TITLE
 from .ui.add_asset_window import AddAssetWindow
 from .ui.add_camera_window import AddCameraWindow
@@ -50,6 +51,7 @@ from .ui.add_pose_from_tcp_window import AddPoseFromTcpWindow
 from .ui.add_robot_window import AddRobotWindow
 from .ui.add_tcp_window import AddTcpWindow
 from .ui.add_tool_window import AddToolWindow
+from .ui.convert_to_frame_pose_window import ConvertToFramePoseWindow
 from .ui.isaacsim_server_window import IsaacSimServerWindow
 from .ui.robot_overlay import RobotOverlay
 from .ui_builder import UIBuilder
@@ -174,6 +176,7 @@ class Extension(omni.ext.IExt):
             self._pose_service, self._robot_overlay
         )
         self._add_tcp_window = AddTcpWindow(self._pose_service)
+        self._convert_to_frame_pose_window = ConvertToFramePoseWindow(self._pose_service)
 
         # Shown at the top of the right-click menu in the Stage panel and viewport. The returned
         # subscription keeps the entry alive; dropping it in on_shutdown removes it.
@@ -250,6 +253,20 @@ class Extension(omni.ext.IExt):
                                 ],
                             },
                         },
+                        {
+                            "name": "Convert Tool Pose to Frame Pose",
+                            "show_fn": lambda objects: self._clicked_pose_is_ghost(objects, True),
+                            "onclick_fn": lambda objects: self._convert_to_frame_pose_window.show(
+                                self._clicked_pose_prim_path(objects)
+                            ),
+                        },
+                        {
+                            "name": "Convert Frame Pose to Tool Pose",
+                            "show_fn": lambda objects: self._clicked_pose_is_ghost(objects, False),
+                            "onclick_fn": lambda objects: asyncio.ensure_future(
+                                self._convert_pose_to_tool_pose(objects)
+                            ),
+                        },
                     ],
                 },
                 "glyph": f"{extension_path}/data/icon.png",
@@ -268,6 +285,7 @@ class Extension(omni.ext.IExt):
         self._add_pose_from_joint_positions_window.destroy()
         self._add_pose_from_tcp_window.destroy()
         self._add_tcp_window.destroy()
+        self._convert_to_frame_pose_window.destroy()
         self._robot_overlay.destroy()
         self._pose_service.follow_stage(None)
         self._bridge_stage_event_sub = None
@@ -412,6 +430,47 @@ class Extension(omni.ext.IExt):
         omni.usd.get_context().get_selection().set_selected_prim_paths([pose["prim_path"]], True)
         reach = "reachable" if pose["reachable"] else "not reachable by the robot"
         notification_manager.post_notification(f"Added pose {pose['prim_path']} ({reach}).")
+
+    async def _convert_pose_to_tool_pose(self, objects: dict):
+        """Turn the right-clicked pose into a pose of the ``tool_base`` TCP for the same joints,
+        shown as a ghost of the tool, as Add Pose ▸ From Tool makes; select it, and notify a
+        failure as a warning that stays until dismissed.
+
+        Args:
+            objects: Kit context-menu payload, as for :meth:`_show_add_asset_window`.
+        """
+        pose_prim_path = self._clicked_pose_prim_path(objects)
+        try:
+            await self._pose_service.convert_pose(pose_prim_path, TOOL_BASE_TCP_NAME, ghost=True)
+        except HTTPException as error:
+            notification_manager.post_notification(
+                f"Converting the pose failed: {error.detail}",
+                hide_after_timeout=False,
+                status=notification_manager.NotificationStatus.WARNING,
+                button_infos=[notification_manager.NotificationButtonInfo("OK", on_complete=None)],
+            )
+            return
+        omni.usd.get_context().get_selection().set_selected_prim_paths([pose_prim_path], True)
+
+    @staticmethod
+    def _clicked_pose_prim_path(objects: dict) -> str | None:
+        """Return the path of the pose the right-clicked prim in a Kit context-menu payload is
+        or lies in, such as a frame pose's arrows, or ``None`` when it is part of no pose."""
+        stage = omni.usd.get_context().get_stage()
+        for ancestor_path in Sdf.Path(Extension._clicked_prim_path(objects)).GetAncestorsRange():
+            if stage.GetPrimAtPath(ancestor_path).HasAttribute(POSE_REACHABLE_ATTRIBUTE):
+                return ancestor_path.pathString
+        return None
+
+    @staticmethod
+    def _clicked_pose_is_ghost(objects: dict, ghost: bool) -> bool:
+        """Return whether the right-clicked prim in a Kit context-menu payload is part of a pose
+        shown as a ghost, when ``ghost``, or as a frame of arrows, otherwise."""
+        pose_prim_path = Extension._clicked_pose_prim_path(objects)
+        if pose_prim_path is None:
+            return False
+        pose_prim = omni.usd.get_context().get_stage().GetPrimAtPath(pose_prim_path)
+        return pose_prim.IsA(UsdGeom.Mesh) == ghost
 
     @staticmethod
     def _clicked_prim_path(objects: dict) -> str:

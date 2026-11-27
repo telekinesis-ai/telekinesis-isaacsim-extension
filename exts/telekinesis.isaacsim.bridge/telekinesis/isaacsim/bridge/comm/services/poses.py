@@ -10,7 +10,7 @@ import carb
 import numpy as np
 import omni.usd
 from fastapi import HTTPException
-from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics, UsdShade
+from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics, UsdShade, Vt
 
 from ...core import asset_loader, meshes, robot_assembler
 from .. import models
@@ -592,6 +592,111 @@ class PoseService:
         )
         return {"prim_path": pose_path, "reachable": reachable}
 
+    async def convert_pose(self, pose_prim_path: str, tcp_name: str | None, ghost: bool):
+        """Turn the pose at ``pose_prim_path`` into a pose of the TCP ``tcp_name`` for the same
+        robot joints, shown as a ghost of the robot's tool when ``ghost`` and as a frame of
+        red/green/blue arrows otherwise.
+
+        Every TCP is fixed to the default TCP, so the joints that bring the pose's TCP to the
+        pose bring ``tcp_name`` to where it stands from the pose's TCP: the pose moves there,
+        stores ``tcp_name`` and its new pose in the base frame, and keeps its path, joint
+        solution and reachability, so it is not solved again. Converting to the TCP the pose
+        already places only changes its look. The ``tool_base`` TCP is placed at the tool's
+        base first when the robot has none. A ghost is the robot's tool as it is mounted now,
+        tinted by the stored reachability; the whole-robot ghost of Add Pose ▸ From Joint
+        Positions is not made again. Anything else authored on or under the pose, such as its
+        visibility, is not kept. A failure leaves the pose unchanged.
+
+        Args:
+            pose_prim_path: The pose prim.
+            tcp_name: Name of a TCP of the robot, such as ``tool_base``, or ``None`` for its
+                default TCP.
+            ghost: Whether to show the pose as a ghost of the tool instead of a frame.
+
+        Raises:
+            HTTPException: 422 if the prim is no pose, its robot is not in the stage or stores
+                neither its default TCP and base frame nor a class name, the pose's TCP or
+                ``tcp_name`` is no TCP of the robot, or, for a ghost or ``tool_base``, the
+                robot has no tool or the tool has no visible meshes; 503 if the server is needed
+                to find the default TCP or base frame and cannot be reached.
+        """
+        stage = omni.usd.get_context().get_stage()
+        pose_prim = stage.GetPrimAtPath(pose_prim_path)
+        if not pose_prim or not pose_prim.HasAttribute(POSE_REACHABLE_ATTRIBUTE):
+            raise HTTPException(422, f"'{pose_prim_path}' is no pose.")
+        robot_targets = pose_prim.GetRelationship(POSE_ROBOT_RELATIONSHIP).GetTargets()
+        if not robot_targets or not stage.GetPrimAtPath(robot_targets[0]):
+            raise HTTPException(422, f"The robot of {pose_prim_path} is not in the stage.")
+        robot_prim_path, default_tcp_prim_path = await self.find_default_tcp(
+            robot_targets[0].pathString
+        )
+        default_tcp_name = Sdf.Path(default_tcp_prim_path).name
+        tcp_paths = {default_tcp_name: default_tcp_prim_path}
+        tcp_paths |= self.robot_tcp_paths(robot_prim_path)
+        # A pose without a TCP name was taught before poses stored it: the default TCP.
+        old_tcp_name = pose_prim.GetAttribute(POSE_TCP_ATTRIBUTE).Get() or default_tcp_name
+        new_tcp_name = tcp_name or default_tcp_name
+        tool_prim_path = None
+        if ghost or new_tcp_name == TOOL_BASE_TCP_NAME:
+            _, tool_prim_path = await self.find_robot_and_tool(robot_prim_path)
+            if tool_prim_path is None:
+                raise HTTPException(
+                    422, f"'{robot_prim_path}' has no tool. Attach one with Add Tool first."
+                )
+            if new_tcp_name == TOOL_BASE_TCP_NAME and TOOL_BASE_TCP_NAME not in tcp_paths:
+                tcp_paths[TOOL_BASE_TCP_NAME] = await self.place_tool_base_tcp(robot_prim_path)
+        for name in (old_tcp_name, new_tcp_name):
+            if name not in tcp_paths:
+                raise HTTPException(422, f"'{robot_prim_path}' has no TCP '{name}'.")
+        old_tcp_world, new_tcp_world = (
+            omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(tcp_paths[name]))
+            for name in (old_tcp_name, new_tcp_name)
+        )
+        # Gf composes row-vector first: the new TCP in the old TCP's frame, then the pose.
+        pose_world = (
+            new_tcp_world
+            * old_tcp_world.GetInverse()
+            * omni.usd.get_world_transform_matrix(pose_prim)
+        )
+        pose = _pose_in_frame(pose_world, await self._base_frame_world(stage, robot_prim_path))
+        ghost_mesh = None
+        if ghost:
+            ghost_mesh = meshes.merge_meshes_in_frame(stage, tool_prim_path, new_tcp_world)
+            if not ghost_mesh[1]:
+                raise HTTPException(
+                    422, f"'{tool_prim_path}' has no visible meshes to show as a ghost."
+                )
+        pose_attributes = [
+            (attribute.GetName(), attribute.GetTypeName(), attribute.Get())
+            for attribute in pose_prim.GetAttributes()
+            if attribute.GetName().startswith("telekinesis:pose:") and attribute.HasValue()
+        ]
+        translation, rotation = robot_assembler.matrix_to_translation_rotation(
+            pose_world * omni.usd.get_world_transform_matrix(pose_prim.GetParent()).GetInverse()
+        )
+
+        stage.RemovePrim(pose_prim_path)
+        if ghost_mesh is not None:
+            pose_prim = _define_ghost_pose(stage, pose_prim_path, ghost_mesh, pose_world)
+        else:
+            pose_prim = robot_assembler.define_tcp_marker(
+                stage,
+                pose_prim_path,
+                models.Transformation(translation=translation, rotation=rotation),
+            ).GetPrim()
+        pose_prim.CreateRelationship(POSE_ROBOT_RELATIONSHIP).SetTargets(robot_targets)
+        for name, type_name, value in pose_attributes:
+            pose_prim.CreateAttribute(name, type_name).Set(value)
+        pose_prim.CreateAttribute(POSE_TCP_ATTRIBUTE, Sdf.ValueTypeNames.String).Set(new_tcp_name)
+        _write_pose_in_base_frame(pose_prim, pose)
+        if ghost_mesh is not None:
+            _set_ghost_look(
+                stage, pose_prim, bool(pose_prim.GetAttribute(POSE_REACHABLE_ATTRIBUTE).Get())
+            )
+        if stage is self._stage:
+            # The stored joints solve the converted pose already.
+            self._solved_poses[pose_prim.GetPath()] = pose
+
     async def _create_pose(self, robot_part_prim_path: str, joints: dict | None) -> dict:
         """Create a pose of a robot's TCP, as :meth:`create_pose_from_tool` when ``joints`` is
         ``None`` and as :meth:`create_pose_from_joint_positions` otherwise."""
@@ -690,23 +795,13 @@ class PoseService:
             else Tf.MakeValidIdentifier(Sdf.Path(tool_prim_path or robot_prim_path).name)
         ) + POSE_NAME_SUFFIX
         pose_path = omni.usd.get_stage_next_free_path(stage, f"{poses_path}/{pose_name}", False)
-        pose_mesh = UsdGeom.Mesh.Define(stage, pose_path)
-        pose_mesh.CreatePointsAttr(points)
-        pose_mesh.CreateFaceVertexCountsAttr(face_vertex_counts)
-        pose_mesh.CreateFaceVertexIndicesAttr(face_vertex_indices)
-        local_transform = Gf.Transform(
-            pose_world
-            * omni.usd.get_world_transform_matrix(stage.GetPrimAtPath(poses_path)).GetInverse()
+        pose_prim = _define_ghost_pose(
+            stage, pose_path, (points, face_vertex_counts, face_vertex_indices), pose_world
         )
-        pose_mesh.AddTranslateOp().Set(local_transform.GetTranslation())
-        pose_mesh.AddOrientOp(UsdGeom.XformOp.PrecisionDouble).Set(
-            Gf.Quatd(local_transform.GetRotation().GetQuat())
-        )
-        pose_mesh.AddScaleOp(UsdGeom.XformOp.PrecisionDouble).Set(local_transform.GetScale())
 
         reachable = self._tag_new_pose(
             stage,
-            pose_mesh.GetPrim(),
+            pose_prim,
             robot_prim_path,
             tcp_name,
             pose,
@@ -1423,6 +1518,32 @@ def define_ghost_material(
     material.CreateSurfaceOutput("mdl").ConnectToSource(shader_output)
     material.CreateVolumeOutput("mdl").ConnectToSource(shader_output)
     return material
+
+
+def _define_ghost_pose(
+    stage: Usd.Stage,
+    pose_path: str,
+    ghost_mesh: tuple[Vt.Vec3fArray, Vt.IntArray, Vt.IntArray],
+    pose_world: Gf.Matrix4d,
+) -> Usd.Prim:
+    """Define the prim of a ghost pose at ``pose_path`` and return it: a ``Mesh`` of
+    ``ghost_mesh``, given as (points, face vertex counts, face vertex indices) in the pose's frame,
+    placed at the world transform ``pose_world`` by translate, orient and scale ops."""
+    points, face_vertex_counts, face_vertex_indices = ghost_mesh
+    pose_mesh = UsdGeom.Mesh.Define(stage, pose_path)
+    pose_mesh.CreatePointsAttr(points)
+    pose_mesh.CreateFaceVertexCountsAttr(face_vertex_counts)
+    pose_mesh.CreateFaceVertexIndicesAttr(face_vertex_indices)
+    local_transform = Gf.Transform(
+        pose_world
+        * omni.usd.get_world_transform_matrix(pose_mesh.GetPrim().GetParent()).GetInverse()
+    )
+    pose_mesh.AddTranslateOp().Set(local_transform.GetTranslation())
+    pose_mesh.AddOrientOp(UsdGeom.XformOp.PrecisionDouble).Set(
+        Gf.Quatd(local_transform.GetRotation().GetQuat())
+    )
+    pose_mesh.AddScaleOp(UsdGeom.XformOp.PrecisionDouble).Set(local_transform.GetScale())
+    return pose_mesh.GetPrim()
 
 
 def _set_ghost_look(stage: Usd.Stage, pose_prim: Usd.Prim, reachable: bool):

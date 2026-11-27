@@ -26,9 +26,9 @@ class AddTcpWindow(FramePlacementWindow):
     (E) is selected and translation otherwise, and edits nothing in the stage. Nothing in the
     stage can be selected while the window is open, so Kit's own gizmo never shows beside it.
     **Add** creates the TCP as an Xform named after the Name field under the default TCP frame
-    and leaves the window open for the next TCP. Once the window is closed, the TCP can be
-    selected and moved with Kit's gizmo or the Property window, and right-clicking it offers Add
-    Pose for that TCP. The Telekinesis Isaac Sim Server gets the robot's TCPs when the robot is
+    and closes the window; when adding fails, the window stays open. Once the window is closed,
+    the TCP can be selected and moved with Kit's gizmo or the Property window, and right-clicking
+    it offers Add Pose for that TCP. The Telekinesis Isaac Sim Server gets the robot's TCPs when the robot is
     loaded there, and again whenever one changes; adding a TCP needs the server only for a robot
     that stores no default TCP yet. Failures are notified as warnings that stay until dismissed.
 
@@ -72,11 +72,12 @@ class AddTcpWindow(FramePlacementWindow):
 
     async def add_frame(self, transformation: models.Transformation) -> str:
         """Create the TCP named after the Name field at ``transformation``, with its arrows
-        shown."""
+        shown, and close the window."""
         tcp_prim_path = await self._pose_service.create_tcp(
             self._robot_part_prim_path,
             self._name_model.get_value_as_string(),
             transformation,
             visible=True,
         )
+        self.close()
         return f"Added TCP {tcp_prim_path}."
