@@ -11,8 +11,9 @@ Standalone Python scripts that call the Telekinesis Isaac Sim Bridge.
   [scenes/README.md](scenes/README.md)
 - Top-level scripts: complete workflows, such as assembling a gripper onto a robot,
   streaming joint positions, the quickstart's pick-and-place example
-  `ur10e_hande_isaacsim_pick_place.py`, and `ur10e_hande_teach_pick_place.py`, which picks and
-  places at poses taught with Add Pose
+  `ur10e_hande_isaacsim_pick_place.py`, `ur10e_hande_teach_pick_place.py`, which picks and
+  places at poses taught with Add Pose, and `ur10e_hande_gui_scene_pick_place.py`, which also
+  moves through joint positions taught with Add Pose > From Joint Positions (Isaac Sim only)
 
 ## Setup
 
@@ -24,7 +25,7 @@ Start Isaac Sim with the bridge extension enabled. The bridge listens on
 | Examples | Packages |
 |-|-|
 | Device folders, `general/`, `prims/`, `stage/` and top-level scripts | `pip install -r requirements.txt` |
-| `ur10e_hande_isaacsim_pick_place.py`, `ur10e_hande_teach_pick_place.py` | The Telekinesis SDK packages pinned in the [Isaac Sim installation guide](https://docs.telekinesis.ai/getting-started/advanced-installation/install-isaacsim) |
+| `ur10e_hande_isaacsim_pick_place.py`, `ur10e_hande_teach_pick_place.py`, `ur10e_hande_gui_scene_pick_place.py` | The Telekinesis SDK packages pinned in the [Isaac Sim installation guide](https://docs.telekinesis.ai/getting-started/advanced-installation/install-isaacsim) |
 | `scenes/` | `usd-core` |
 
 ## Run the example
