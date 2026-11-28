@@ -40,6 +40,15 @@
   (Surface, Prim or Grid) selected in the viewport's snap toolbar, dragging its center square
   moves the placement to what the provider finds under the cursor, turned to the surface when
   Conform to target is on. Dragging an axis or a plane does not snap.
+- `GET /stage/simulation/speed` reports what decides how fast the simulation runs: the run-loop,
+  player and renderer settings, the timeline's time codes per second, each physics scene's steps
+  per second and whether the viewport renders, with `update_hz` and `simulation_rate` (simulated
+  seconds per second of wall clock) measured over up to one second. `PUT /stage/simulation/speed`
+  changes them: the run-loop, player, renderer, asynchronous rendering, play-time throttling and
+  render mode settings, the timeline rate, the physics step rate and viewport rendering.
+  Both take `measure=false` to return at once without the measured speed.
+  `/app/player/useFastMode` is set on the timeline as well, which otherwise brings its own
+  value back on the next play.
 - **Add Tool** places a hidden TCP named `tool_base` at the attached tool's base, under the
   robot's default TCP, and moves it when another tool is attached. **Add Pose ▸ From Tool**
   places it first for a robot without one, e.g. one whose tool a program attached. The TCPs
@@ -130,6 +139,11 @@
   `telekinesis-isaacsim-server` command instead of a `fastapi run` command line.
 
 ### Fixed
+- The bridge listens again when Windows closes its port under it. A client that resets a
+  connection the server is accepting (a client process that was killed) made asyncio log
+  "Accept failed on a socket" (`WinError 64`) and close the listening socket; every later
+  request was refused until the extension was reloaded. The server now reopens the port
+  within a second and logs a warning.
 - A robot added with Add Robot where it would overlap a robot already in the stage is moved
   along +X clear of it again, inside its new `<model>_assembly`, instead of being loaded into
   the other robot. Loading an asset now parks it clear of the robots beside any prim it lies

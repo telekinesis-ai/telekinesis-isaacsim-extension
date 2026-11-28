@@ -57,6 +57,7 @@ import uvicorn
 from fastapi import responses
 from pxr import Tf, Usd
 
+from . import listening
 from .isaacsim_server_client import IsaacSimServerClient
 from .routers import ALL_ROUTERS
 from .services.articulations import ArticulationService
@@ -108,6 +109,7 @@ class BridgeServer:
         self._app = self._build_app()
         self._server = None
         self._serve_task = None
+        self._listen_task = None
         self._objects_changed_listener = None
 
     def start(self):
@@ -124,6 +126,11 @@ class BridgeServer:
         # handling, and don't let uvicorn hijack Ctrl+C.
         self._server.install_signal_handlers = lambda: None
         self._serve_task = asyncio.ensure_future(self._server.serve())
+        # On Windows a client that resets a connection being accepted makes asyncio close
+        # the listening socket under uvicorn; the port is opened again when that happens.
+        self._listen_task = asyncio.ensure_future(
+            listening.keep_listening(lambda: self._server, self._host, self._port, carb.log_warn)
+        )
         stage = omni.usd.get_context().get_stage()
         if stage is not None:
             self._listen_for_removed_prims(stage)
@@ -247,6 +254,9 @@ class BridgeServer:
         if self._serve_task is not None:
             self._serve_task.cancel()
             self._serve_task = None
+        if self._listen_task is not None:
+            self._listen_task.cancel()
+            self._listen_task = None
         carb.log_info("[bridge] server stopped.")
 
     def _build_app(self):

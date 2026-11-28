@@ -148,6 +148,156 @@ class StageService:
             state = "paused"
         return {"timeline": state}
 
+    # Application settings that decide how much simulated time passes per second of wall clock.
+    SPEED_SETTINGS = (
+        "/app/runLoops/main/rateLimitEnabled",
+        "/app/runLoops/main/rateLimitFrequency",
+        "/app/runLoops/main/manualModeEnabled",
+        "/app/player/useFixedTimeStepping",
+        "/app/player/playSimulations",
+        "/app/player/useFastMode",
+        "/app/asyncRendering",
+        "/app/asyncRenderingLowLatency",
+        "/app/omni.usd/asyncHandshake",
+        "/exts/isaacsim.core.throttling/enable_manualmode",
+        "/exts/isaacsim.core.throttling/enable_async",
+        "/rtx/rendermode",
+        "/app/renderer/sleepMsOnFocus",
+        "/app/renderer/sleepMsOutOfFocus",
+        "/app/vsync",
+        "/persistent/simulation/minFrameRate",
+    )
+    # A client may write settings under these paths only.
+    SPEED_SETTING_PREFIXES = (
+        "/app/runLoops/",
+        "/app/player/",
+        "/app/renderer/",
+        "/app/vsync",
+        "/app/asyncRendering",
+        "/app/omni.usd/asyncHandshake",
+        "/omni/replicator/asyncRendering",
+        "/exts/isaacsim.core.throttling/",
+        "/rtx/rendermode",
+        "/persistent/simulation/",
+    )
+
+    async def simulation_speed(self, keys=(), measure=True) -> dict:
+        """What decides the simulation's speed, and the speed measured now.
+
+        Reads ``SPEED_SETTINGS`` and any further setting paths in ``keys``, the
+        timeline's time codes per second, every physics scene's authored steps per
+        second (``None`` if not authored), and whether the active viewport renders.
+        It then waits for up to 30 application updates, at most one second, and
+        reports ``update_hz``, the updates per second of wall clock, and
+        ``simulation_rate``, the simulated seconds per second of wall clock
+        (``None`` unless the timeline is playing). With ``measure`` false it
+        returns at once and both are ``None``. Works without an open stage.
+        """
+        import time
+
+        import carb.settings
+        import omni.kit.app
+        import omni.timeline
+        import omni.usd
+        from isaacsim.core.simulation_manager import SimulationManager
+        from pxr import PhysxSchema, UsdPhysics
+
+        settings = carb.settings.get_settings()
+        timeline = omni.timeline.get_timeline_interface()
+        values = {key: settings.get(key) for key in (*self.SPEED_SETTINGS, *keys)}
+        steps = {}
+        stage = omni.usd.get_context().get_stage()
+        if stage is not None:
+            for prim in stage.Traverse():
+                if prim.IsA(UsdPhysics.Scene):
+                    attr = PhysxSchema.PhysxSceneAPI(prim).GetTimeStepsPerSecondAttr()
+                    steps[str(prim.GetPath())] = attr.Get() if attr and attr.HasAuthoredValue() else None
+        viewport = self._active_viewport()
+        app = omni.kit.app.get_app()
+        playing = timeline.is_playing()
+        updates, started, simulated = 0, time.perf_counter(), SimulationManager.get_simulation_time()
+        while measure and updates < 30 and time.perf_counter() - started < 1.0:
+            await app.next_update_async()
+            updates += 1
+        elapsed = time.perf_counter() - started if measure else 0.0
+        advanced = SimulationManager.get_simulation_time() - simulated
+        return {
+            "settings": values,
+            "time_codes_per_second": timeline.get_time_codes_per_second(),
+            "physics_steps_per_second": steps,
+            "viewport_updates": None if viewport is None else bool(viewport.updates_enabled),
+            "timeline": self.simulation_state()["timeline"],
+            "update_hz": updates / elapsed if elapsed > 0 else None,
+            # simulated time restarts from zero on play: a negative step is not a rate
+            "simulation_rate": advanced / elapsed if playing and elapsed > 0 and advanced >= 0 else None,
+        }
+
+    async def set_simulation_speed(
+        self,
+        settings=None,
+        time_codes_per_second=None,
+        physics_steps_per_second=None,
+        viewport_updates=None,
+    ) -> None:
+        """Change what decides the simulation's speed; an argument left ``None`` is not touched.
+
+        ``settings`` are application settings under ``SPEED_SETTING_PREFIXES`` (422
+        for any other path); those under ``/persistent/`` survive a restart, the rest
+        last until Isaac Sim closes; ``/app/player/useFastMode`` is also set on the
+        timeline, which otherwise restores it on the next play.
+        ``time_codes_per_second`` is the timeline's rate,
+        authored on the open stage. ``physics_steps_per_second`` is authored on every
+        physics scene and takes effect on the next play. ``viewport_updates`` turns
+        the active viewport's rendering on or off; camera render products are not
+        affected. Stage changes are made in the current edit layer and not saved.
+        Raises 409 for a stage change with no stage open.
+        """
+        import carb.settings
+        import omni.timeline
+        from pxr import PhysxSchema, UsdPhysics
+
+        refused = [key for key in (settings or {}) if not key.startswith(self.SPEED_SETTING_PREFIXES)]
+        if refused:
+            raise HTTPException(
+                status_code=422,
+                detail=f"not a simulation speed setting: {', '.join(refused)}; "
+                f"allowed paths start with {', '.join(self.SPEED_SETTING_PREFIXES)}",
+            )
+        if physics_steps_per_second is not None or time_codes_per_second is not None:
+            stage = self.stage()
+        for key, value in (settings or {}).items():
+            carb.settings.get_settings().set(key, value)
+        fast_mode = (settings or {}).get("/app/player/useFastMode")
+        if fast_mode is not None:
+            # The timeline keeps its own copy of this one and writes it back to the
+            # setting on every play, so the setting alone comes back on the next play.
+            timeline = omni.timeline.get_timeline_interface()
+            set_fast_mode = getattr(timeline, "set_play_every_frame", None) or timeline.set_fast_mode
+            set_fast_mode(bool(fast_mode))
+        if time_codes_per_second is not None:
+            omni.timeline.get_timeline_interface().set_time_codes_per_second(time_codes_per_second)
+        if physics_steps_per_second is not None:
+            scenes = [prim for prim in stage.Traverse() if prim.IsA(UsdPhysics.Scene)]
+            if not scenes:
+                scenes = [UsdPhysics.Scene.Define(stage, "/physicsScene").GetPrim()]
+            for prim in scenes:
+                PhysxSchema.PhysxSceneAPI.Apply(prim).CreateTimeStepsPerSecondAttr().Set(physics_steps_per_second)
+        if viewport_updates is not None:
+            viewport = self._active_viewport()
+            if viewport is None:
+                raise HTTPException(status_code=409, detail="no active viewport")
+            viewport.updates_enabled = viewport_updates
+
+    @staticmethod
+    def _active_viewport():
+        """The active viewport, or ``None`` when Isaac Sim runs without one."""
+        try:
+            from omni.kit.viewport import utility as viewport_utility
+
+            return viewport_utility.get_active_viewport()
+        except Exception:  # pylint: disable=broad-exception-caught
+            return None
+
     async def set_solve_articulation_contact_last(self, enabled: bool) -> None:
         """Stop simulation and set contact ordering on every physics scene.
 

@@ -88,6 +88,7 @@ from .models import (
     SetJointStateRequest,
     SetPrimMetadataRequest,
     SetRigidBodyRequest,
+    SimulationSpeedRequest,
     SetScaleRequest,
     SetTcpRequest,
     SetVelocityRequest,
@@ -872,6 +873,41 @@ async def timeline_action(action: TimelineAction, stage_service=Depends(get_stag
 async def simulation_state(stage_service=Depends(get_stage_service)):
     """Current timeline state: ``playing`` / ``paused`` / ``stopped``."""
     return stage_service.simulation_state()
+
+
+@stage.get("/simulation/speed", summary="Get Simulation Speed")
+async def get_simulation_speed(
+    key: list[str] = Query(default=[]), measure: bool = True, stage_service=Depends(get_stage_service)
+):
+    """What decides how fast the simulation runs, and the speed measured over up to one second.
+
+    Returns the application's run-loop, player and renderer settings (plus any
+    setting path given as ``key``), the timeline's time codes per second, each
+    physics scene's steps per second, whether the viewport renders, ``update_hz``
+    and ``simulation_rate`` (simulated seconds per second; null unless playing).
+    ``measure=false`` skips the measurement: the call returns at once and both
+    are null.
+    """
+    return await stage_service.simulation_speed(key, measure)
+
+
+@stage.put("/simulation/speed", summary="Set Simulation Speed")
+async def set_simulation_speed(
+    req: SimulationSpeedRequest, measure: bool = True, stage_service=Depends(get_stage_service)
+):
+    """Change run-loop, player or renderer settings, the timeline rate, the physics
+    step rate or viewport rendering; fields left out are not touched.
+
+    Physics steps apply on the next play. Stage changes are not saved; settings
+    under ``/persistent/`` survive a restart. Returns the state as the GET does;
+    ``measure=false`` returns it at once, without the measured speed.
+    422 for a setting path outside the allowed ones, 409 for a stage change with
+    no stage open.
+    """
+    await stage_service.set_simulation_speed(
+        req.settings, req.time_codes_per_second, req.physics_steps_per_second, req.viewport_updates
+    )
+    return await stage_service.simulation_speed(measure=measure)
 
 
 @stage.put("/physics/solve_articulation_contact_last", summary="Set Articulation Contact Order")

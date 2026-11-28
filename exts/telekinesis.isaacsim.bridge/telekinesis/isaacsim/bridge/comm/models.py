@@ -310,6 +310,22 @@ class SetTcpRequest(BaseModel):
 # -- Stage (mirrors the extension's Omniservice schemas) --------------------
 
 
+class SimulationSpeedRequest(BaseModel):
+    """What to change about how fast the simulation runs; a field left ``None`` is not touched.
+
+    ``settings`` maps application setting paths to values. Only paths under
+    ``/app/runLoops/``, ``/app/player/``, ``/app/renderer/``, ``/app/vsync``,
+    ``/app/asyncRendering``, ``/app/omni.usd/asyncHandshake``,
+    ``/omni/replicator/asyncRendering``, ``/exts/isaacsim.core.throttling/``,
+    ``/rtx/rendermode`` and ``/persistent/simulation/`` are accepted.
+    """
+
+    settings: dict[str, bool | int | float | str] | None = None
+    time_codes_per_second: float | None = Field(None, gt=0)
+    physics_steps_per_second: int | None = Field(None, gt=0)
+    viewport_updates: bool | None = None
+
+
 class OpenSceneRequest(BaseModel):
     """Body of PUT /stage/scene (spec: ``UsdStageModel``)."""
 

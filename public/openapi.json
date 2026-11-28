@@ -7288,6 +7288,111 @@
         }
       }
     },
+    "/stage/simulation/speed": {
+      "get": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Get Simulation Speed",
+        "description": "What decides how fast the simulation runs, and the speed measured over up to one second.\n\nReturns the application's run-loop, player and renderer settings (plus any\nsetting path given as ``key``), the timeline's time codes per second, each\nphysics scene's steps per second, whether the viewport renders, ``update_hz``\nand ``simulation_rate`` (simulated seconds per second; null unless playing).\n``measure=false`` skips the measurement: the call returns at once and both\nare null.",
+        "operationId": "get_simulation_speed_stage_simulation_speed_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [],
+              "title": "Key"
+            }
+          },
+          {
+            "name": "measure",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Measure"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "stage"
+        ],
+        "summary": "Set Simulation Speed",
+        "description": "Change run-loop, player or renderer settings, the timeline rate, the physics\nstep rate or viewport rendering; fields left out are not touched.\n\nPhysics steps apply on the next play. Stage changes are not saved; settings\nunder ``/persistent/`` survive a restart. Returns the state as the GET does;\n``measure=false`` returns it at once, without the measured speed.\n422 for a setting path outside the allowed ones, 409 for a stage change with\nno stage open.",
+        "operationId": "set_simulation_speed_stage_simulation_speed_put",
+        "parameters": [
+          {
+            "name": "measure",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Measure"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulationSpeedRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/stage/physics/solve_articulation_contact_last": {
       "put": {
         "tags": [
@@ -7354,7 +7459,7 @@
           "stage"
         ],
         "summary": "Set Guides Visible",
-        "description": "Show or hide guide-purpose prims (e.g. TCP marker axes) in the viewport.\n\nSame as Display > Show By Purpose > Guide: applies to every guide prim and persists\nacross Isaac Sim restarts.",
+        "description": "Show or hide guide-purpose prims (e.g. colliders' guide meshes) in the viewport.\n\nSame as Display > Show By Purpose > Guide: applies to every guide prim and persists\nacross Isaac Sim restarts.",
         "operationId": "set_guides_visible_stage_viewport_guides_put",
         "requestBody": {
           "content": {
@@ -10514,6 +10619,75 @@
         ],
         "title": "SetWorldVelocityRequest",
         "description": "Body of PUT .../world_velocity -- the root link's full 6-DOF velocity\n(``[vx, vy, vz, wx, wy, wz]``, linear then angular)."
+      },
+      "SimulationSpeedRequest": {
+        "properties": {
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settings"
+          },
+          "time_codes_per_second": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Codes Per Second"
+          },
+          "physics_steps_per_second": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Physics Steps Per Second"
+          },
+          "viewport_updates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Viewport Updates"
+          }
+        },
+        "type": "object",
+        "title": "SimulationSpeedRequest",
+        "description": "What to change about how fast the simulation runs; a field left ``None`` is not touched.\n\n``settings`` maps application setting paths to values. Only paths under\n``/app/runLoops/``, ``/app/player/``, ``/app/renderer/``, ``/app/vsync``,\n``/app/asyncRendering``, ``/app/omni.usd/asyncHandshake``,\n``/omni/replicator/asyncRendering``, ``/exts/isaacsim.core.throttling/``,\n``/rtx/rendermode`` and ``/persistent/simulation/`` are accepted."
       },
       "SolverIterationCountRequest": {
         "properties": {
