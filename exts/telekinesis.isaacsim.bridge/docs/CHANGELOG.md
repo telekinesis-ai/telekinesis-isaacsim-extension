@@ -20,8 +20,26 @@
   coloured per face by `primvars:displayColor`, in place of an `X`/`Y`/`Z` Xform each holding a
   `Shaft` cylinder and a `Head` cone, and the `Looks` scope with their materials. TCPs and poses
   created earlier keep the old arrows.
+- The robot drawn reaching a selected frame pose now carries its tool, so the gripper shows
+  where the frame pose puts it; for a ghost pose, the ghost still is the tool.
 
 ### Added
+- Right-click a ghost pose → **Telekinesis Isaac Sim Bridge ▸ Convert to TCP Pose**
+  opens a window with a **TCP** dropdown (default TCP or a TCP of the robot, starting at the
+  pose's own) and turns the pose into a frame pose of the picked TCP. Right-click a frame pose →
+  **Convert to Tool Pose** turns it into a pose of `tool_base` shown as a ghost of
+  the tool, as Add Pose ▸ From Tool makes, placing `tool_base` first if the robot has none.
+  Both keep the robot's joints for the pose: the pose moves to where the new TCP is for them,
+  and stores the new TCP and pose in the base frame, keeping its path and solution. A ghost of
+  the whole robot (From Joint Positions) converted to a frame and back becomes a ghost of the
+  tool alone. With several poses selected, both entries are shown and convert every selected
+  pose (to frames only when they belong to one robot); a pose that fails stays as it was.
+- **Add TCP** closes its window once the TCP is added; it stays open when adding fails.
+- The placement gizmo of **Add Robot**, **Add Tool**, **Add Mesh**, **Add TCP** and
+  **Add Pose ▸ From Tool** snaps like Kit's own gizmo: with snapping on and a snap provider
+  (Surface, Prim or Grid) selected in the viewport's snap toolbar, dragging its center square
+  moves the placement to what the provider finds under the cursor, turned to the surface when
+  Conform to target is on. Dragging an axis or a plane does not snap.
 - **Add Tool** places a hidden TCP named `tool_base` at the attached tool's base, under the
   robot's default TCP, and moves it when another tool is attached. **Add Pose ▸ From Tool**
   places it first for a robot without one, e.g. one whose tool a program attached. The TCPs

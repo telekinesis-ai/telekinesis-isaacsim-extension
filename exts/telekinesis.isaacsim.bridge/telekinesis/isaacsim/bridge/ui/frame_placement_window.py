@@ -16,6 +16,7 @@ from ..core import robot_assembler
 from .add_asset_window import (
     BUTTON_ROW_GAP,
     BUTTON_WIDTH,
+    WINDOW_HEIGHT,
     WINDOW_WIDTH,
     build_gizmo_hint,
     deselect_all,
@@ -70,7 +71,7 @@ class FramePlacementWindow(abc.ABC):
         # Clears every selection while the window is open; None while it is closed.
         self._selection_subscription = None
 
-        self._window = ui.Window(title, width=WINDOW_WIDTH, height=0, visible=False)
+        self._window = ui.Window(title, width=WINDOW_WIDTH, height=WINDOW_HEIGHT, visible=False)
         self._window.set_visibility_changed_fn(self._on_visibility_changed)
         with self._window.frame, ui.VStack(spacing=5, height=0):
             with ui.HStack(height=0):
