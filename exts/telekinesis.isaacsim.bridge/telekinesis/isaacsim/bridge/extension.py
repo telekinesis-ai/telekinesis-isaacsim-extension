@@ -41,6 +41,7 @@ from pxr import Sdf, Usd
 
 from .comm.server import BridgeServer
 from .comm.services.articulations import ASSEMBLY_ROBOT_RELATIONSHIP, ROBOT_CLASS_NAME_ATTRIBUTE
+from .comm.services.move_to import MoveToService
 from .global_variables import BRIDGE_HOST, BRIDGE_PORT, EXTENSION_TITLE
 from .ui.add_asset_window import AddAssetWindow
 from .ui.add_camera_window import AddCameraWindow
@@ -52,6 +53,7 @@ from .ui.add_tcp_window import AddTcpWindow
 from .ui.add_tool_window import AddToolWindow
 from .ui.isaacsim_server_window import IsaacSimServerWindow
 from .ui.robot_overlay import RobotOverlay
+from .ui.teaching_tool_bar import TeachingToolBar
 from .ui_builder import UIBuilder
 
 
@@ -98,6 +100,10 @@ class Extension(omni.ext.IExt):
             MenuItemDescription(
                 name="Telekinesis Isaac Sim Server",
                 onclick_action=(ext_id, "ShowIsaacSimServerWindow"),
+            ),
+            MenuItemDescription(
+                name="Teaching Tool Bar",
+                onclick_action=(ext_id, "ShowTeachingToolBar"),
             ),
         ]
 
@@ -167,6 +173,17 @@ class Extension(omni.ext.IExt):
             description="Show the Telekinesis Isaac Sim Server window",
         )
         self._robot_overlay = RobotOverlay(self._pose_service)
+        self._teaching_tool_bar = TeachingToolBar(
+            MoveToService(self._pose_service, self._bridge_server.articulation_service),
+            self._pose_service,
+        )
+        # Opened by the menu item of the same action id, added above.
+        action_registry.register_action(
+            ext_id,
+            "ShowTeachingToolBar",
+            self._teaching_tool_bar.show,
+            description="Show the Teaching Tool Bar",
+        )
         self._add_pose_from_joint_positions_window = AddPoseFromJointPositionsWindow(
             self._pose_service, self._robot_overlay, self._bridge_server.isaacsim_server_client
         )
@@ -269,6 +286,7 @@ class Extension(omni.ext.IExt):
         self._add_pose_from_tcp_window.destroy()
         self._add_tcp_window.destroy()
         self._robot_overlay.destroy()
+        self._teaching_tool_bar.destroy()
         self._pose_service.follow_stage(None)
         self._bridge_stage_event_sub = None
         if getattr(self, "_bridge_server", None) is not None:
@@ -279,6 +297,7 @@ class Extension(omni.ext.IExt):
         action_registry = omni.kit.actions.core.get_action_registry()
         action_registry.deregister_action(self.ext_id, f"CreateUIExtension:{EXTENSION_TITLE}")
         action_registry.deregister_action(self.ext_id, "ShowIsaacSimServerWindow")
+        action_registry.deregister_action(self.ext_id, "ShowTeachingToolBar")
 
         if self._window:
             self._window = None

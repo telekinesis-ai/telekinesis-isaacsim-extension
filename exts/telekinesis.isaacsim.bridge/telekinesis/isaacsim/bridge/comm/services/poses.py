@@ -27,11 +27,13 @@ from .articulations import (
 # places, and ``tcp`` names that TCP; poses taught before every pose stored it lack it, which
 # means the robot's default TCP. The joint
 # attributes hold the robot's inverse-kinematics solution for the pose, in radians;
-# ``reachable`` says whether there is one.
+# ``reachable`` says whether there is one. ``joint_positions_chosen`` marks a pose whose joints
+# the user chose, which Move to drives to as they are.
 POSE_ROBOT_RELATIONSHIP = "telekinesis:pose:robot"
 POSE_TCP_ATTRIBUTE = "telekinesis:pose:tcp"
 POSE_JOINT_NAMES_ATTRIBUTE = "telekinesis:pose:joint_names"
 POSE_JOINT_POSITIONS_ATTRIBUTE = "telekinesis:pose:joint_positions"
+POSE_JOINT_POSITIONS_CHOSEN_ATTRIBUTE = "telekinesis:pose:joint_positions_chosen"
 POSE_REACHABLE_ATTRIBUTE = "telekinesis:pose:reachable"
 POSE_IN_BASE_FRAME_ATTRIBUTE = "telekinesis:pose:pose_in_base_frame"
 # Relationship on a TCP prim targeting its robot prim; it also marks the prim as a TCP. The
@@ -136,10 +138,15 @@ class PoseService:
         # The solve running for each pose, and the poses moved while theirs ran.
         self._solve_tasks: dict[Sdf.Path, asyncio.Task] = {}
         self._moved_while_solving: set[Sdf.Path] = set()
+        # Poses whose latest solve failed, so their stored solution may not match their place.
+        self._failed_solves: set[Sdf.Path] = set()
         # TCP prims of the followed stage and the robot prim each belongs to, and the robots
-        # whose TCPs are waiting to be given to the server. One TCP sync runs at a time.
+        # whose TCPs are waiting to be given to the server. One TCP sync runs at a time. The
+        # latest sync scheduled for each robot runs after its earlier ones, so it tells whether
+        # the server has the robot's current TCPs.
         self._tcp_robots: dict[Sdf.Path, str] = {}
         self._tcp_syncs_pending: set[str] = set()
+        self._tcp_sync_tasks: dict[str, asyncio.Task] = {}
         self._tcp_sync_lock = asyncio.Lock()
         # Serializes loading robots on the server, so concurrent solves of a robot that is not
         # loaded yet load it once.
@@ -147,6 +154,9 @@ class PoseService:
         # Called on Isaac Sim's loop with a pose's path whenever its solution was written, so
         # the robot overlay can follow the selected pose.
         self.on_pose_solved: Callable[[Sdf.Path], None] | None = None
+        # Called on Isaac Sim's loop with a pose's path whenever the pose, or a prim it lies
+        # under, was moved or re-created, so the Teaching Tool Bar's Follow can follow it.
+        self.on_pose_moved: Callable[[Sdf.Path], None] | None = None
         self.follow_stage(omni.usd.get_context().get_stage())
 
     def follow_stage(self, stage: Usd.Stage | None):
@@ -165,8 +175,10 @@ class PoseService:
             task.cancel()
         self._solve_tasks.clear()
         self._moved_while_solving.clear()
+        self._failed_solves.clear()
         self._solved_poses.clear()
         self._tcp_syncs_pending.clear()
+        self._tcp_sync_tasks.clear()
         self._stage = stage
         self._pose_paths = set() if stage is None else _find_poses(stage.GetPseudoRoot())
         self._tcp_robots = {} if stage is None else _find_tcps(stage.GetPseudoRoot())
@@ -703,6 +715,10 @@ class PoseService:
             Gf.Quatd(local_transform.GetRotation().GetQuat())
         )
         pose_mesh.AddScaleOp(UsdGeom.XformOp.PrecisionDouble).Set(local_transform.GetScale())
+        if joints is not None:
+            pose_mesh.GetPrim().CreateAttribute(
+                POSE_JOINT_POSITIONS_CHOSEN_ATTRIBUTE, Sdf.ValueTypeNames.Bool
+            ).Set(True)
 
         reachable = self._tag_new_pose(
             stage,
@@ -870,6 +886,166 @@ class PoseService:
             for link_name, pose in link_poses["link_poses"].items()
         }
 
+    def robot_of_pose(self, pose_path: str) -> str:
+        """Return the prim path of the robot the pose at ``pose_path`` belongs to.
+
+        Raises:
+            HTTPException: 422 if there is no pose at ``pose_path`` or it names no robot in the
+                stage.
+        """
+        stage = self._stage
+        pose_prim = stage.GetPrimAtPath(pose_path) if stage is not None else None
+        if not pose_prim or not pose_prim.HasAttribute(POSE_REACHABLE_ATTRIBUTE):
+            raise HTTPException(422, f"There is no pose at {pose_path}.")
+        robot_targets = pose_prim.GetRelationship(POSE_ROBOT_RELATIONSHIP).GetTargets()
+        if not robot_targets or not stage.GetPrimAtPath(robot_targets[0]):
+            raise HTTPException(422, f"The robot of {pose_path} is not in the stage.")
+        return robot_targets[0].pathString
+
+    async def plan_joint_trajectory_to_pose(
+        self, pose_path: str, speed: float | None = None
+    ) -> dict:
+        """Plan the joint-space motion of a pose's robot from its current joints to the pose.
+
+        The target joints of a pose whose joints the user chose (From Joint Positions) are the
+        joints it stores. Those of any other pose are solved by the server at the pose's current
+        place, for its TCP, with the search starting from the robot's current joints, which
+        usually avoids extra full turns of a joint; they can differ from the stored ones the
+        pose's ghost shows. A TCP change of the robot still being given to the server is waited
+        for first. For a pose with chosen joints, a solve of the
+        pose that is running, e.g. because the pose was just moved, is waited for first instead,
+        so the plan ends at the pose's current place. Cancelling this call cancels neither. The
+        robot's current joints are read as :meth:`current_joint_positions` reads them, so they
+        are the live ones only while the simulation runs.
+
+        Args:
+            pose_path: The pose prim.
+            speed: Speed in rad/s of the joint that moves furthest, or ``None`` for the server
+                robot's default.
+
+        Returns:
+            The server's plan: ``{"joint_names": [...], "times": [...], "joint_positions":
+            [[...], ...]}``, the sample times in seconds and the joint positions in radians at
+            each time.
+
+        Raises:
+            HTTPException: 422 if there is no such pose, it names no robot in the stage, the
+                robot stores no class name or is no longer known to the server, the server
+                rejects the plan, e.g. because no joints reach the pose, or the robot's TCPs
+                could not be given to the server; for a pose with chosen joints, also if it is
+                out of its robot's reach or its latest solve failed; 503 if the server cannot be
+                reached.
+        """
+        robot_prim_path = self.robot_of_pose(pose_path)
+        stage = self._stage
+        path = Sdf.Path(pose_path)
+        pose_prim = stage.GetPrimAtPath(path)
+        if not pose_prim.GetAttribute(POSE_JOINT_POSITIONS_CHOSEN_ATTRIBUTE).Get():
+            robot_id, start, pose, tcp = await self._plan_start_and_pose(pose_path)
+            return await _call_server(
+                self._server_client.plan_cartesian_trajectory_in_joint_space(
+                    robot_id, start, pose, tcp, speed
+                )
+            )
+
+        solve_task = self._solve_tasks.get(path)
+        if solve_task is not None:
+            await asyncio.shield(solve_task)
+            robot_prim_path = self.robot_of_pose(pose_path)
+            stage = self._stage
+            pose_prim = stage.GetPrimAtPath(path)
+        if path in self._failed_solves:
+            raise HTTPException(
+                422,
+                f"{pose_path} could not be solved at its current place, see the log. Move it "
+                "again once the cause is fixed, e.g. the server is running.",
+            )
+        joint_positions = pose_prim.GetAttribute(POSE_JOINT_POSITIONS_ATTRIBUTE).Get()
+        if not pose_prim.GetAttribute(POSE_REACHABLE_ATTRIBUTE).Get() or not joint_positions:
+            raise HTTPException(422, f"{pose_path} is out of its robot's reach.")
+        target = {
+            "joint_names": list(pose_prim.GetAttribute(POSE_JOINT_NAMES_ATTRIBUTE).Get()),
+            "joint_positions": [float(position) for position in joint_positions],
+        }
+        robot_id = await self._connected_robot_id(stage, robot_prim_path)
+        start = await self.current_joint_positions(robot_prim_path)
+        return await _call_server(
+            self._server_client.plan_joint_trajectory(robot_id, start, target, speed)
+        )
+
+    async def plan_line_to_pose(self, pose_path: str, speed: float | None = None) -> dict:
+        """Plan the motion of a pose's robot from its current joints that moves the pose's TCP
+        along a straight line to the pose's current place.
+
+        Each point of the line is solved to joints by the server; the plan is refused when the
+        joints of consecutive points are not close together, so the robot needs no sudden jump.
+        A pose taught From Joint Positions is moved to by its place alone, not its joints. A TCP
+        change of the robot still being given to the server is waited for first; cancelling this
+        call does not cancel it. The robot's current joints are read as
+        :meth:`current_joint_positions` reads them, so they are the live ones only while the
+        simulation runs.
+
+        Args:
+            pose_path: The pose prim.
+            speed: Speed of the TCP along the line in m/s, or ``None`` for the server robot's
+                default.
+
+        Returns:
+            The server's plan: ``{"joint_names": [...], "times": [...], "joint_positions":
+            [[...], ...]}``, the sample times in seconds and the joint positions in radians at
+            each time.
+
+        Raises:
+            HTTPException: 422 if there is no such pose, it names no robot in the stage, the
+                robot stores no class name or is no longer known to the server, the robot's TCPs
+                could not be given to the server, or the server rejects the plan, e.g. because
+                the line has no continuous joint solution; 503 if the server cannot be reached.
+        """
+        robot_id, start, pose, tcp = await self._plan_start_and_pose(pose_path)
+        return await _call_server(
+            self._server_client.plan_cartesian_trajectory(robot_id, start, pose, tcp, speed)
+        )
+
+    async def _plan_start_and_pose(
+        self, pose_path: str
+    ) -> tuple[str, dict, list[float], str | None]:
+        """Return what a plan of a pose's robot to the pose's current place is made from: the
+        server robot's id, the robot's current joints, the pose of the pose's TCP in the robot's
+        base frame (``[x, y, z, rx, ry, rz]``, metres and extrinsic XYZ Euler degrees), and the
+        TCP's name, ``None`` for the default TCP of a pose taught before poses stored it.
+
+        A TCP change of the robot still being given to the server is waited for first, so the
+        server plans for the TCP the stage holds; cancelling this call does not cancel it. When
+        the robot's latest TCP change could not be given to the server, its TCPs are given again
+        first, since they may have reached the server since, e.g. on Connect.
+
+        Raises:
+            HTTPException: 422 if there is no such pose, it names no robot in the stage, the
+                robot stores no class name or is no longer known to the server, or the robot's
+                TCPs could not be given to the server; 503 if the server cannot be reached.
+        """
+        robot_prim_path = self.robot_of_pose(pose_path)
+        stage = self._stage
+        pose_prim = stage.GetPrimAtPath(pose_path)
+        sync_task = self._tcp_sync_tasks.get(robot_prim_path)
+        if sync_task is not None and sync_task.done() and not sync_task.result():
+            self._schedule_tcp_sync(robot_prim_path)
+            sync_task = self._tcp_sync_tasks[robot_prim_path]
+        if sync_task is not None and not await asyncio.shield(sync_task):
+            raise HTTPException(
+                422,
+                f"The TCPs of {robot_prim_path} could not be given to the Telekinesis Isaac Sim "
+                "Server, see the log.",
+            )
+        base_world = await self._base_frame_world(stage, robot_prim_path)
+        if stage is not self._stage or not pose_prim.IsValid():
+            raise HTTPException(422, f"There is no pose at {pose_path}.")
+        pose = _pose_in_frame(omni.usd.get_world_transform_matrix(pose_prim), base_world)
+        tcp = pose_prim.GetAttribute(POSE_TCP_ATTRIBUTE).Get() or None
+        robot_id = await self._connected_robot_id(stage, robot_prim_path)
+        start = await self.current_joint_positions(robot_prim_path)
+        return robot_id, start, pose, tcp
+
     async def _base_frame_world(self, stage: Usd.Stage, robot_prim_path: str) -> Gf.Matrix4d:
         """Return the world transform of the base frame of the robot at ``robot_prim_path``.
 
@@ -948,11 +1124,14 @@ class PoseService:
         if robot_prim_path in self._tcp_syncs_pending:
             return
         self._tcp_syncs_pending.add(robot_prim_path)
-        asyncio.ensure_future(self._sync_robot_tcps(robot_prim_path))
+        self._tcp_sync_tasks[robot_prim_path] = asyncio.ensure_future(
+            self._sync_robot_tcps(robot_prim_path)
+        )
 
-    async def _sync_robot_tcps(self, robot_prim_path: str):
+    async def _sync_robot_tcps(self, robot_prim_path: str) -> bool:
         """Give the server the TCPs of the robot at ``robot_prim_path`` as the stage holds them
-        now, then solve the robot's poses of a TCP again.
+        now, then solve the robot's poses of a TCP again, and return ``False`` only when the
+        server could not be given them.
 
         Only a robot loaded on the server gets its TCPs; any other gets them when it is loaded.
         A failure logs a warning and leaves the poses as they are. Runs one at a time, and reads
@@ -963,7 +1142,7 @@ class PoseService:
             stage = self._stage
             robot_prim = stage.GetPrimAtPath(robot_prim_path) if stage is not None else None
             if not robot_prim:
-                return
+                return True
             robot_id = robot_prim.GetAttribute(ROBOT_ID_ATTRIBUTE).Get()
             if robot_id:
                 try:
@@ -977,9 +1156,9 @@ class PoseService:
                         f"[bridge] could not give the TCPs of {robot_prim_path} to the "
                         f"Telekinesis Isaac Sim Server: {error.detail}"
                     )
-                    return
+                    return False
             if stage is not self._stage:
-                return
+                return True
             default_tcp = robot_prim.GetAttribute(ROBOT_DEFAULT_TCP_ATTRIBUTE).Get()
             for pose_path in self._pose_paths:
                 pose_prim = stage.GetPrimAtPath(pose_path)
@@ -994,6 +1173,7 @@ class PoseService:
                     # Solved again even though the pose did not move: its TCP did.
                     self._solved_poses.pop(pose_path, None)
                     self._schedule_solve(pose_path)
+            return True
 
     def _on_objects_changed(self, notice, sender):
         """Hand the prims a change to the followed stage moved or re-created to Isaac Sim's loop.
@@ -1019,7 +1199,8 @@ class PoseService:
         self, stage: Usd.Stage, moved_paths: list[Sdf.Path], resynced_paths: list[Sdf.Path]
     ):
         """Update the known poses and TCPs under the re-created prims, then solve every pose
-        that is or lies under a moved or re-created prim, and give the server the TCPs of every
+        that is or lies under a moved or re-created prim and report it to :attr:`on_pose_moved`,
+        and give the server the TCPs of every
         robot with a TCP that was moved itself, re-created or removed. Runs on Isaac Sim's loop.
 
         A TCP moved only with its parent prims, such as the robot's links while the simulation
@@ -1056,6 +1237,8 @@ class PoseService:
         for pose_path in self._pose_paths:
             if any(pose_path.HasPrefix(changed_path) for changed_path in changed_paths):
                 self._schedule_solve(pose_path)
+                if self.on_pose_moved is not None:
+                    self.on_pose_moved(pose_path)
 
     def _schedule_solve(self, pose_path: Sdf.Path):
         """Solve the pose at ``pose_path`` again, or once more after its running solve."""
@@ -1073,7 +1256,10 @@ class PoseService:
                 try:
                     await self._solve_moved_pose(pose_path)
                 except HTTPException as error:
+                    self._failed_solves.add(pose_path)
                     carb.log_warn(f"[bridge] could not solve pose {pose_path}: {error.detail}")
+                else:
+                    self._failed_solves.discard(pose_path)
                 if pose_path not in self._moved_while_solving:
                     return
         finally:

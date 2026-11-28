@@ -110,6 +110,106 @@ class IsaacSimServerClient:
         body = {"poses": poses, "seed": seed, "tcp": tcp}
         return await self._request("POST", f"/robots/{robot_id}/inverse_kinematics", body)
 
+    async def plan_joint_trajectory(
+        self, robot_id: str, start: dict, target: dict, speed: float | None = None
+    ) -> dict:
+        """Plan the joint-space motion of the server's robot from ``start`` to ``target``,
+        without moving any robot.
+
+        Args:
+            robot_id: Id of the server's robot.
+            start: ``{"joint_names": [...], "joint_positions": [...]}`` in radians the motion
+                starts from, usually the robot's current joints.
+            target: Joint positions in radians the motion ends at, the same way.
+            speed: Speed in rad/s of the joint that moves furthest, or ``None`` for the server
+                robot's default.
+
+        Returns:
+            ``{"joint_names": [...], "times": [...], "joint_positions": [[...], ...]}``: the
+            sample times in seconds from the start of the motion, and the joint positions in
+            radians at each time.
+
+        Raises:
+            IsaacSimServerError: If the server is not reachable or answers with an error, e.g.
+                404 when it has no robot of that id, 422 when ``target`` is outside the joint
+                limits.
+        """
+        body = {"start": start, "target": target, "speed": speed}
+        return await self._request("POST", f"/robots/{robot_id}/plan_joint_trajectory", body)
+
+    async def plan_cartesian_trajectory_in_joint_space(
+        self,
+        robot_id: str,
+        start: dict,
+        pose: list[float],
+        tcp: str | None = None,
+        speed: float | None = None,
+    ) -> dict:
+        """Solve the joints that bring the server robot's TCP ``tcp`` to ``pose``, searching from
+        ``start``, and plan the joint-space motion there from ``start``, without moving any
+        robot.
+
+        Args:
+            robot_id: Id of the server's robot.
+            start: ``{"joint_names": [...], "joint_positions": [...]}`` in radians the motion
+                and the search start from, usually the robot's current joints.
+            pose: Pose ``[x, y, z, rx, ry, rz]`` of the TCP in the robot's base frame: metres,
+                then extrinsic XYZ Euler angles in degrees.
+            tcp: Name of the default TCP or a TCP set with :meth:`set_tcps`, or ``None`` for the
+                default TCP.
+            speed: Speed in rad/s of the joint that moves furthest, or ``None`` for the server
+                robot's default.
+
+        Returns:
+            ``{"joint_names": [...], "times": [...], "joint_positions": [[...], ...]}``: the
+            sample times in seconds from the start of the motion, and the joint positions in
+            radians at each time.
+
+        Raises:
+            IsaacSimServerError: If the server is not reachable or answers with an error, e.g.
+                404 when it has no robot of that id, 422 when it has no TCP ``tcp`` or no joint
+                configuration reaches ``pose``.
+        """
+        body = {"start": start, "pose": pose, "tcp": tcp, "speed": speed}
+        return await self._request(
+            "POST", f"/robots/{robot_id}/plan_cartesian_trajectory_in_joint_space", body
+        )
+
+    async def plan_cartesian_trajectory(
+        self,
+        robot_id: str,
+        start: dict,
+        pose: list[float],
+        tcp: str | None = None,
+        speed: float | None = None,
+    ) -> dict:
+        """Plan the motion of the server robot from ``start`` that moves its TCP ``tcp`` along a
+        straight line to ``pose``, without moving any robot.
+
+        Args:
+            robot_id: Id of the server's robot.
+            start: ``{"joint_names": [...], "joint_positions": [...]}`` in radians the motion
+                starts from, usually the robot's current joints.
+            pose: Pose ``[x, y, z, rx, ry, rz]`` of the TCP in the robot's base frame at the end
+                of the line: metres, then extrinsic XYZ Euler angles in degrees.
+            tcp: Name of the default TCP or a TCP set with :meth:`set_tcps`, or ``None`` for the
+                default TCP.
+            speed: Speed of the TCP along the line in m/s, or ``None`` for the server robot's
+                default.
+
+        Returns:
+            ``{"joint_names": [...], "times": [...], "joint_positions": [[...], ...]}``: the
+            sample times in seconds from the start of the motion, and the joint positions in
+            radians at each time.
+
+        Raises:
+            IsaacSimServerError: If the server is not reachable or answers with an error, e.g.
+                404 when it has no robot of that id, 422 when it has no TCP ``tcp``, ``start`` is
+                past a joint limit, or the line has no continuous joint solution.
+        """
+        body = {"start": start, "pose": pose, "tcp": tcp, "speed": speed}
+        return await self._request("POST", f"/robots/{robot_id}/plan_cartesian_trajectory", body)
+
     async def set_tcps(self, robot_id: str, tcps: dict[str, list[float]]) -> dict:
         """Make ``tcps`` the server robot's TCPs besides its default TCP, deleting those set
         before that ``tcps`` leaves out, and return the robot's description.

@@ -272,6 +272,55 @@ running at `http://127.0.0.1:6000`.
    is out of reach. Every pose that moves more than 1 mm or 0.01 rad is solved again, starting from
    its stored joint positions so the arm keeps its configuration; a pose moved out of reach turns
    red and keeps its last solution.
+
+   Selecting one pose opens the **Teaching Tool Bar**, a row under the viewport (also in the menu
+   bar: **Telekinesis Isaac Sim Bridge ▸ Teaching Tool Bar**). It shows the pose's robot on the
+   left; on the right the TCP the robot brings to the pose (the TCP the pose places, e.g.
+   `tool_base` for a pose from a tool, or `Default TCP (tool0)` for a pose taught before poses
+   stored their TCP), greyed out, then a dropdown of the
+   robot's poses that selects the picked pose, a **Move to** button, a **Follow** button (a
+   link icon) and a settings button. The settings button opens:
+   - **Motion command**: how **Move to** and **Follow** move the robot, **Joint P2P** (to start
+     with) or **Line**.
+   - **Joint speed (deg/s)**: for Joint P2P, the speed of the fastest-moving joint, 40 to start
+     with, from 1 to 180.
+   - **Line speed (mm/s)**: for Line, the speed of the TCP along the line, 200 to start with,
+     from 1 to 1000. The range is the tool bar's, not the robot's limit.
+
+   Selecting anything other than one pose hides the tool bar.
+
+   Hold **Move to** until the robot reaches the pose to move the pose's robot there. Release the
+   button to stop the robot where it is. The button reads **Planning...** while the motion is
+   planned by the Telekinesis Isaac Sim Server, which must be running, and **Executing...**
+   while the robot moves. A stopped or paused simulation is started first. If the robot stops
+   short of the pose, e.g. because something blocks it, it stays where it stopped and a warning
+   in the log says how far it is from the pose.
+
+   - **Joint P2P**: all joints move together from where they are to the pose's joints. These
+     are solved when you press **Move to**, for the pose's current place and its TCP, with the
+     search starting from the robot's current joints, which usually avoids extra full turns of
+     a joint. They can differ from the arm the pose's ghost shows, e.g. with the wrist turned
+     the other way. A pose taught **From Joint Positions** is the exception: the robot moves to
+     exactly the joints you entered (or, once the pose is dragged, those solved from them).
+     Such a pose that is out of reach, or whose last solve failed, is not moved to and shows a
+     warning; one that is being solved again, e.g. because it was just dragged, is moved to
+     once that solve is done.
+   - **Line**: the TCP follows a straight line from where it is to the pose's current place,
+     for any pose, also one taught From Joint Positions, whose joints Line does not use. If no
+     continuous sequence of joint positions along the line is found, **Move to** warns and does
+     not start.
+
+   Click **Follow** to have the robot follow the pose: it moves to the pose at once, and again
+   whenever you move the pose and leave it still for 0.1 s, with the motion command and speed
+   set at that moment. A move that is running is finished before the next one starts. While
+   following, the icon shows a closed link and **Move to** is disabled and reads **Following**.
+   A move that cannot be planned shows its warning, and the robot keeps following. Selecting
+   another pose follows that pose instead. Click **Follow** again to stop the robot where it
+   is; selecting anything other than one pose stops following too.
+
+   The motion is not checked for collisions: in between, the arm can pass through the table or
+   other objects, the same as when a program runs the same move. Teach an intermediate pose
+   that keeps the arm clear, e.g. above the part, and move to it first.
 4. **Read the poses.** `GET /teaching/poses?robot_prim_path=<robot>` lists them with their
    `name`, `tcp`, `pose` and stored `joint_positions`. The pose is `[x, y, z, rx, ry, rz]` of
    the TCP named by `tcp` in the robot's base frame, in metres and extrinsic XYZ Euler degrees:

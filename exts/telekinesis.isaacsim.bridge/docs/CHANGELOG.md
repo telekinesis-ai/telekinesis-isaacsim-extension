@@ -66,6 +66,40 @@
 - Catalogue robots store their default TCP as `telekinesis:robot:default_tcp`, from the new
   `default_tcp` field of the asset index; loading a robot on the server stores it too.
   `examples/scenes/pick_and_place_scene.py` writes it.
+- **Teaching Tool Bar**, a row docked under the viewport: it opens when one pose is selected, and
+  from **Telekinesis Isaac Sim Bridge ▸ Teaching Tool Bar**, and hides when anything else is
+  selected. It shows the pose's robot, the TCP the pose is solved for (the TCP the pose places, or
+  the robot's default TCP for an older pose), a dropdown of the robot's poses that selects the
+  picked one, a **Move to** button, a **Follow** button, and a settings button opening the
+  motion command (Joint P2P or Line), a joint speed in degrees per second for Joint P2P (40 to
+  start with, 1 to 180) and a TCP speed in millimetres per second for Line (200 to start with, 1
+  to 1000).
+- **Move to** in the Teaching Tool Bar: holding it moves the pose's robot from its current joints
+  to the pose along a motion the Telekinesis Isaac Sim Server plans, played by simulation time,
+  and holds the end until the robot reaches it; releasing it stops the robot where it is. A
+  robot that stops short of the pose, e.g. blocked by an obstacle, stays where it stopped and a
+  warning in the log says so; the motion is not checked for collisions. Both motion commands
+  plan to the pose's current place for its TCP, after any TCP change is given to the server:
+  - **Joint P2P** moves all joints together. The target joints are solved with the search
+    starting from the robot's current joints
+    (`POST /robots/{robot_id}/plan_cartesian_trajectory_in_joint_space`); for a pose taught
+    From Joint Positions they are the joints it stores
+    (`POST /robots/{robot_id}/plan_joint_trajectory`), after a running solve of the pose, and
+    such a pose that is out of reach or whose last solve failed is refused with a warning.
+  - **Line** moves the TCP along a straight line
+    (`POST /robots/{robot_id}/plan_cartesian_trajectory`), and is refused with a warning when
+    the line has no continuous joint solution.
+
+  It starts a simulation that is not playing, and binds the robot again after the simulation was
+  stopped and played. Needs the Telekinesis Isaac Sim Server version with the `plan_*` routes.
+- **Follow** in the Teaching Tool Bar, a link/unlink icon next to Move to: clicking it moves the
+  pose's robot to the pose as Move to does, and again whenever the pose was moved and has stayed
+  still for 0.1 s, with the tool bar's settings of that moment, finishing a running move first.
+  While following, Move to is disabled and reads **Following**, and selecting another pose
+  follows that pose. Clicking it again, or selecting anything other than one pose, stops the
+  robot where it is.
+- Poses taught **From Joint Positions** store `telekinesis:pose:joint_positions_chosen` (`true`),
+  so Move to drives to their joints as they are.
 
 ### Changed
 - TCP markers placed by `PUT /articulations/{articulation_id}/tcp` carry a translate and a
